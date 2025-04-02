@@ -6,11 +6,10 @@ import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import desc, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.modules.logging.models import LogEntry, LogEntryCreate, LogQueryParams
 from app.utils.common import json_serializer
+from sqlalchemy import desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class LogEntryService:
@@ -19,7 +18,9 @@ class LogEntryService:
     """
 
     @staticmethod
-    async def create_log_entry(db: AsyncSession, log_entry_data: LogEntryCreate) -> LogEntry:
+    async def create_log_entry(
+        db: AsyncSession, log_entry_data: LogEntryCreate
+    ) -> LogEntry:
         """
         Create a new log entry asynchronously.
 
@@ -65,7 +66,8 @@ class LogEntryService:
             limit: Maximum number of records to return (pagination).
 
         Returns:
-            A tuple containing a list of log entries and the total count matching the criteria.
+            A tuple containing a list of log entries and the total count matching the cr
+                iteria.
         """
         stmt = select(LogEntry)
         count_stmt = select(func.count()).select_from(LogEntry)
@@ -77,13 +79,19 @@ class LogEntryService:
                 count_stmt = count_stmt.where(LogEntry.level == filters.level)
             if filters.service:
                 stmt = stmt.where(LogEntry.service == filters.service)
-                count_stmt = count_stmt.where(LogEntry.service == filters.service)
+                count_stmt = count_stmt.where(
+                    LogEntry.service == filters.service
+                )
             if filters.trace_id:
                 stmt = stmt.where(LogEntry.trace_id == filters.trace_id)
-                count_stmt = count_stmt.where(LogEntry.trace_id == filters.trace_id)
+                count_stmt = count_stmt.where(
+                    LogEntry.trace_id == filters.trace_id
+                )
             if filters.user_id:
                 stmt = stmt.where(LogEntry.user_id == filters.user_id)
-                count_stmt = count_stmt.where(LogEntry.user_id == filters.user_id)
+                count_stmt = count_stmt.where(
+                    LogEntry.user_id == filters.user_id
+                )
             # Add other filters from LogQueryParams as needed
 
         # Apply time range filters
@@ -102,7 +110,9 @@ class LogEntryService:
         total_count = total_count_result.scalar_one_or_none() or 0
 
         # Apply ordering and pagination
-        stmt = stmt.order_by(desc(LogEntry.timestamp)).offset(skip).limit(limit)
+        stmt = (
+            stmt.order_by(desc(LogEntry.timestamp)).offset(skip).limit(limit)
+        )
 
         # Execute the main query
         result = await db.execute(stmt)
@@ -111,7 +121,9 @@ class LogEntryService:
         return list(log_entries), total_count
 
     @staticmethod
-    async def get_log_entry(db: AsyncSession, log_id: int) -> Optional[LogEntry]:
+    async def get_log_entry(
+        db: AsyncSession, log_id: int
+    ) -> Optional[LogEntry]:
         """
         Get a single log entry by its ID asynchronously.
 
@@ -200,7 +212,9 @@ class LogEntryService:
 
         # Get counts by level
         level_stmt = (
-            select(LogEntry.level, func.count(LogEntry.id)).select_from(base_stmt.subquery()).group_by(LogEntry.level)
+            select(LogEntry.level, func.count(LogEntry.id))
+            .select_from(base_stmt.subquery())
+            .group_by(LogEntry.level)
         )
         level_res = await db.execute(level_stmt)
         level_counts = {level: count for level, count in level_res.all()}
@@ -212,7 +226,9 @@ class LogEntryService:
             .group_by(LogEntry.service)
         )
         service_res = await db.execute(service_stmt)
-        service_counts = {service: count for service, count in service_res.all()}
+        service_counts = {
+            service: count for service, count in service_res.all()
+        }
 
         # Return statistics
         return {

@@ -6,10 +6,9 @@ import json
 from datetime import datetime, timedelta
 
 import pytest
-from httpx import AsyncClient
-
 from app.modules.logging.models import LogEntry, LogEntryCreate, LogQueryParams
 from app.modules.logging.service import LogEntryService
+from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
@@ -67,7 +66,9 @@ async def test_get_log_entries(async_client: AsyncClient, db_session):
 
 
 @pytest.mark.asyncio
-async def test_get_log_entries_with_filters(async_client: AsyncClient, db_session):
+async def test_get_log_entries_with_filters(
+    async_client: AsyncClient, db_session
+):
     """Test getting log entries with filters."""
     # Create test log entries with different levels
     levels = ["INFO", "WARNING", "ERROR"]
@@ -92,7 +93,9 @@ async def test_get_log_entries_with_filters(async_client: AsyncClient, db_sessio
 
 
 @pytest.mark.asyncio
-async def test_get_log_entries_with_time_range(async_client: AsyncClient, db_session):
+async def test_get_log_entries_with_time_range(
+    async_client: AsyncClient, db_session
+):
     """Test getting log entries within a time range."""
     # Create test log entry from yesterday
     yesterday = datetime.utcnow() - timedelta(days=1)
@@ -155,7 +158,9 @@ async def test_export_logs(async_client: AsyncClient, db_session):
     # Check response
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
-    assert response.headers["Content-Disposition"].startswith("attachment; filename=logs_")
+    assert response.headers["Content-Disposition"].startswith(
+        "attachment; filename=logs_"
+    )
 
     # Parse JSON response
     logs = json.loads(response.content)
@@ -176,16 +181,22 @@ async def test_log_entry_service_methods(db_session):
         context={"test_key": "service_test_value"},
     )
 
-    log_entry = await LogEntryService.create_log_entry(db_session, log_entry_create)
+    log_entry = await LogEntryService.create_log_entry(
+        db_session, log_entry_create
+    )
 
     # Check created log entry
     assert log_entry.level == "ERROR"
     assert log_entry.message == "Service test message"
 
     # Get log entries using service
-    query_params = LogQueryParams(level="ERROR", service="test_service", limit=10)
+    query_params = LogQueryParams(
+        level="ERROR", service="test_service", limit=10
+    )
 
-    log_entries, count = await LogEntryService.get_log_entries(db_session, query_params)
+    log_entries, count = await LogEntryService.get_log_entries(
+        db_session, query_params
+    )
 
     # Check that our specific log entry is in the results
     assert count > 0

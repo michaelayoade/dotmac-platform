@@ -35,7 +35,9 @@ class AuditLog(BaseModel):
     )
     old_value: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
     new_value: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
-    event_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    event_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
     ip_address: Mapped[Optional[str]] = mapped_column(
         sa.String(45),
         nullable=True,
@@ -83,7 +85,9 @@ class AuditLogCreate(PydanticBaseModel):
     )
     old_value: Optional[str] = None
     new_value: Optional[str] = None
-    event_metadata: Optional[Dict[str, Any]] = Field(None, description="Additional contextual information as JSON")
+    event_metadata: Optional[Dict[str, Any]] = Field(
+        None, description="Additional contextual information as JSON"
+    )
     ip_address: Optional[str] = None
 
 

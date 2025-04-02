@@ -11,10 +11,6 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import BackgroundTasks
-from sqlalchemy import and_, desc, or_, select
-from sqlalchemy.orm import Session
-
 from app.modules.webhooks.models import (
     WebhookDelivery,
     WebhookEndpoint,
@@ -27,6 +23,9 @@ from app.modules.webhooks.models import (
     WebhookSubscriptionResponse,
 )
 from app.utils.common import json_serializer
+from fastapi import BackgroundTasks
+from sqlalchemy import and_, desc, or_, select
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +83,9 @@ class WebhooksService:
             Updated webhook endpoint if found, None otherwise
         """
         # Build the query using SQLAlchemy select
-        query = select(WebhookEndpoint).where(WebhookEndpoint.id == endpoint_id)
+        query = select(WebhookEndpoint).where(
+            WebhookEndpoint.id == endpoint_id
+        )
 
         # Execute the query asynchronously
         result = await db.execute(query)
@@ -120,7 +121,9 @@ class WebhooksService:
             True if deleted, False if not found
         """
         # Build the query using SQLAlchemy select
-        query = select(WebhookEndpoint).where(WebhookEndpoint.id == endpoint_id)
+        query = select(WebhookEndpoint).where(
+            WebhookEndpoint.id == endpoint_id
+        )
 
         # Execute the query asynchronously
         result = await db.execute(query)
@@ -134,7 +137,9 @@ class WebhooksService:
         return True
 
     @staticmethod
-    async def get_endpoint(db: Session, endpoint_id: int) -> Optional[WebhookEndpoint]:
+    async def get_endpoint(
+        db: Session, endpoint_id: int
+    ) -> Optional[WebhookEndpoint]:
         """
         Get a webhook endpoint by ID.
 
@@ -146,7 +151,9 @@ class WebhooksService:
             Webhook endpoint if found, None otherwise
         """
         # Build the query using SQLAlchemy select
-        query = select(WebhookEndpoint).where(WebhookEndpoint.id == endpoint_id)
+        query = select(WebhookEndpoint).where(
+            WebhookEndpoint.id == endpoint_id
+        )
 
         # Execute the query asynchronously
         result = await db.execute(query)
@@ -178,7 +185,11 @@ class WebhooksService:
             query = query.where(WebhookEndpoint.status == status.value)
 
         # Add ordering, offset and limit
-        query = query.order_by(desc(WebhookEndpoint.created_at)).offset(skip).limit(limit)
+        query = (
+            query.order_by(desc(WebhookEndpoint.created_at))
+            .offset(skip)
+            .limit(limit)
+        )
 
         # Execute the query asynchronously
         result = await db.execute(query)
@@ -208,7 +219,8 @@ class WebhooksService:
         query = select(WebhookSubscription).where(
             and_(
                 WebhookSubscription.endpoint_id == endpoint_id,
-                WebhookSubscription.event_type == subscription.event_type.value,
+                WebhookSubscription.event_type
+                == subscription.event_type.value,
             )
         )
         result = await db.execute(query)
@@ -216,7 +228,9 @@ class WebhooksService:
 
         if existing_subscription:
             # Update filter conditions if subscription already exists
-            existing_subscription.filter_conditions = subscription.filter_conditions
+            existing_subscription.filter_conditions = (
+                subscription.filter_conditions
+            )
             await db.commit()
             await db.refresh(existing_subscription)
             return existing_subscription
@@ -245,7 +259,9 @@ class WebhooksService:
             True if deleted, False if not found
         """
         # Build the query using SQLAlchemy select
-        query = select(WebhookSubscription).where(WebhookSubscription.id == subscription_id)
+        query = select(WebhookSubscription).where(
+            WebhookSubscription.id == subscription_id
+        )
 
         # Execute the query asynchronously
         result = await db.execute(query)
@@ -282,19 +298,26 @@ class WebhooksService:
             query = query.where(WebhookSubscription.endpoint_id == endpoint_id)
 
         if event_type:
-            query = query.where(WebhookSubscription.event_type == event_type.value)
+            query = query.where(
+                WebhookSubscription.event_type == event_type.value
+            )
 
         # Execute the query asynchronously
         result = await db.execute(query)
         db_subscriptions = result.scalars().all()
 
         # Explicitly convert SQLAlchemy models to Pydantic models
-        response_subscriptions = [WebhookSubscriptionResponse.model_validate(sub) for sub in db_subscriptions]
+        response_subscriptions = [
+            WebhookSubscriptionResponse.model_validate(sub)
+            for sub in db_subscriptions
+        ]
 
         return response_subscriptions
 
     @staticmethod
-    async def get_endpoints_for_event(db: Session, event_type: WebhookEventType) -> List[Dict[str, Any]]:
+    async def get_endpoints_for_event(
+        db: Session, event_type: WebhookEventType
+    ) -> List[Dict[str, Any]]:
         """
         Get all active webhook endpoints subscribed to a specific event type.
 
@@ -305,7 +328,8 @@ class WebhooksService:
         Returns:
             List of dictionaries containing endpoint and subscription details
         """
-        # Join WebhookEndpoint and WebhookSubscription to get all active endpoints for the event type
+        # Join WebhookEndpoint and WebhookSubscription to get all active endpoints
+        # for the event type
         results = (
             db.query(WebhookEndpoint, WebhookSubscription)
             .join(
@@ -363,7 +387,9 @@ class WebhooksService:
         payload_str = json.dumps(payload, default=json_serializer)
 
         # Generate HMAC signature
-        signature = hmac.new(secret.encode(), payload_str.encode(), hashlib.sha256).hexdigest()
+        signature = hmac.new(
+            secret.encode(), payload_str.encode(), hashlib.sha256
+        ).hexdigest()
 
         return signature
 
@@ -398,7 +424,11 @@ class WebhooksService:
         """
         # Get or create delivery record
         if delivery_id:
-            db_delivery = db.query(WebhookDelivery).filter(WebhookDelivery.id == delivery_id).first()
+            db_delivery = (
+                db.query(WebhookDelivery)
+                .filter(WebhookDelivery.id == delivery_id)
+                .first()
+            )
             if db_delivery:
                 db_delivery.attempt_count += 1
                 db_delivery.next_retry_at = None
@@ -412,7 +442,9 @@ class WebhooksService:
                 db.add(db_delivery)
         else:
             # Create new delivery record
-            db_delivery = WebhookDelivery(endpoint_id=endpoint_id, event_type=event_type, payload=payload)
+            db_delivery = WebhookDelivery(
+                endpoint_id=endpoint_id, event_type=event_type, payload=payload
+            )
             db.add(db_delivery)
 
         await db.commit()
@@ -459,12 +491,14 @@ class WebhooksService:
             if db_delivery.success:
                 logger.info(
                     f"Webhook delivery successful: "
-                    f"ID={db_delivery.id}, Event={event_type}, Status={response.status_code}"
+                    f"ID={db_delivery.id}, Event={event_type}, "
+                    f"Status={response.status_code}"
                 )
             else:
                 logger.warning(
                     f"Webhook delivery failed: "
-                    f"ID={db_delivery.id}, Event={event_type}, Status={response.status_code}"
+                    f"ID={db_delivery.id}, Event={event_type}, "
+                    f"Status={response.status_code}"
                 )
 
         except Exception as e:
@@ -473,7 +507,10 @@ class WebhooksService:
             db_delivery.response_body = str(e)
             db_delivery.success = False
             db_delivery.completed_at = datetime.utcnow()
-            logger.error(f"Webhook delivery error: ID={db_delivery.id}, Event={event_type}, Error={str(e)}")
+            logger.error(
+                f"Webhook delivery error: ID={db_delivery.id}, "
+                f"Event={event_type}, Error={str(e)}"
+            )
 
         # Update delivery record
         await db.commit()
@@ -501,7 +538,9 @@ class WebhooksService:
             List of delivery IDs
         """
         # Get all endpoints for the event type
-        endpoints = await WebhooksService.get_endpoints_for_event(db, event_type)
+        endpoints = await WebhooksService.get_endpoints_for_event(
+            db, event_type
+        )
 
         delivery_ids = []
         for endpoint_data in endpoints:
@@ -510,7 +549,6 @@ class WebhooksService:
 
             # Check filter conditions if present
             if subscription["filter_conditions"]:
-                # Simple filter implementation - can be enhanced for more complex filtering
                 match = True
                 for key, value in subscription["filter_conditions"].items():
                     if key not in payload or payload[key] != value:
@@ -549,13 +587,16 @@ class WebhooksService:
         return delivery_ids
 
     @staticmethod
-    async def retry_failed_deliveries(db: Session, test_mode: bool = False) -> int:
+    async def retry_failed_deliveries(
+        db: Session, test_mode: bool = False
+    ) -> int:
         """
         Retry failed webhook deliveries.
 
         Args:
             db: Database session
-            test_mode: If True, directly await deliveries instead of creating background tasks (for testing)
+            test_mode: If True, directly await deliveries instead of creating
+                background tasks (for testing)
 
         Returns:
             Number of deliveries queued for retry
@@ -576,8 +617,10 @@ class WebhooksService:
             )
             .where(
                 and_(
-                    WebhookDelivery.success == False,  # noqa: E712 - Use == for SQLAlchemy boolean comparison
-                    WebhookDelivery.attempt_count < WebhookEndpoint.retry_count,
+                    WebhookDelivery.success
+                    == False,  # noqa: E712 - Use == for SQLAlchemy boolean comparison
+                    WebhookDelivery.attempt_count
+                    < WebhookEndpoint.retry_count,
                     or_(
                         WebhookDelivery.next_retry_at.is_(None),
                         WebhookDelivery.next_retry_at <= now,
@@ -597,12 +640,16 @@ class WebhooksService:
 
         # Debug: Log the number of deliveries found
         if test_mode:
-            logger.info(f"Found {len(failed_deliveries)} failed deliveries to retry")
+            logger.info(
+                f"Found {len(failed_deliveries)} failed deliveries to retry"
+            )
 
         retry_count = 0
         for delivery in failed_deliveries:
             # Get endpoint details
-            endpoint_query = select(WebhookEndpoint).where(WebhookEndpoint.id == delivery.endpoint_id)
+            endpoint_query = select(WebhookEndpoint).where(
+                WebhookEndpoint.id == delivery.endpoint_id
+            )
             endpoint_result = await db.execute(endpoint_query)
             endpoint = endpoint_result.scalar_one_or_none()
 
@@ -610,15 +657,20 @@ class WebhooksService:
                 continue
 
             # Calculate next retry time with exponential backoff
-            backoff_factor = min(delivery.attempt_count, 5)  # Cap at 5 to avoid excessive delays
-            retry_delay = 60 * (2**backoff_factor)  # Exponential backoff in seconds
+            backoff_factor = min(
+                delivery.attempt_count, 5
+            )  # Cap at 5 to avoid excessive delays
+            retry_delay = 60 * (
+                2**backoff_factor
+            )  # Exponential backoff in seconds
             next_retry = now + timedelta(seconds=retry_delay)
 
             # Update next retry time
             delivery.next_retry_at = next_retry
             await db.commit()
 
-            # In test mode, directly await the delivery instead of creating a background task
+            # In test mode, directly await the delivery instead of creating a
+            # background task
             if test_mode:
                 await WebhooksService._deliver_webhook(
                     db,
@@ -693,7 +745,9 @@ class WebhooksService:
         return delivery
 
     @staticmethod
-    async def get_delivery(db: Session, delivery_id: int) -> Optional[WebhookDelivery]:
+    async def get_delivery(
+        db: Session, delivery_id: int
+    ) -> Optional[WebhookDelivery]:
         """
         Get a webhook delivery by ID.
 
@@ -704,7 +758,11 @@ class WebhooksService:
         Returns:
             Webhook delivery if found, None otherwise
         """
-        return db.query(WebhookDelivery).filter(WebhookDelivery.id == delivery_id).first()
+        return (
+            db.query(WebhookDelivery)
+            .filter(WebhookDelivery.id == delivery_id)
+            .first()
+        )
 
     @staticmethod
     async def get_deliveries(
@@ -740,4 +798,9 @@ class WebhooksService:
         if success is not None:
             query = query.filter(WebhookDelivery.success == success)
 
-        return query.order_by(desc(WebhookDelivery.created_at)).offset(skip).limit(limit).all()
+        return (
+            query.order_by(desc(WebhookDelivery.created_at))
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )

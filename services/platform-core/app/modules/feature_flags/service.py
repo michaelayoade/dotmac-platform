@@ -29,26 +29,38 @@ class FeatureFlagsService:
         db: AsyncSession, redis_client: redis.Redis, flag_in: FeatureFlagCreate
     ) -> FeatureFlag:
         """Creates a new feature flag."""
-        result = await db.execute(FeatureFlag.__table__.select().where(FeatureFlag.key == flag_in.key))
+        result = await db.execute(
+            FeatureFlag.__table__.select().where(
+                FeatureFlag.key == flag_in.key
+            )
+        )
         existing = result.scalar_one_or_none()
 
         if existing:
-            raise ValueError(f"Feature flag with key '{flag_in.key}' already exists.")
+            raise ValueError(
+                f"Feature flag with key '{flag_in.key}' already exists."
+            )
 
         db_flag = FeatureFlag(**flag_in.dict())
         db.add(db_flag)
         await db.commit()
         await db.refresh(db_flag)
-        logger.info(f"Feature flag created: Key='{db_flag.key}', ID={db_flag.id}")
+        logger.info(
+            f"Feature flag created: Key='{db_flag.key}', ID={db_flag.id}"
+        )
 
         # Invalidate cache (though unlikely to exist)
         await FeatureFlagsService.invalidate_cache(redis_client, db_flag.key)
         return db_flag
 
     @staticmethod
-    async def get_feature_flag_by_key(db: AsyncSession, flag_key: str) -> Optional[FeatureFlag]:
+    async def get_feature_flag_by_key(
+        db: AsyncSession, flag_key: str
+    ) -> Optional[FeatureFlag]:
         """Retrieves a feature flag by its key."""
-        result = await db.execute(FeatureFlag.__table__.select().where(FeatureFlag.key == flag_key))
+        result = await db.execute(
+            FeatureFlag.__table__.select().where(FeatureFlag.key == flag_key)
+        )
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -76,7 +88,9 @@ class FeatureFlagsService:
         flag_update: FeatureFlagUpdate,
     ) -> Optional[FeatureFlag]:
         """Updates an existing feature flag."""
-        db_flag = await FeatureFlagsService.get_feature_flag_by_key(db, flag_key)
+        db_flag = await FeatureFlagsService.get_feature_flag_by_key(
+            db, flag_key
+        )
         if not db_flag:
             return None
 
@@ -86,7 +100,9 @@ class FeatureFlagsService:
 
         await db.commit()
         await db.refresh(db_flag)
-        logger.info(f"Feature flag updated: Key='{db_flag.key}', Changes={update_data}")
+        logger.info(
+            f"Feature flag updated: Key='{db_flag.key}', Changes={update_data}"
+        )
 
         # Invalidate cache if relevant fields changed
         if "is_enabled" in update_data or "targeting_rules" in update_data:
@@ -117,7 +133,9 @@ class FeatureFlagsService:
     ) -> bool:
         """Checks if a feature flag is enabled for the given context."""
         # 1. Check Cache
-        cached_flag = await FeatureFlagsService._get_flag_from_cache(redis_client, flag_key)
+        cached_flag = await FeatureFlagsService._get_flag_from_cache(
+            redis_client, flag_key
+        )
         if cached_flag is not None:
             logger.debug(f"Cache hit for feature flag '{flag_key}'")
             # Evaluate rules based on cached data
@@ -128,12 +146,18 @@ class FeatureFlagsService:
             )
 
         # 2. Cache miss - Fetch from DB
-        logger.debug(f"Cache miss for feature flag '{flag_key}'. Fetching from DB.")
-        db_flag = await FeatureFlagsService.get_feature_flag_by_key(db, flag_key)
+        logger.debug(
+            f"Cache miss for feature flag '{flag_key}'. Fetching from DB."
+        )
+        db_flag = await FeatureFlagsService.get_feature_flag_by_key(
+            db, flag_key
+        )
 
         if not db_flag:
             # Flag doesn't exist
-            logger.warning(f"Feature flag '{flag_key}' not found during evaluation.")
+            logger.warning(
+                f"Feature flag '{flag_key}' not found during evaluation."
+            )
             raise ValueError(f"Feature flag '{flag_key}' not found.")
 
         # 3. Evaluate Rules
@@ -192,7 +216,9 @@ class FeatureFlagsService:
         return False
 
     @staticmethod
-    def _compare_values(context_value: Any, operator: str, target_value: Any) -> bool:
+    def _compare_values(
+        context_value: Any, operator: str, target_value: Any
+    ) -> bool:
         """
         Compare values using the specified operator.
 
@@ -231,7 +257,9 @@ class FeatureFlagsService:
     # --- Cache Management ---
 
     @staticmethod
-    async def _get_flag_from_cache(redis_client: redis.Redis, flag_key: str) -> Optional[Dict]:
+    async def _get_flag_from_cache(
+        redis_client: redis.Redis, flag_key: str
+    ) -> Optional[Dict]:
         """Retrieves flag data from Redis cache."""
         cache_key = FeatureFlagsService._get_cache_key(flag_key)
         try:
@@ -255,7 +283,9 @@ class FeatureFlagsService:
                 "key": flag.key,
                 "is_enabled": flag.is_enabled,
                 "targeting_rules": flag.targeting_rules,
-                "updated_at": flag.updated_at.isoformat() if flag.updated_at else None,
+                "updated_at": flag.updated_at.isoformat()
+                if flag.updated_at
+                else None,
             }
             await redis_client.set(
                 cache_key,

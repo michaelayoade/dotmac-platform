@@ -5,20 +5,21 @@ Tests for the notifications module.
 from datetime import datetime, timedelta
 
 import pytest
-from httpx import AsyncClient
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.modules.notifications.models import (
     Notification,
     NotificationPriority,
     NotificationStatus,
     NotificationType,
 )
+from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_create_notification(async_client: AsyncClient, db_session: AsyncSession):
+async def test_create_notification(
+    async_client: AsyncClient, db_session: AsyncSession
+):
     """Test creating a notification."""
     # Create notification data
     notification_data = {
@@ -33,7 +34,9 @@ async def test_create_notification(async_client: AsyncClient, db_session: AsyncS
     }
 
     # Send request
-    response = await async_client.post("/api/v1/notifications/", json=notification_data)
+    response = await async_client.post(
+        "/api/v1/notifications/", json=notification_data
+    )
 
     # Check response
     assert response.status_code == 201
@@ -46,14 +49,18 @@ async def test_create_notification(async_client: AsyncClient, db_session: AsyncS
     assert data["status"] == NotificationStatus.PENDING.value
 
     # Check database
-    result = await db_session.execute(select(Notification).where(Notification.id == data["id"]))
+    result = await db_session.execute(
+        select(Notification).where(Notification.id == data["id"])
+    )
     db_notification = result.scalar_one()
     assert db_notification is not None
     assert db_notification.title == notification_data["title"]
 
 
 @pytest.mark.asyncio
-async def test_get_notifications(async_client: AsyncClient, db_session: AsyncSession):
+async def test_get_notifications(
+    async_client: AsyncClient, db_session: AsyncSession
+):
     """Test getting notifications."""
     # Create test notifications
     for i in range(3):
@@ -71,7 +78,9 @@ async def test_get_notifications(async_client: AsyncClient, db_session: AsyncSes
     await db_session.commit()
 
     # Send request
-    response = await async_client.get("/api/v1/notifications/?recipient_id=user123")
+    response = await async_client.get(
+        "/api/v1/notifications/?recipient_id=user123"
+    )
 
     # Check response
     assert response.status_code == 200
@@ -81,7 +90,9 @@ async def test_get_notifications(async_client: AsyncClient, db_session: AsyncSes
 
 
 @pytest.mark.asyncio
-async def test_mark_as_read(async_client: AsyncClient, db_session: AsyncSession):
+async def test_mark_as_read(
+    async_client: AsyncClient, db_session: AsyncSession
+):
     """Test marking a notification as read."""
     # Create test notification
     notification = Notification(
@@ -100,7 +111,9 @@ async def test_mark_as_read(async_client: AsyncClient, db_session: AsyncSession)
     await db_session.refresh(notification)
 
     # Send request to mark as read
-    response = await async_client.post(f"/api/v1/notifications/{notification.id}/read")
+    response = await async_client.post(
+        f"/api/v1/notifications/{notification.id}/read"
+    )
 
     # Check response
     assert response.status_code == 200
@@ -108,13 +121,17 @@ async def test_mark_as_read(async_client: AsyncClient, db_session: AsyncSession)
     assert data["status"] == NotificationStatus.READ.value
 
     # Check database
-    result = await db_session.execute(select(Notification).where(Notification.id == notification.id))
+    result = await db_session.execute(
+        select(Notification).where(Notification.id == notification.id)
+    )
     db_notification = result.scalar_one()
     assert db_notification.status == NotificationStatus.READ.value
 
 
 @pytest.mark.asyncio
-async def test_get_unread_count(async_client: AsyncClient, db_session: AsyncSession):
+async def test_get_unread_count(
+    async_client: AsyncClient, db_session: AsyncSession
+):
     """Test getting unread notification count."""
     # Create test notifications with different statuses
     for i, status in enumerate(
@@ -139,17 +156,23 @@ async def test_get_unread_count(async_client: AsyncClient, db_session: AsyncSess
     await db_session.commit()
 
     # Send request
-    response = await async_client.get("/api/v1/notifications/count?recipient_id=user123")
+    response = await async_client.get(
+        "/api/v1/notifications/count?recipient_id=user123"
+    )
 
     # Check response
     assert response.status_code == 200
     data = response.json()
     assert data["recipient_id"] == "user123"
-    assert data["unread_count"] == 2  # PENDING and DELIVERED are considered unread
+    assert (
+        data["unread_count"] == 2
+    )  # PENDING and DELIVERED are considered unread
 
 
 @pytest.mark.asyncio
-async def test_mark_all_as_read(async_client: AsyncClient, db_session: AsyncSession):
+async def test_mark_all_as_read(
+    async_client: AsyncClient, db_session: AsyncSession
+):
     """Test marking all notifications as read."""
     # Create test notifications
     for i in range(3):
@@ -168,7 +191,9 @@ async def test_mark_all_as_read(async_client: AsyncClient, db_session: AsyncSess
     await db_session.commit()
 
     # Send request to mark all as read
-    response = await async_client.post("/api/v1/notifications/read-all?recipient_id=user123")
+    response = await async_client.post(
+        "/api/v1/notifications/read-all?recipient_id=user123"
+    )
 
     # Check response
     assert response.status_code == 200
@@ -188,7 +213,9 @@ async def test_mark_all_as_read(async_client: AsyncClient, db_session: AsyncSess
 
 
 @pytest.mark.asyncio
-async def test_clean_expired_notifications(async_client: AsyncClient, db_session: AsyncSession):
+async def test_clean_expired_notifications(
+    async_client: AsyncClient, db_session: AsyncSession
+):
     """Test cleaning expired notifications."""
     # Create expired notification
     expired_time = datetime.now() - timedelta(days=31)

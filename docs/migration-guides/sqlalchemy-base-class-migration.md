@@ -38,7 +38,7 @@ from app.db.session import Base
 
 class MyModel(Base):
     __tablename__ = "my_models"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     description = Column(String(500), nullable=True)
@@ -53,7 +53,7 @@ from shared_core.base.base_model import BaseModel
 
 class MyModel(BaseModel):
     __tablename__ = "my_models"
-    
+
     # id, created_at, and updated_at are inherited from BaseModel
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str] = mapped_column(String(500), nullable=True)

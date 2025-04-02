@@ -25,11 +25,15 @@ class ConfigScope(BaseModel):
     __tablename__ = "configscope"
 
     # Use mapped_column for explicit column definitions
-    name: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(
+        String(100), unique=True, index=True, nullable=False
+    )
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationship - Mapped[List[...]] is standard for one-to-many
-    items: Mapped[List["ConfigItem"]] = relationship("ConfigItem", back_populates="scope", cascade="all, delete-orphan")
+    items: Mapped[List["ConfigItem"]] = relationship(
+        "ConfigItem", back_populates="scope", cascade="all, delete-orphan"
+    )
 
 
 class ConfigItem(BaseModel):
@@ -45,13 +49,19 @@ class ConfigItem(BaseModel):
         index=True,
         comment="Unique key for the config item",
     )
-    value: Mapped[Any] = mapped_column(JSONB, comment="Value of the config item, stored as JSON")
+    value: Mapped[Any] = mapped_column(
+        JSONB, comment="Value of the config item, stored as JSON"
+    )
     scope_id: Mapped[int] = mapped_column(
         ForeignKey("configscope.id"),
         comment="Scope this config item belongs to",
     )
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="Description of the config item")
-    version: Mapped[int] = mapped_column(Integer, default=1, comment="Version number, incremented on update")
+    description: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True, comment="Description of the config item"
+    )
+    version: Mapped[int] = mapped_column(
+        Integer, default=1, comment="Version number, incremented on update"
+    )
     is_enabled: Mapped[bool] = mapped_column(
         Boolean,
         default=True,
@@ -61,7 +71,9 @@ class ConfigItem(BaseModel):
     # Foreign keys - use Mapped[int] for the type, keep ForeignKey in mapped_column
 
     # Relationships
-    scope: Mapped["ConfigScope"] = relationship("ConfigScope", back_populates="items")
+    scope: Mapped["ConfigScope"] = relationship(
+        "ConfigScope", back_populates="items"
+    )
     history: Mapped[List["ConfigHistory"]] = relationship(
         "ConfigHistory",
         back_populates="config_item",
@@ -69,7 +81,9 @@ class ConfigItem(BaseModel):
     )
 
     # Constraints
-    __table_args__ = (UniqueConstraint("scope_id", "key", name="uix_config_scope_key"),)
+    __table_args__ = (
+        UniqueConstraint("scope_id", "key", name="uix_config_scope_key"),
+    )
 
 
 class ConfigHistory(BaseModel):
@@ -81,13 +95,19 @@ class ConfigHistory(BaseModel):
 
     value: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
-    changed_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    changed_by: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
 
     # Foreign Key
-    config_id: Mapped[int] = mapped_column(ForeignKey("configitem.id"), nullable=False)
+    config_id: Mapped[int] = mapped_column(
+        ForeignKey("configitem.id"), nullable=False
+    )
 
     # Relationship
-    config_item: Mapped["ConfigItem"] = relationship("ConfigItem", back_populates="history")
+    config_item: Mapped["ConfigItem"] = relationship(
+        "ConfigItem", back_populates="history"
+    )
 
 
 # Pydantic models for API
@@ -95,7 +115,9 @@ class ConfigHistory(BaseModel):
 
 # Use aliased PydanticBaseModel
 class ConfigScopeBase(PydanticBaseModel):
-    name: str = Field(..., max_length=100, description="Scope name (e.g., 'auth')")
+    name: str = Field(
+        ..., max_length=100, description="Scope name (e.g., 'auth')"
+    )
     description: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -140,7 +162,9 @@ class ConfigItemCreate(ConfigItemBase):
 
 
 # Use aliased PydanticBaseModel
-class ConfigItemUpdate(PydanticBaseModel):  # Separate base for update flexibility
+class ConfigItemUpdate(
+    PydanticBaseModel
+):  # Separate base for update flexibility
     value: Optional[str] = None
     description: Optional[str] = None
     is_enabled: Optional[bool] = None

@@ -5,9 +5,6 @@ Router for the logging module.
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.db.session import get_db
 from app.modules.logging.models import (
     ExportRequest,
@@ -17,26 +14,40 @@ from app.modules.logging.models import (
     LogQueryParams,
 )
 from app.modules.logging.service import LogEntryService
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 
 
 @router.post("/", response_model=LogEntryResponse, status_code=201)
-async def create_log_entry(log_entry: LogEntryCreate, db: AsyncSession = Depends(get_db)):
+async def create_log_entry(
+    log_entry: LogEntryCreate, db: AsyncSession = Depends(get_db)
+):
     """
     Create a new log entry.
     """
-    return await LogEntryService.create_log_entry(db=db, log_entry_data=log_entry)
+    return await LogEntryService.create_log_entry(
+        db=db, log_entry_data=log_entry
+    )
 
 
 @router.get("/", response_model=List[LogEntryResponse])
 async def get_log_entries(
     level: Optional[str] = Query(None, description="Filter by log level"),
-    service: Optional[str] = Query(None, alias="service", description="Filter by service name"),
-    start_time: Optional[datetime] = Query(None, description="Start time (ISO format)"),
-    end_time: Optional[datetime] = Query(None, description="End time (ISO format)"),
+    service: Optional[str] = Query(
+        None, alias="service", description="Filter by service name"
+    ),
+    start_time: Optional[datetime] = Query(
+        None, description="Start time (ISO format)"
+    ),
+    end_time: Optional[datetime] = Query(
+        None, description="End time (ISO format)"
+    ),
     skip: int = Query(0, description="Number of logs to skip"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximum number of logs to return"),
+    limit: int = Query(
+        100, ge=1, le=1000, description="Maximum number of logs to return"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -101,9 +112,15 @@ async def export_logs(
 async def export_logs_direct(
     level: Optional[str] = Query(None, description="Filter by log level"),
     service: Optional[str] = Query(None, description="Filter by service name"),
-    start_time: Optional[datetime] = Query(None, description="Start time (ISO format)"),
-    end_time: Optional[datetime] = Query(None, description="End time (ISO format)"),
-    limit: int = Query(1000, ge=1, le=10000, description="Maximum number of logs to export"),
+    start_time: Optional[datetime] = Query(
+        None, description="Start time (ISO format)"
+    ),
+    end_time: Optional[datetime] = Query(
+        None, description="End time (ISO format)"
+    ),
+    limit: int = Query(
+        1000, ge=1, le=10000, description="Maximum number of logs to export"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -121,13 +138,20 @@ async def export_logs_direct(
         time_range = {"start_time": start_time, "end_time": end_time}
 
     # Get logs with correct parameter names
-    logs, _ = await LogEntryService.get_log_entries(db=db, filters=filters, time_range=time_range, limit=limit)
+    logs, _ = await LogEntryService.get_log_entries(
+        db=db, filters=filters, time_range=time_range, limit=limit
+    )
 
     # Generate filename with timestamp
-    filename = f"logs_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+    filename = (
+        f"logs_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+    )
 
     # Convert SQLAlchemy models to Pydantic models
-    pydantic_logs = [LogEntryResponse.model_validate(log, from_attributes=True) for log in logs]
+    pydantic_logs = [
+        LogEntryResponse.model_validate(log, from_attributes=True)
+        for log in logs
+    ]
 
     # Create response with Content-Disposition header
     from fastapi.responses import JSONResponse
@@ -140,11 +164,17 @@ async def export_logs_direct(
 
 @router.get("/stats/summary")
 async def get_log_statistics(
-    start_time: Optional[datetime] = Query(None, description="Start time (ISO format)"),
-    end_time: Optional[datetime] = Query(None, description="End time (ISO format)"),
+    start_time: Optional[datetime] = Query(
+        None, description="Start time (ISO format)"
+    ),
+    end_time: Optional[datetime] = Query(
+        None, description="End time (ISO format)"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Get statistics about log entries.
     """
-    return await LogEntryService.get_log_statistics(db=db, start_time=start_time, end_time=end_time)
+    return await LogEntryService.get_log_statistics(
+        db=db, start_time=start_time, end_time=end_time
+    )

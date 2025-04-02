@@ -1,15 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
 
-from dotenv import load_dotenv
-from fastapi import FastAPI, Request, status
-from fastapi.encoders import jsonable_encoder
-from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from prometheus_fastapi_instrumentator import Instrumentator
-from shared_core.errors.exceptions import BasePlatformException
-
 # Import the initialized settings object
 from app.core.config import settings
 from app.db.redis import close_redis_pool, initialize_redis_pool
@@ -22,6 +13,14 @@ from app.modules.health.router import router as health_router
 from app.modules.logging.router import router as logging_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.webhooks.router import router as webhooks_router
+from dotenv import load_dotenv
+from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
+from shared_core.errors.exceptions import BasePlatformException
 
 # Configure logging
 logging.basicConfig(
@@ -34,33 +33,52 @@ logger = logging.getLogger(__name__)
 tags_metadata = [
     {
         "name": "Health",
-        "description": ("Health check endpoints for monitoring application status and " "readiness."),
+        "description": (
+            "Health check endpoints for monitoring application status and "
+            "readiness."
+        ),
     },
     {
         "name": "Config",
-        "description": ("Configuration management endpoints for storing and retrieving " "application settings."),
+        "description": (
+            "Configuration management endpoints for storing and retrieving "
+            "application settings."
+        ),
     },
     {
         "name": "Audit",
-        "description": ("Audit logging endpoints for tracking sensitive actions for " "compliance and security."),
+        "description": (
+            "Audit logging endpoints for tracking sensitive actions for "
+            "compliance and security."
+        ),
     },
     {
         "name": "Feature Flags",
         "description": (
-            "Feature flag endpoints for toggling features on/off globally " "or for specific users/groups."
+            "Feature flag endpoints for toggling features on/off globally "
+            "or for specific users/groups."
         ),
     },
     {
         "name": "Logging",
-        "description": ("Structured logging endpoints for storing and retrieving " "application logs."),
+        "description": (
+            "Structured logging endpoints for storing and retrieving "
+            "application logs."
+        ),
     },
     {
         "name": "Webhooks",
-        "description": ("Webhook endpoints for registering webhook endpoints and " "triggering webhooks for events."),
+        "description": (
+            "Webhook endpoints for registering webhook endpoints and "
+            "triggering webhooks for events."
+        ),
     },
     {
         "name": "Notifications",
-        "description": ("Notification endpoints for creating and managing user " "notifications."),
+        "description": (
+            "Notification endpoints for creating and managing user "
+            "notifications."
+        ),
     },
 ]
 
@@ -154,15 +172,21 @@ def create_app() -> FastAPI:
         }
 
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    async def validation_exception_handler(
+        request: Request, exc: RequestValidationError
+    ):
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=jsonable_encoder({"detail": exc.errors(), "body": exc.body}),
+            content=jsonable_encoder(
+                {"detail": exc.errors(), "body": exc.body}
+            ),
         )
 
     # Generic Exception Handler for shared exceptions
     @app.exception_handler(BasePlatformException)
-    async def platform_exception_handler(request: Request, exc: BasePlatformException):
+    async def platform_exception_handler(
+        request: Request, exc: BasePlatformException
+    ):
         logger.error(
             f"Platform error handled: {exc.__class__.__name__} - "
             f"Status: {exc.status_code}, Detail: {exc.detail} "

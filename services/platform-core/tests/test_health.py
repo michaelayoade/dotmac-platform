@@ -5,9 +5,8 @@ Tests for the health module.
 from typing import Dict
 
 import pytest
-from httpx import AsyncClient
-
 from app.modules.health.models import ServiceStatus
+from httpx import AsyncClient
 
 
 @pytest.mark.asyncio

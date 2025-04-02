@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Depends
-from fastapi.responses import PlainTextResponse
-from redis.asyncio import Redis
-
 from app.db.redis import get_redis
 from app.db.session import engine
 from app.modules.health.models import HealthResponse
 from app.modules.health.service import HealthService
+from fastapi import APIRouter, Depends
+from fastapi.responses import PlainTextResponse
+from redis.asyncio import Redis
 
 router = APIRouter()
 
@@ -47,7 +46,8 @@ async def metrics():
     prometheus-fastapi-instrumentator or a similar library.
     """
     # Return a basic Prometheus-style metrics response for testing
-    metrics_text = """# HELP platform_core_uptime_seconds How long the service has been running
+    metrics_text = """# HELP platform_core_uptime_seconds How long the service has been
+        running
 # TYPE platform_core_uptime_seconds gauge
 platform_core_uptime_seconds 123.45
 

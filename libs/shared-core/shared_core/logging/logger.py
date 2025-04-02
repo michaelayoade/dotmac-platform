@@ -11,7 +11,6 @@ import sys
 
 from shared_core.config.settings import BaseCoreSettings, load_settings
 
-
 # Load minimal settings just for logging config
 # Note: This assumes BaseCoreSettings is sufficient or uses defaults
 # for LOG_LEVEL. If specific service settings affect logging, that

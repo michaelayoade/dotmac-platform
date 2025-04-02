@@ -3,11 +3,10 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import redis
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.db.redis import get_redis
 from app.db.session import get_db
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import FeatureFlagCreate, FeatureFlagResponse, FeatureFlagUpdate
 from .service import FeatureFlagsService
@@ -36,10 +35,16 @@ async def create_feature_flag(
 ) -> FeatureFlagResponse:
     """Create a new feature flag definition."""
     try:
-        flag = await FeatureFlagsService.create_feature_flag(db, redis_client, flag_in=flag_in)
+        flag = await FeatureFlagsService.create_feature_flag(
+            db, redis_client, flag_in=flag_in
+        )
     except ValueError as e:
-        logger.warning(f"Failed to create feature flag '{flag_in.key}': " f"{e}")
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        logger.warning(
+            f"Failed to create feature flag '{flag_in.key}': " f"{e}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(e)
+        )
     return flag
 
 
@@ -57,7 +62,9 @@ async def list_feature_flags(
     db: AsyncSession = Depends(get_db),
 ) -> List[FeatureFlagResponse]:
     """Retrieve feature flags, optionally filtered by active status."""
-    return await FeatureFlagsService.get_feature_flags(db, is_active=is_active, skip=skip, limit=limit)
+    return await FeatureFlagsService.get_feature_flags(
+        db, is_active=is_active, skip=skip, limit=limit
+    )
 
 
 @router.get(
@@ -100,7 +107,9 @@ async def update_feature_flag(
         db, redis_client, flag_key=flag_key, flag_update=flag_update
     )
     if db_flag is None:
-        logger.warning(f"Feature flag with key '{flag_key}' not found for update.")
+        logger.warning(
+            f"Feature flag with key '{flag_key}' not found for update."
+        )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Feature flag not found",
@@ -116,7 +125,9 @@ async def update_feature_flag(
     tags=[FEATURE_FLAG_TAG],
 )
 async def delete_feature_flag(
-    key: str = Path(..., description="Unique key of the feature flag to delete"),
+    key: str = Path(
+        ..., description="Unique key of the feature flag to delete"
+    ),
     db: AsyncSession = Depends(get_db),
     redis_client: redis.Redis = Depends(get_redis),
 ) -> None:
@@ -136,7 +147,9 @@ async def delete_feature_flag(
     await FeatureFlagsService.invalidate_cache(redis_client, key=key)
 
     # Publish update event
-    await FeatureFlagsService.publish_update(redis_client, key=key, action="deleted")
+    await FeatureFlagsService.publish_update(
+        redis_client, key=key, action="deleted"
+    )
 
     # No content to return on success
     return None
@@ -146,7 +159,10 @@ async def delete_feature_flag(
     "/evaluate/{flag_key}",
     response_model=bool,
     summary="Evaluate Feature Flag",
-    description=("Evaluates a feature flag for a given context " "(e.g., user ID, group)."),
+    description=(
+        "Evaluates a feature flag for a given context "
+        "(e.g., user ID, group)."
+    ),
     tags=[FEATURE_FLAG_TAG],
 )
 async def evaluate_feature_flag(
@@ -176,7 +192,9 @@ async def evaluate_feature_flag(
             )
 
     try:
-        result = await FeatureFlagsService.is_feature_enabled(db, redis_client, flag_key=flag_key, context=context_dict)
+        result = await FeatureFlagsService.is_feature_enabled(
+            db, redis_client, flag_key=flag_key, context=context_dict
+        )
         return result
     except ValueError:
         raise HTTPException(

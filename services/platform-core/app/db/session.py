@@ -2,11 +2,10 @@ import logging
 import os
 from typing import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-
 # Import BaseModel for metadata registration
 from shared_core.base.base_model import BaseModel  # noqa: F401
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +13,8 @@ logger = logging.getLogger(__name__)
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError(
-        "DATABASE_URL environment variable is not set. " "Please set it to a valid database connection string."
+        "DATABASE_URL environment variable is not set. "
+        "Please set it to a valid database connection string."
     )
 
 # Create async engine
@@ -40,17 +40,17 @@ from app.modules.audit.models import AuditLog  # noqa
 
 # Import config models with explicit imports to avoid unused import warnings
 from app.modules.config.models import (  # noqa
+    ConfigHistory,
     ConfigItem,
     ConfigScope,
-    ConfigHistory,
 )
 from app.modules.feature_flags.models import FeatureFlag  # noqa
 from app.modules.logging.models import LogEntry  # noqa
 from app.modules.notifications.models import Notification  # noqa
 from app.modules.webhooks.models import (  # noqa
+    WebhookDelivery,
     WebhookEndpoint,
     WebhookSubscription,
-    WebhookDelivery,
 )
 
 

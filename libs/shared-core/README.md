@@ -23,7 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class MyModel(BaseModel):
     __tablename__ = "my_models"
-    
+
     # id, created_at, and updated_at are inherited from BaseModel
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str] = mapped_column(String(500), nullable=True)

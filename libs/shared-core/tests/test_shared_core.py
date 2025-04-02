@@ -5,11 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from pydantic import Field, ValidationError
 from pydantic_settings import SettingsConfigDict
-
-from shared_core.config.settings import (
-    BaseCoreSettings,
-    load_settings,
-)
+from shared_core.config.settings import BaseCoreSettings, load_settings
 from shared_core.errors.exceptions import (
     BadRequestError,
     BasePlatformException,

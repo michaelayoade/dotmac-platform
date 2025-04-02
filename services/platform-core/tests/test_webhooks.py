@@ -6,19 +6,20 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.modules.webhooks.models import (
     WebhookDelivery,
     WebhookEndpoint,
     WebhookSubscription,
 )
 from app.modules.webhooks.service import WebhooksService
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_create_endpoint(async_client: AsyncClient, db_session: AsyncSession):
+async def test_create_endpoint(
+    async_client: AsyncClient, db_session: AsyncSession
+):
     """Test creating a webhook endpoint."""
     # Create endpoint data
     endpoint_data = {
@@ -29,7 +30,9 @@ async def test_create_endpoint(async_client: AsyncClient, db_session: AsyncSessi
     }
 
     # Send request
-    response = await async_client.post("/api/v1/webhooks/endpoints", json=endpoint_data)
+    response = await async_client.post(
+        "/api/v1/webhooks/endpoints", json=endpoint_data
+    )
 
     # Check response
     assert response.status_code == 201
@@ -54,7 +57,9 @@ async def test_create_endpoint(async_client: AsyncClient, db_session: AsyncSessi
 
 
 @pytest.mark.asyncio
-async def test_get_endpoints(async_client: AsyncClient, db_session: AsyncSession):
+async def test_get_endpoints(
+    async_client: AsyncClient, db_session: AsyncSession
+):
     """Test getting webhook endpoints."""
     # Create test endpoints
     for i in range(3):
@@ -80,7 +85,9 @@ async def test_get_endpoints(async_client: AsyncClient, db_session: AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_create_subscription(async_client: AsyncClient, db_session: AsyncSession):
+async def test_create_subscription(
+    async_client: AsyncClient, db_session: AsyncSession
+):
     """Test creating a webhook subscription."""
     # Create test endpoint
     endpoint = WebhookEndpoint(
@@ -115,18 +122,25 @@ async def test_create_subscription(async_client: AsyncClient, db_session: AsyncS
     # Check database
     from sqlalchemy import select
 
-    query = select(WebhookSubscription).where(WebhookSubscription.id == data["id"])
+    query = select(WebhookSubscription).where(
+        WebhookSubscription.id == data["id"]
+    )
     result = await db_session.execute(query)
     db_subscription = result.scalar_one()
 
     assert db_subscription is not None
     assert db_subscription.endpoint_id == endpoint.id
     assert db_subscription.event_type == subscription_data["event_type"]
-    assert db_subscription.filter_conditions == subscription_data["filter_conditions"]
+    assert (
+        db_subscription.filter_conditions
+        == subscription_data["filter_conditions"]
+    )
 
 
 @pytest.mark.asyncio
-async def test_get_subscriptions(async_client: AsyncClient, db_session: AsyncSession):
+async def test_get_subscriptions(
+    async_client: AsyncClient, db_session: AsyncSession
+):
     """Test getting webhook subscriptions."""
     # Create test endpoint
     endpoint = WebhookEndpoint(
@@ -150,17 +164,23 @@ async def test_get_subscriptions(async_client: AsyncClient, db_session: AsyncSes
     await db_session.commit()
 
     # Send request to get subscriptions for the endpoint
-    response = await async_client.get(f"/api/v1/webhooks/endpoints/{endpoint.id}/subscriptions")
+    response = await async_client.get(
+        f"/api/v1/webhooks/endpoints/{endpoint.id}/subscriptions"
+    )
 
     # Check response
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == len(event_types)  # Check if we got all created subscriptions
+    assert len(data) == len(
+        event_types
+    )  # Check if we got all created subscriptions
     assert {sub["event_type"] for sub in data} == {et for et in event_types}
 
 
 @pytest.mark.asyncio
-async def test_trigger_webhook(async_client: AsyncClient, db_session: AsyncSession):
+async def test_trigger_webhook(
+    async_client: AsyncClient, db_session: AsyncSession
+):
     """Test triggering a webhook."""
     # Create test endpoint
     endpoint = WebhookEndpoint(
@@ -186,16 +206,22 @@ async def test_trigger_webhook(async_client: AsyncClient, db_session: AsyncSessi
     payload = {"config_key": "new_setting", "value": "enabled"}
 
     # Mock the WebhooksService.trigger_webhook method
-    with patch("app.modules.webhooks.service.WebhooksService.trigger_webhook") as mock_trigger:
+    with patch(
+        "app.modules.webhooks.service.WebhooksService.trigger_webhook"
+    ) as mock_trigger:
         # Configure the mock to return a list of delivery IDs
         mock_delivery_ids = [1, 2, 3]  # Example delivery IDs
         mock_trigger.return_value = mock_delivery_ids
 
         # Send request to the correct path with event_type in URL
-        response = await async_client.post(f"/api/v1/webhooks/trigger/{event_type}", json=payload)
+        response = await async_client.post(
+            f"/api/v1/webhooks/trigger/{event_type}", json=payload
+        )
 
         # Check response status code
-        assert response.status_code == 202  # Expecting 202 Accepted status code
+        assert (
+            response.status_code == 202
+        )  # Expecting 202 Accepted status code
 
         # Parse the response data
         response_data = response.json()
@@ -213,7 +239,9 @@ async def test_trigger_webhook(async_client: AsyncClient, db_session: AsyncSessi
         # Verify the service method was called with the correct parameters
         mock_trigger.assert_called_once()
         # Check that the first argument is a db session
-        assert mock_trigger.call_args[0][0].__class__.__name__ == "AsyncSession"
+        assert (
+            mock_trigger.call_args[0][0].__class__.__name__ == "AsyncSession"
+        )
         # Check that the third argument is the event type
         assert mock_trigger.call_args[0][2] == event_type
         # Check that the fourth argument is the payload
@@ -222,7 +250,9 @@ async def test_trigger_webhook(async_client: AsyncClient, db_session: AsyncSessi
 
 @pytest.mark.asyncio
 @patch("httpx.AsyncClient.post")
-async def test_retry_failed_deliveries(mock_post, async_client: AsyncClient, db_session: AsyncSession):
+async def test_retry_failed_deliveries(
+    mock_post, async_client: AsyncClient, db_session: AsyncSession
+):
     """Test retrying failed webhook deliveries."""
     # Mock the HTTP response
     mock_response = MagicMock()
@@ -260,7 +290,9 @@ async def test_retry_failed_deliveries(mock_post, async_client: AsyncClient, db_
         return_value=(True, 200, "OK"),
     ) as mock_delivery:
         # Call the retry function - need to run it in an event loop since it's async
-        await WebhooksService.retry_failed_deliveries(db=db_session, test_mode=True)
+        await WebhooksService.retry_failed_deliveries(
+            db=db_session, test_mode=True
+        )
 
         # Assertions
         mock_delivery.assert_called_once()

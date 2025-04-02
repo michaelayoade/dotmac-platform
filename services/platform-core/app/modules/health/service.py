@@ -3,10 +3,9 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 import sqlalchemy as sa
+from app.core.config import settings
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +49,9 @@ class HealthService:
             return {
                 "status": "ok",
                 "details": {
-                    "database": str(engine.url).split("@")[-1],  # Hide credentials
+                    "database": str(engine.url).split("@")[
+                        -1
+                    ],  # Hide credentials
                     "dialect": engine.dialect.name,
                 },
             }
@@ -93,7 +94,9 @@ class HealthService:
             }
 
     @classmethod
-    async def check_all_components(cls, engine: AsyncSession, redis_client: Redis) -> List[Dict[str, Any]]:
+    async def check_all_components(
+        cls, engine: AsyncSession, redis_client: Redis
+    ) -> List[Dict[str, Any]]:
         """
         Check all components and return their status.
         """

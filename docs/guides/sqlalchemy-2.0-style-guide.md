@@ -103,10 +103,10 @@ Define indexes and constraints at the class level:
 ```python
 class MyModel(BaseModel):
     __tablename__ = "my_models"
-    
+
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
-    
+
     # Define unique constraint
     __table_args__ = (
         UniqueConstraint("name", "email", name="uq_name_email"),

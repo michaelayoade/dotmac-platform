@@ -2,10 +2,9 @@ import logging
 from urllib.parse import urlparse
 
 import redis.asyncio as redis
+from app.core.config import settings
 from fastapi import HTTPException
 from redis.asyncio.connection import ConnectionPool
-
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -59,15 +58,21 @@ async def initialize_redis_pool():
             master_name = parsed_url.path.strip("/")
             password = parsed_url.password
             # Create sentinel connection
-            sentinels = [(s.split(":")[0], int(s.split(":")[1])) for s in sentinels_str.split(",")]
+            sentinels = [
+                (s.split(":")[0], int(s.split(":")[1]))
+                for s in sentinels_str.split(",")
+            ]
             sentinel = redis.asyncio.Sentinel(
                 sentinels,
                 socket_timeout=0.1,
                 password=password,
             )
-            redis_pool = sentinel.master_for(master_name, decode_responses=True)
+            redis_pool = sentinel.master_for(
+                master_name, decode_responses=True
+            )
             logger.info(
-                f"Redis Sentinel pool initialized for master '{master_name}'" f"using sentinels: {sentinels_str}"
+                f"Redis Sentinel pool initialized for master '{master_name}'"
+                f"using sentinels: {sentinels_str}"
             )
         else:
             redis_pool = redis.asyncio.from_url(
@@ -76,7 +81,9 @@ async def initialize_redis_pool():
                 decode_responses=True,
                 health_check_interval=30,  # Check connection every 30s
             )
-            logger.info(f"Standard Redis pool initialized from URL: {pool_url}")
+            logger.info(
+                f"Standard Redis pool initialized from URL: {pool_url}"
+            )
 
         # Test connection immediately after creation
         try:
@@ -84,15 +91,21 @@ async def initialize_redis_pool():
                 await client.ping()
             logger.info("Redis connection successful.")
         except redis.exceptions.ConnectionError as e:
-            logger.error(f"Failed to connect to Redis at {redis_url} " f"during pool initialization: {e}")
+            logger.error(
+                f"Failed to connect to Redis at {redis_url} "
+                f"during pool initialization: {e}"
+            )
             # Optionally re-raise or handle based on application requirements
             # raise  # Uncomment to prevent startup if Redis is down
         except redis.exceptions.AuthenticationError as e:
-            logger.error(f"Redis authentication failed for URL: {redis_url}. Error: {e}")
+            logger.error(
+                f"Redis authentication failed for URL: {redis_url}. Error: {e}"
+            )
             # raise # Uncomment to prevent startup on auth failure
         except Exception as e:
             logger.error(
-                f"An unexpected error occurred during Redis pool init for " f"{redis_url}: {e}",
+                f"An unexpected error occurred during Redis pool init for "
+                f"{redis_url}: {e}",
                 exc_info=True,
             )
             # raise
@@ -112,14 +125,16 @@ async def close_redis_pool():
 
 # For use as a FastAPI dependency
 async def get_redis() -> redis.Redis:
-    """FastAPI dependency to get a Redis client from the pool."""
+    """Returns a Redis client from the pool."""
     # Ensure pool is initialized
     # (important if app startup event doesn't run first)
     if redis_pool is None:
         await initialize_redis_pool()
 
     if redis_pool is None:
-        raise HTTPException(status_code=503, detail="Redis service unavailable.")
+        raise HTTPException(
+            status_code=503, detail="Redis service unavailable."
+        )
 
     async with redis_pool.client() as client:
         try:
@@ -128,4 +143,6 @@ async def get_redis() -> redis.Redis:
             yield client
         except Exception as e:
             logger.error(f"Failed to yield Redis client: {e}")
-            raise HTTPException(status_code=503, detail="Redis connection error.")
+            raise HTTPException(
+                status_code=503, detail="Redis connection error."
+            )

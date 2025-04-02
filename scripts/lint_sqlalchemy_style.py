@@ -15,7 +15,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 # Default patterns to search for
 DEFAULT_PATTERNS = {
@@ -161,7 +161,9 @@ def main() -> int:
         "files", nargs="*", help="Files or directories to check"
     )
     parser.add_argument(
-        "--fix", action="store_true", help="Attempt to fix issues automatically"
+        "--fix",
+        action="store_true",
+        help="Attempt to fix issues automatically",
     )
     args = parser.parse_args()
 
@@ -172,9 +174,11 @@ def main() -> int:
     # Find Python files to check
     paths = args.files or ["."]
     python_files = find_python_files(paths)
-    
+
     # Skip checking the linter itself
-    python_files = [f for f in python_files if not f.endswith("lint_sqlalchemy_style.py")]
+    python_files = [
+        f for f in python_files if not f.endswith("lint_sqlalchemy_style.py")
+    ]
 
     # Check each file
     issues = []

@@ -1,9 +1,5 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
-from redis import Redis
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.db.redis import get_redis
 from app.db.session import get_db
 from app.modules.config.models import (
@@ -16,6 +12,9 @@ from app.modules.config.models import (
 )
 from app.modules.config.service import ConfigService
 from app.utils.common import get_client_ip
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
+from redis import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 
@@ -26,7 +25,9 @@ router = APIRouter()
     response_model=ConfigScopeResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_scope(scope: ConfigScopeCreate, db: AsyncSession = Depends(get_db)) -> ConfigScopeResponse:
+async def create_scope(
+    scope: ConfigScopeCreate, db: AsyncSession = Depends(get_db)
+) -> ConfigScopeResponse:
     """
     Create a new configuration scope.
     """
@@ -34,7 +35,9 @@ async def create_scope(scope: ConfigScopeCreate, db: AsyncSession = Depends(get_
 
 
 @router.get("/scopes", response_model=List[ConfigScopeResponse])
-async def get_scopes(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)) -> List[ConfigScopeResponse]:
+async def get_scopes(
+    skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)
+) -> List[ConfigScopeResponse]:
     """
     Get all configuration scopes.
     """
@@ -42,7 +45,9 @@ async def get_scopes(skip: int = 0, limit: int = 100, db: AsyncSession = Depends
 
 
 @router.get("/scopes/{scope_name}", response_model=ConfigScopeResponse)
-async def get_scope(scope_name: str, db: AsyncSession = Depends(get_db)) -> ConfigScopeResponse:
+async def get_scope(
+    scope_name: str, db: AsyncSession = Depends(get_db)
+) -> ConfigScopeResponse:
     """
     Get a configuration scope by name.
     """
@@ -75,10 +80,14 @@ async def create_config_item(
     # For now, we'll use the client IP as a placeholder
     user_id = get_client_ip(request)
 
-    config_item = await ConfigService.create_config_item(db, scope_name, config, user_id)
+    config_item = await ConfigService.create_config_item(
+        db, scope_name, config, user_id
+    )
 
     # Cache the config item
-    await ConfigService.cache_config(redis, scope_name, config.key, config.value)
+    await ConfigService.cache_config(
+        redis, scope_name, config.key, config.value
+    )
 
     # Publish update event
     await ConfigService.publish_config_update(redis, scope_name, config.key)
@@ -110,7 +119,9 @@ async def get_config_item(
     Get a configuration item by scope and key.
     """
     # Try to get from cache first
-    cached_value = await ConfigService.get_cached_config(redis, scope_name, key)
+    cached_value = await ConfigService.get_cached_config(
+        redis, scope_name, key
+    )
 
     # If not in cache, get from database and cache it
     if cached_value is None:
@@ -122,7 +133,9 @@ async def get_config_item(
             )
 
         # Cache the config item
-        await ConfigService.cache_config(redis, scope_name, key, config_item.value)
+        await ConfigService.cache_config(
+            redis, scope_name, key, config_item.value
+        )
 
         return config_item
     else:
@@ -155,7 +168,9 @@ async def update_config_item(
     # For now, we'll use the client IP as a placeholder
     user_id = get_client_ip(request)
 
-    config_item = await ConfigService.update_config_item(db, scope_name, key, config, user_id)
+    config_item = await ConfigService.update_config_item(
+        db, scope_name, key, config, user_id
+    )
 
     # Update cache
     await ConfigService.cache_config(redis, scope_name, key, config_item.value)
@@ -168,7 +183,9 @@ async def update_config_item(
 
 @router.delete("/{scope_name}/{key}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_config_item(
-    key: str = Path(..., description="The key of the configuration item to delete"),
+    key: str = Path(
+        ..., description="The key of the configuration item to delete"
+    ),
     scope: str = Path(
         ...,
         description="The scope name of the configuration item (e.g., 'global')",
@@ -181,7 +198,9 @@ async def delete_config_item(
 
     Requires `config:delete` permission.
     """
-    deleted = await ConfigService.delete_config_item(db, key=key, scope_name=scope)
+    deleted = await ConfigService.delete_config_item(
+        db, key=key, scope_name=scope
+    )
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -210,7 +229,9 @@ async def get_config_history(
     """
     Retrieve the history of changes for a specific configuration item within a scope.
     """
-    history = await ConfigService.get_config_history(db, key=key, scope_name=scope)
+    history = await ConfigService.get_config_history(
+        db, key=key, scope_name=scope
+    )
     if not history:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

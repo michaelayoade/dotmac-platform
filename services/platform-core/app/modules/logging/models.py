@@ -21,15 +21,31 @@ class LogEntry(BaseModel):
     __tablename__ = "log_entries"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), index=True)
-    level: Mapped[str] = mapped_column(String(10), index=True)  # INFO, WARNING, ERROR, DEBUG, etc.
-    service: Mapped[str] = mapped_column(String(100), index=True)  # Service or component name
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now(), index=True
+    )
+    level: Mapped[str] = mapped_column(
+        String(10), index=True
+    )  # INFO, WARNING, ERROR, DEBUG, etc.
+    service: Mapped[str] = mapped_column(
+        String(100), index=True
+    )  # Service or component name
     message: Mapped[str] = mapped_column(Text)
-    context: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)  # Additional context data
-    trace_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)  # For distributed tracing
-    span_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # For distributed tracing
-    user_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)  # User ID if applicable
-    ip_address: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Client IP address if applicable
+    context: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )  # Additional context data
+    trace_id: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True, index=True
+    )  # For distributed tracing
+    span_id: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True
+    )  # For distributed tracing
+    user_id: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True, index=True
+    )  # User ID if applicable
+    ip_address: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # Client IP address if applicable
 
     # Create indexes for common query patterns
     __table_args__ = (

@@ -8,10 +8,6 @@ from datetime import datetime
 from typing import List, Optional
 
 import redis
-from fastapi import BackgroundTasks
-from sqlalchemy import and_, desc, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.modules.notifications.models import (
     Notification,
     NotificationBulkCreate,
@@ -20,6 +16,9 @@ from app.modules.notifications.models import (
     NotificationUpdate,
 )
 from app.utils.common import json_serializer
+from fastapi import BackgroundTasks
+from sqlalchemy import and_, desc, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,9 @@ class NotificationsService:
     """
 
     @staticmethod
-    async def create_notification(db: AsyncSession, notification: NotificationCreate) -> Notification:
+    async def create_notification(
+        db: AsyncSession, notification: NotificationCreate
+    ) -> Notification:
         """
         Create a new notification.
 
@@ -59,7 +60,9 @@ class NotificationsService:
         return db_notification
 
     @staticmethod
-    async def create_bulk_notifications(db: AsyncSession, notification: NotificationBulkCreate) -> List[Notification]:
+    async def create_bulk_notifications(
+        db: AsyncSession, notification: NotificationBulkCreate
+    ) -> List[Notification]:
         """
         Create multiple notifications at once.
 
@@ -112,7 +115,9 @@ class NotificationsService:
             Updated notification if found, None otherwise
         """
         db_notification = (
-            await db.execute(select(Notification).filter(Notification.id == notification_id))
+            await db.execute(
+                select(Notification).filter(Notification.id == notification_id)
+            )
         ).scalar_one_or_none()
         if not db_notification:
             return None
@@ -123,11 +128,17 @@ class NotificationsService:
             setattr(db_notification, key, value)
 
         # If status is being updated to "delivered", set delivered_at time
-        if update_dict.get("status") == NotificationStatus.DELIVERED.value and not db_notification.delivered_at:
+        if (
+            update_dict.get("status") == NotificationStatus.DELIVERED.value
+            and not db_notification.delivered_at
+        ):
             db_notification.delivered_at = datetime.utcnow()
 
         # If status is being updated to "read", set read_at time
-        if update_dict.get("status") == NotificationStatus.READ.value and not db_notification.read_at:
+        if (
+            update_dict.get("status") == NotificationStatus.READ.value
+            and not db_notification.read_at
+        ):
             db_notification.read_at = datetime.utcnow()
 
         await db.commit()
@@ -135,7 +146,9 @@ class NotificationsService:
         return db_notification
 
     @staticmethod
-    async def mark_as_read(db: AsyncSession, notification_id: int) -> Optional[Notification]:
+    async def mark_as_read(
+        db: AsyncSession, notification_id: int
+    ) -> Optional[Notification]:
         """
         Mark a notification as read.
 
@@ -146,8 +159,12 @@ class NotificationsService:
         Returns:
             Updated notification if found, None otherwise
         """
-        update_data = NotificationUpdate(status=NotificationStatus.READ, read_at=datetime.utcnow())
-        return await NotificationsService.update_notification(db, notification_id, update_data)
+        update_data = NotificationUpdate(
+            status=NotificationStatus.READ, read_at=datetime.utcnow()
+        )
+        return await NotificationsService.update_notification(
+            db, notification_id, update_data
+        )
 
     @staticmethod
     async def mark_all_as_read(db: AsyncSession, recipient_id: str) -> int:
@@ -193,7 +210,9 @@ class NotificationsService:
         return len(unread_notifications)
 
     @staticmethod
-    async def delete_notification(db: AsyncSession, notification_id: int) -> bool:
+    async def delete_notification(
+        db: AsyncSession, notification_id: int
+    ) -> bool:
         """
         Delete a notification.
 
@@ -205,7 +224,9 @@ class NotificationsService:
             True if deleted, False if not found
         """
         db_notification = (
-            await db.execute(select(Notification).filter(Notification.id == notification_id))
+            await db.execute(
+                select(Notification).filter(Notification.id == notification_id)
+            )
         ).scalar_one_or_none()
         if not db_notification:
             return False
@@ -215,7 +236,9 @@ class NotificationsService:
         return True
 
     @staticmethod
-    async def get_notification(db: AsyncSession, notification_id: int) -> Optional[Notification]:
+    async def get_notification(
+        db: AsyncSession, notification_id: int
+    ) -> Optional[Notification]:
         """
         Get a notification by ID.
 
@@ -226,7 +249,11 @@ class NotificationsService:
         Returns:
             Notification if found, None otherwise
         """
-        return (await db.execute(select(Notification).filter(Notification.id == notification_id))).scalar_one_or_none()
+        return (
+            await db.execute(
+                select(Notification).filter(Notification.id == notification_id)
+            )
+        ).scalar_one_or_none()
 
     @staticmethod
     async def get_notifications(
@@ -265,7 +292,9 @@ class NotificationsService:
             query = query.filter(Notification.status == status.value)
 
         if notification_type:
-            query = query.filter(Notification.notification_type == notification_type)
+            query = query.filter(
+                Notification.notification_type == notification_type
+            )
 
         if priority:
             query = query.filter(Notification.priority == priority)
@@ -326,7 +355,9 @@ class NotificationsService:
         return len(notifications)
 
     @staticmethod
-    async def publish_notification(redis_client: redis.Redis, notification: Notification) -> bool:
+    async def publish_notification(
+        redis_client: redis.Redis, notification: Notification
+    ) -> bool:
         """
         Publish a notification to Redis for real-time delivery.
 
@@ -339,7 +370,10 @@ class NotificationsService:
         """
         try:
             # Create channel name based on recipient
-            channel = f"notifications:{notification.recipient_type}:{notification.recipient_id}"
+            channel = (
+                f"notifications:{notification.recipient_type}:"
+                f"{notification.recipient_id}"
+            )
 
             # Serialize notification to JSON
             notification_dict = {
@@ -356,7 +390,9 @@ class NotificationsService:
                 "action_url": notification.action_url,
             }
 
-            notification_json = json.dumps(notification_dict, default=json_serializer)
+            notification_json = json.dumps(
+                notification_dict, default=json_serializer
+            )
 
             # Publish to Redis
             await redis_client.publish(channel, notification_json)
@@ -364,7 +400,9 @@ class NotificationsService:
             # Also publish to a global channel for system-wide listeners
             await redis_client.publish("notifications:all", notification_json)
 
-            logger.info(f"Published notification {notification.id} to channel {channel}")
+            logger.info(
+                f"Published notification {notification.id} to channel {channel}"
+            )
             return True
 
         except Exception as e:
@@ -391,7 +429,9 @@ class NotificationsService:
             Created notification
         """
         # Create notification in database
-        db_notification = await NotificationsService.create_notification(db, notification)
+        db_notification = await NotificationsService.create_notification(
+            db, notification
+        )
 
         # Publish to Redis (either in background or directly)
         if background_tasks:
@@ -429,7 +469,11 @@ class NotificationsService:
             List of created notifications
         """
         # Create notifications in database
-        db_notifications = await NotificationsService.create_bulk_notifications(db, notification)
+        db_notifications = (
+            await NotificationsService.create_bulk_notifications(
+                db, notification
+            )
+        )
 
         # Publish to Redis in background
         for db_notification in db_notifications:

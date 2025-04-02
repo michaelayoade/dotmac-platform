@@ -67,7 +67,9 @@ async def prune_old_logs(days: int = 30):
         # Create query params with the cutoff date
         from app.modules.logging.models import LogQueryParams
 
-        query_params = LogQueryParams(end_time=cutoff_date, limit=10000)  # Set a high limit to delete in batches
+        query_params = LogQueryParams(
+            end_time=cutoff_date, limit=10000
+        )  # Set a high limit to delete in batches
 
         # Get old logs
         old_logs = await LoggingService.get_log_entries(db, query_params)
@@ -77,7 +79,9 @@ async def prune_old_logs(days: int = 30):
             db.delete(log)
 
         db.commit()
-        logger.info(f"Deleted {len(old_logs)} log entries older than {days} days")
+        logger.info(
+            f"Deleted {len(old_logs)} log entries older than {days} days"
+        )
     except Exception as e:
         logger.error(f"Error pruning old logs: {e}")
     finally:
@@ -100,7 +104,9 @@ async def run_all_tasks(log_retention_days: int = 30):
 
 def main():
     """Main entry point for the scheduler."""
-    parser = argparse.ArgumentParser(description="Run Platform Core maintenance tasks")
+    parser = argparse.ArgumentParser(
+        description="Run Platform Core maintenance tasks"
+    )
     parser.add_argument(
         "--task",
         type=str,

@@ -3,12 +3,11 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
+import alembic
+from app.core.config import settings
 from dotenv import load_dotenv
 from shared_core.base.base_model import BaseModel
 from sqlalchemy import engine_from_config, pool
-
-import alembic
-from app.core.config import settings
 
 # --- Load Environment Variables --- #
 # Assuming alembic is run from the project root (platform-core)
@@ -19,7 +18,9 @@ loaded = load_dotenv(dotenv_path=dotenv_path)
 print(f"Alembic: .env loaded: {loaded}")
 
 # Adjust the path according to your actual project structure
-sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(
+    0, os.path.realpath(os.path.join(os.path.dirname(__file__), ".."))
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -84,7 +85,9 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        alembic.context.configure(connection=connection, target_metadata=target_metadata)
+        alembic.context.configure(
+            connection=connection, target_metadata=target_metadata
+        )
 
         with alembic.context.begin_transaction():
             alembic.context.run_migrations()

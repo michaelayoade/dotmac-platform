@@ -50,7 +50,7 @@ jobs:
           ! grep -r "Base = declarative_base()" --include="*.py" app/
           echo " No deprecated SQLAlchemy base class usage found"
         working-directory: ./services/platform-core
-        
+
       - name: Run SQLAlchemy style linter
         run: python ../../scripts/lint_sqlalchemy_style.py .
         working-directory: ./services/platform-core

@@ -2,10 +2,9 @@ import logging
 from typing import Optional
 
 import redis.asyncio as redis
+from app.core.config import settings
 from redis.asyncio.client import Redis
 from redis.exceptions import RedisError
-
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +41,14 @@ class RedisClient:
             await cls._redis_client.ping()
             logger.info("Successfully connected to Redis and pinged server.")
         except RedisError as e:
-            logger.error(f"Failed to initialize Redis connection: {e}", exc_info=True)
+            logger.error(
+                f"Failed to initialize Redis connection: {e}", exc_info=True
+            )
             # Depending on the application's needs, you might want to raise the error
             # or handle it gracefully (e.g., operate without cache).
-            cls._redis_client = None  # Ensure client is None if initialization fails
+            cls._redis_client = (
+                None  # Ensure client is None if initialization fails
+            )
             cls._pool = None
             # raise  # Optionally re-raise the exception
         except Exception as e:
@@ -68,24 +71,32 @@ class RedisClient:
             except Exception as e:
                 logger.error(f"Error closing Redis connection pool: {e}")
         else:
-            logger.warning("Attempted to close Redis client, but it was not initialized.")
+            logger.warning(
+                "Attempted to close Redis client, but it was not initialized."
+            )
 
         if cls._pool:
             try:
                 await cls._pool.disconnect()  # Disconnect the pool
                 logger.info("Redis connection pool disconnected.")
             except RedisError as e:
-                logger.error(f"Error disconnecting Redis pool: {e}", exc_info=True)
+                logger.error(
+                    f"Error disconnecting Redis pool: {e}", exc_info=True
+                )
             finally:
                 cls._pool = None
         else:
-            logger.warning("Attempted to disconnect Redis pool, but it was not initialized.")
+            logger.warning(
+                "Attempted to disconnect Redis pool, but it was not initialized."
+            )
 
     @classmethod
     def get_client(cls) -> Optional[Redis]:
         """Get the initialized Redis client instance."""
         if cls._redis_client is None:
-            logger.error("Redis client accessed before initialization or after failure.")
+            logger.error(
+                "Redis client accessed before initialization or after failure."
+            )
             # Depending on requirements, you could raise an error or return None
             # raise RuntimeError("Redis client is not initialized.")
         return cls._redis_client
@@ -96,7 +107,9 @@ async def example_redis_usage():
     redis_conn = RedisClient.get_client()
     if redis_conn:
         try:
-            await redis_conn.set("mykey", "myvalue", ex=60)  # Set with 60s expiry
+            await redis_conn.set(
+                "mykey", "myvalue", ex=60
+            )  # Set with 60s expiry
             value = await redis_conn.get("mykey")
             logger.info(f"Got value from Redis: {value}")
             return value

@@ -108,8 +108,12 @@ class PlatformCoreSettings(BaseCoreSettings):  # Inherit from BaseCoreSettings
     """Main settings model combining all components."""
 
     # General
-    ENV: str = Field(default="development", description="Application environment")
-    PROJECT_NAME: str = Field(default="Platform Core", description="Name of the project")
+    ENV: str = Field(
+        default="development", description="Application environment"
+    )
+    PROJECT_NAME: str = Field(
+        default="Platform Core", description="Name of the project"
+    )
     VERSION: str = Field(default="0.1.0", description="API version")
 
     # Components (Declare type only)

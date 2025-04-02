@@ -18,7 +18,9 @@ def main():
     """
     Main entry point for the run script.
     """
-    parser = argparse.ArgumentParser(description="Run the Platform Core service")
+    parser = argparse.ArgumentParser(
+        description="Run the Platform Core service"
+    )
     parser.add_argument(
         "--host",
         type=str,

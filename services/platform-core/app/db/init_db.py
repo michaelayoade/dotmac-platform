@@ -1,15 +1,14 @@
 import logging
 
-from sqlalchemy.orm import Session
-
 from app.core.config import settings
 from app.db.session import SessionLocal, engine
-from shared_core.base.base_model import BaseModel
 from app.modules.audit.models import AuditLog  # noqa: F401
 from app.modules.config.models import ConfigScope  # noqa: F401
 from app.modules.feature_flags.models import FeatureFlag  # noqa: F401
 from app.modules.logging.models import LogEntry  # noqa: F401
 from app.modules.notifications.models import Notification  # noqa: F401
+from shared_core.base.base_model import BaseModel
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,9 @@ def init_db() -> None:
         # Create tables
         BaseModel.metadata.create_all(bind=engine)
         db_url = settings.DB.DATABASE_URL.render_as_string(hide_password=True)
-        logger.info("Database tables created successfully. " f"Database URL: {db_url}")
+        logger.info(
+            "Database tables created successfully. " f"Database URL: {db_url}"
+        )
 
         # Initialize default data if needed
         db = SessionLocal()
@@ -32,7 +33,9 @@ def init_db() -> None:
             db.close()
     except Exception as e:
         logger.error(
-            f"Error initializing database: {e}. " "If your models have changed, you might need to run " "migrations."
+            f"Error initializing database: {e}. "
+            "If your models have changed, you might need to run "
+            "migrations."
         )
         raise
 
@@ -44,7 +47,11 @@ def init_default_data(db: Session) -> None:
     # Create default config scopes if they don't exist
     default_scopes = ["system", "auth", "logging", "notifications"]
     for scope_name in default_scopes:
-        scope = db.query(ConfigScope).filter(ConfigScope.name == scope_name).first()
+        scope = (
+            db.query(ConfigScope)
+            .filter(ConfigScope.name == scope_name)
+            .first()
+        )
         if not scope:
             scope = ConfigScope(
                 name=scope_name,
@@ -72,7 +79,11 @@ def init_default_data(db: Session) -> None:
     ]
 
     for flag_data in default_flags:
-        flag = db.query(FeatureFlag).filter(FeatureFlag.key == flag_data["key"]).first()
+        flag = (
+            db.query(FeatureFlag)
+            .filter(FeatureFlag.key == flag_data["key"])
+            .first()
+        )
         if not flag:
             flag = FeatureFlag(**flag_data)
             db.add(flag)

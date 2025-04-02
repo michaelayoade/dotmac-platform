@@ -1,18 +1,21 @@
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.db.session import get_db
 from app.modules.audit.models import AuditLogCreate, AuditLogResponse
 from app.modules.audit.service import AuditService
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 
 
-@router.post("/", response_model=AuditLogResponse, status_code=status.HTTP_201_CREATED)
-async def create_audit_log(audit_log: AuditLogCreate, db: AsyncSession = Depends(get_db)):
+@router.post(
+    "/", response_model=AuditLogResponse, status_code=status.HTTP_201_CREATED
+)
+async def create_audit_log(
+    audit_log: AuditLogCreate, db: AsyncSession = Depends(get_db)
+):
     """
     Create a new audit log entry.
     """
