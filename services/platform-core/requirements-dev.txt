@@ -1,0 +1,14 @@
+# Test Dependencies
+pytest
+pytest-asyncio
+pytest-mock
+fakeredis
+httpx # For AsyncClient
+fakeredis[hiredis] # For mocking Redis
+aiosqlite # For SQLite async support
+
+# Linters & Formatters
+black
+isort
+ruff
+tomli # For parsing pyproject.toml

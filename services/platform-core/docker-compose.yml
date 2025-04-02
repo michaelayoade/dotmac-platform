@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:14
+    container_name: platform_core_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: platform_core
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: platform_core_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: platform_core_api
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/platform_core
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=replace_with_secure_key_in_production
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+
+  test:
+    build: .
+    container_name: platform_core_test
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/platform_core_test
+      - REDIS_URL=redis://redis:6379/1
+      - SECRET_KEY=test_secret_key
+      - ENV=test
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: pytest -v
+
+volumes:
+  postgres_data:
+  redis_data:

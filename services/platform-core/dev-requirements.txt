@@ -1,0 +1,14 @@
+# Include base application requirements
+-r requirements.txt
+
+# Testing
+pytest
+pytest-asyncio
+pytest-cov
+fakeredis # For mocking Redis in tests
+
+# Linting & Formatting
+flake8
+black
+isort
+pre-commit

@@ -1,0 +1,34 @@
+# Core Dependencies
+fastapi
+uvicorn[standard] # ASGI server
+pydantic # Data validation
+pydantic-settings>=2.0.0
+python-dotenv # Environment variable loading
+
+# Database
+sqlalchemy
+psycopg2-binary # PostgreSQL driver
+asyncpg # Async PostgreSQL driver
+alembic # Database migrations
+
+# Cache/Queue
+redis
+
+# Observability
+prometheus-fastapi-instrumentator
+
+# Security
+python-jose[cryptography] # For JWT potentially, depending on gateway integration
+passlib[bcrypt] # For potential hashing needs
+
+# HTTP Client (for webhooks)
+httpx
+
+# Shared Core Library (Install locally for development)
+#-e ../../libs/shared-core
+# NOTE: Inside Docker, shared-core is installed directly via Dockerfile COPY and RUN commands
+
+# Testing - Moved to dev-requirements.txt
+# pytest
+# pytest-asyncio
+# pytest-cov

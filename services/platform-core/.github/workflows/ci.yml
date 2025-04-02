@@ -1,0 +1,138 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Pin versions to match pre-commit config
+          pip install flake8==6.1.0 black==24.3.0 isort==5.12.0
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt # Install dev dependencies
+          # Install local shared-core library
+          pip install -e ../../libs/shared-core
+
+      - name: Run flake8
+        run: flake8 app tests
+        working-directory: ./services/platform-core
+
+      - name: Format with black
+        run: black app tests
+
+      - name: Check black formatting
+        run: black --check app tests
+        working-directory: ./services/platform-core
+
+      - name: Run isort
+        run: isort --check-only --profile black app tests
+        working-directory: ./services/platform-core
+
+      - name: Check for SQLAlchemy base class consistency
+        run: |
+          echo "Checking for proper SQLAlchemy base class usage..."
+          ! grep -r "from sqlalchemy.ext.declarative import declarative_base" --include="*.py" app/
+          ! grep -r "Base = declarative_base()" --include="*.py" app/
+          echo " No deprecated SQLAlchemy base class usage found"
+        working-directory: ./services/platform-core
+        
+      - name: Run SQLAlchemy style linter
+        run: python ../../scripts/lint_sqlalchemy_style.py .
+        working-directory: ./services/platform-core
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # Also install development dependencies for tests
+          pip install -r requirements-dev.txt
+
+      - name: Ensure pytest-cov is installed
+        run: pip install pytest-cov
+
+      - name: Run tests
+        run: |
+          echo "Starting services..."
+          docker compose up -d postgres redis
+          echo "Waiting for services to be healthy..."
+          # Add a short delay or implement more robust health checks if needed
+          sleep 10
+          echo "Building test service..."
+          docker compose build test
+          echo "Running pytest within test container..."
+          # Install dependencies, cd to /app, then run pytest pointing to the test dir
+          docker compose run --rm test sh -c "cd /app/services/platform-core && pip install -e . && pip install -r dev-requirements.txt && cd /app && pytest services/platform-core/tests -v --cov=services/platform-core/app --cov-report=xml"
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=sha,format=short
+            latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

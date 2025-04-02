@@ -1,0 +1,23 @@
+[project]
+name = "platform-core"
+version = "0.1.0"  # Or your desired version
+description = "Platform Core Service"
+requires-python = ">=3.10"
+
+# Optional: Add dependencies here if you want them managed
+# via pyproject.toml instead of requirements.txt
+# dependencies = [
+#     "fastapi>=0.100",
+#     # ... other core dependencies
+# ]
+
+# Tell setuptools where the package code is
+[tool.setuptools]
+packages = ["app"]
+
+[tool.black]
+line-length = 120
+
+[tool.isort]
+profile = "black"
+line_length = 120
