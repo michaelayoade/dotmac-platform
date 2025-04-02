@@ -1,5 +1,4 @@
 import logging
-import os
 from typing import AsyncGenerator
 
 # Import BaseModel for metadata registration
@@ -7,15 +6,14 @@ from shared_core.base.base_model import BaseModel  # noqa: F401
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
+# Import settings from core config
+from app.core.config import get_settings
+
 logger = logging.getLogger(__name__)
 
-# Get database connection string from environment variable
-DATABASE_URL = os.environ.get("DATABASE_URL")
-if not DATABASE_URL:
-    raise ValueError(
-        "DATABASE_URL environment variable is not set. "
-        "Please set it to a valid database connection string."
-    )
+# Get database connection string from settings
+settings = get_settings()
+DATABASE_URL = settings.DB.DATABASE_URL
 
 # Create async engine
 engine = create_async_engine(
