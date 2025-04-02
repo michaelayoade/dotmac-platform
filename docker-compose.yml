@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:14
+    container_name: platform_core_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: platform_core
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: platform_core_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: ./services/platform-core/Dockerfile
+    container_name: platform_core_api
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/platform_core
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=replace_with_secure_key_in_production
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./services/platform-core:/app/services/platform-core
+      - ./libs/shared-core:/app/libs/shared-core
+
+  test:
+    build:
+      context: .
+      dockerfile: ./services/platform-core/Dockerfile
+    container_name: platform_core_test
+    environment:
+      - ENV=test
+      - API__NAME=Platform Core API
+      - API__VERSION=0.1.0
+      - API__ALLOWED_HOSTS=["*"]
+      - SERVER__HOST=0.0.0.0
+      - SERVER__PORT=8000
+      - DB__DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/platform_core_test
+      - CACHE__REDIS_URL=redis://redis:6379/1
+      - SECURITY__SECRET_KEY=test_secret_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./services/platform-core:/app/services/platform-core
+      - ./libs/shared-core:/app/libs/shared-core
+    command: ["sh", "-c", "cd /app/services/platform-core && pip install -r dev-requirements.txt && tail -f /dev/null"]
+
+volumes:
+  postgres_data:
+  redis_data:

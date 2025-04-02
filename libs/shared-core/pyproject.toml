@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shared-core"
+version = "0.1.0"
+description = "Shared core library for Dotmac platform services"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License", # Or your chosen license
+    "Operating System :: OS Independent",
+]
+# Add dependencies as you migrate them
+dependencies = [
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0.0",
+    "python-dotenv>=1.0.0", # For .env file loading
+    "SQLAlchemy>=2.0", # For BaseModel
+]
+
+[project.urls]
+Homepage = "https://github.com/michaelayoade/shared-core" # Update with actual URL
+Repository = "https://github.com/michaelayoade/shared-core" # Update with actual URL
+
+[tool.setuptools.packages.find]
+where = ["."]

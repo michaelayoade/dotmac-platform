@@ -1,0 +1,23 @@
+[tool.black]
+line-length = 79
+
+[tool.flake8]
+max-line-length = 79
+extend-ignore = "E203"
+
+[tool.sqlalchemy-linter]
+check_patterns = [
+    "declarative_base",
+    "base_declaration",
+    "column_usage",
+    "base_inheritance"
+]
+exclude = [
+    ".git",
+    "__pycache__",
+    "venv",
+    "env",
+    ".venv",
+    ".env",
+    "migrations"
+]
