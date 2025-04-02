@@ -156,14 +156,12 @@ class SQLAlchemyVisitor(ast.NodeVisitor):
 
 def main() -> int:
     """Main entry point for the linter."""
-    parser = argparse.ArgumentParser(
-        description="Check for SQLAlchemy 1.x style patterns in Python files"
+    parser = argparse.ArgumentParser(description="SQLAlchemy Style Linter")
+    parser.add_argument(
+        "files", nargs="*", help="Files or directories to check"
     )
     parser.add_argument(
-        "paths", nargs="*", help="Files or directories to check"
-    )
-    parser.add_argument(
-        "--config", help="Path to configuration file", default=None
+        "--fix", action="store_true", help="Attempt to fix issues automatically"
     )
     args = parser.parse_args()
 
@@ -171,21 +169,24 @@ def main() -> int:
     config = load_config()
     patterns = config.get("patterns", DEFAULT_PATTERNS)
 
-    # Get files to check
-    paths = args.paths or ["."]
+    # Find Python files to check
+    paths = args.files or ["."]
     python_files = find_python_files(paths)
+    
+    # Skip checking the linter itself
+    python_files = [f for f in python_files if not f.endswith("lint_sqlalchemy_style.py")]
 
-    # Check files
-    all_issues = []
+    # Check each file
+    issues = []
     for file_path in python_files:
-        issues = check_file_content(file_path, patterns)
-        all_issues.extend(issues)
+        file_issues = check_file_content(file_path, patterns)
+        issues.extend(file_issues)
 
     # Report issues
-    for file_path, line_number, message in all_issues:
+    for file_path, line_number, message in issues:
         print(f"{file_path}:{line_number}: {message}")
 
-    return 1 if all_issues else 0
+    return 1 if issues else 0
 
 
 if __name__ == "__main__":

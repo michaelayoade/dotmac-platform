@@ -27,7 +27,10 @@ class RedisClient:
             return
 
         try:
-            logger.info(f"Initializing Redis connection pool for URL: {settings.CACHE.REDIS_URL}")
+            logger.info(
+                f"Initializing Redis connection pool for URL: "
+                f"{settings.CACHE.REDIS_URL}"
+            )
             # Use ConnectionPool for efficient connection management
             cls._pool = redis.ConnectionPool.from_url(
                 str(settings.CACHE.REDIS_URL),  # Ensure URL is a string

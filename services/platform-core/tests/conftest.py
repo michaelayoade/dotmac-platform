@@ -32,12 +32,17 @@ print(f"DEBUG: sys.path[0]: {sys.path[0]}")
 
 # Explicitly load environment variables from .env.test
 env_test_path = Path(__file__).parent.parent / ".env.test"
-print(f"DEBUG: Loading environment from: {env_test_path} " f"(exists: {env_test_path.exists()})")
+print(
+    f"DEBUG: Loading environment from: {env_test_path} "
+    f"(exists: {env_test_path.exists()})"
+)
 load_dotenv(env_test_path, override=True)
 
 # Print environment variables to verify they're loaded
 env_vars = {
-    k: v for k, v in os.environ.items() if k.startswith(("DB__", "API__", "SERVER__", "CACHE__", "SECURITY__", "ENV"))
+    k: v 
+    for k, v in os.environ.items() 
+    if k.startswith(("DB__", "API__", "SERVER__", "CACHE__", "SECURITY__", "ENV"))
 }
 print(f"DEBUG: Loaded env vars: {env_vars}")
 
@@ -61,7 +66,8 @@ def get_settings_override() -> PlatformCoreSettings:
     # Ensure test DB URL is used
     settings.DB.DATABASE_URL = os.getenv("DB__DATABASE_URL", settings.DB.DATABASE_URL)
     # Use fakeredis for tests
-    settings.CACHE.REDIS_URL = "redis://fake:6379/1"  # This URL doesn't matter, we'll patch Redis
+    # This URL doesn't matter, we'll patch Redis
+    settings.CACHE.REDIS_URL = "redis://fake:6379/1"
     return settings
 
 
@@ -97,8 +103,14 @@ def prevent_real_redis_calls(monkeypatch):
         return None
 
     # Apply the patches
-    monkeypatch.setattr("app.db.redis.initialize_redis_pool", mock_initialize_redis_pool)
-    monkeypatch.setattr("app.db.redis.close_redis_pool", mock_close_redis_pool)
+    monkeypatch.setattr(
+        "app.db.redis.initialize_redis_pool", 
+        mock_initialize_redis_pool
+    )
+    monkeypatch.setattr(
+        "app.db.redis.close_redis_pool", 
+        mock_close_redis_pool
+    )
 
     # Continue with the test
     yield
@@ -143,7 +155,10 @@ async def fake_redis_client():
 
 # Override the get_redis dependency using the fake client fixture
 @pytest_asyncio.fixture(scope="function", autouse=True)
-async def override_get_redis(app: FastAPI, fake_redis_client: fakeredis.aioredis.FakeRedis):
+async def override_get_redis(
+    app: FastAPI, 
+    fake_redis_client: fakeredis.aioredis.FakeRedis
+):
     """
     Override the get_redis dependency to yield the fakeredis client.
     Ensures tests use the fake client instead of trying to connect.
@@ -173,7 +188,8 @@ def event_loop():
 async def settings_override() -> PlatformCoreSettings:
     settings = load_settings(PlatformCoreSettings)
     # Override Redis URL to use fakeredis
-    settings.CACHE.REDIS_URL = "redis://fake:6379/1"  # This URL doesn't matter, we'll patch Redis
+    # This URL doesn't matter, we'll patch Redis
+    settings.CACHE.REDIS_URL = "redis://fake:6379/1"
     # Use SQLite file-based database for testing to ensure all connections share the same database
     settings.DB.DATABASE_URL = "sqlite+aiosqlite:///./test_db.sqlite"
     settings.DB.DB_ECHO = False
@@ -285,7 +301,11 @@ async def db_engine(settings_override: PlatformCoreSettings):
 async def db_session(app: FastAPI, db_engine) -> AsyncGenerator[AsyncSession, None]:
     """Create a fresh database session for each test using the shared engine."""
     # Create session factory
-    async_session_maker = sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
+    async_session_maker = sessionmaker(
+        db_engine, 
+        class_=AsyncSession, 
+        expire_on_commit=False
+    )
 
     # Import BaseModel for table operations
     from shared_core.base.base_model import BaseModel
@@ -313,10 +333,14 @@ async def db_session(app: FastAPI, db_engine) -> AsyncGenerator[AsyncSession, No
 
 
 @pytest_asyncio.fixture
-async def async_client(app: FastAPI, db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+async def async_client(
+    app: FastAPI, 
+    db_session: AsyncSession
+) -> AsyncGenerator[AsyncClient, None]:
     """
     Create an async client for testing the FastAPI application.
-    This fixture depends on the db_session fixture to ensure the database is set up before tests run.
+    This fixture depends on the db_session fixture to ensure the database is set up 
+    before tests run.
     """
     # Create a test client that uses the FastAPI app
     async with AsyncClient(
