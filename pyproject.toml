@@ -36,6 +36,7 @@ strawberry-graphql = "^0.287.0"
 tenacity = "^9.1.2"
 python-dateutil = "^2.9.0.post0"
 twilio = "^9.8.7"
+opentelemetry-instrumentation-requests = "^0.59b0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
