@@ -1,6 +1,13 @@
 # Platform/backend/admin/front targets and shared dev/test tooling.
 
-.PHONY: start-platform stop-platform restart-platform status-platform logs-platform clean-platform \
+# Colors
+CYAN := \033[0;36m
+GREEN := \033[0;32m
+YELLOW := \033[1;33m
+NC := \033[0m
+
+.PHONY: up down up-infra down-infra help \
+	start-platform stop-platform restart-platform status-platform logs-platform clean-platform \
 	dev dev-host dev-frontend-admin install check-prereqs check-docker check-deps \
 	db-migrate db-migrate-create db-seed seed-test-users db-reset \
 	post-deploy-platform \
@@ -11,6 +18,64 @@
 	env-validate env-validate-server env-check env-server env-local env-test env-staging env-show setup \
 	build-platform \
 	docker-platform-up docker-ps
+
+.DEFAULT_GOAL := help
+
+help:
+	@echo "$(CYAN)╔══════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(CYAN)║  DotMac Platform - Development Commands                   ║$(NC)"
+	@echo "$(CYAN)╚══════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(GREEN)Quick Start:$(NC)"
+	@echo "  make up        Start infra (Postgres/Redis) + backend + run migrations"
+	@echo "  make down      Stop all services"
+	@echo ""
+	@echo "$(GREEN)Development:$(NC)"
+	@echo "  make dev               Start backend in Docker (logs follow)"
+	@echo "  make dev-host          Start backend on host (debug mode)"
+	@echo "  make dev-frontend-admin   Start Platform Admin frontend (http://localhost:3002)"
+	@echo ""
+	@echo "$(GREEN)Database:$(NC)"
+	@echo "  make db-migrate        Run alembic migrations"
+	@echo "  make db-seed           Seed test data"
+	@echo "  make db-reset          Reset and reseed database (DESTRUCTIVE)"
+	@echo ""
+	@echo "$(GREEN)Testing:$(NC)"
+	@echo "  make test              Run all tests with coverage"
+	@echo "  make test-fast         Run tests without coverage"
+	@echo "  make lint              Run Python linting"
+	@echo ""
+
+# ===================================================================
+# Quick Start - Simple up/down
+# ===================================================================
+
+up-infra:
+	@echo "$(CYAN)Starting infrastructure (Postgres, Redis, MinIO)...$(NC)"
+	@docker compose -f docker-compose.infra.yml up -d
+	@echo "$(GREEN)✓ Infrastructure started$(NC)"
+
+down-infra:
+	@echo "$(CYAN)Stopping infrastructure...$(NC)"
+	@docker compose -f docker-compose.infra.yml down
+	@echo "$(GREEN)✓ Infrastructure stopped$(NC)"
+
+up: up-infra
+	@echo "$(CYAN)Starting platform backend...$(NC)"
+	@docker compose up -d platform-backend
+	@echo "$(CYAN)Running database migrations...$(NC)"
+	@sleep 3
+	@docker compose exec platform-backend alembic upgrade head || poetry run alembic upgrade head || true
+	@echo ""
+	@echo "$(GREEN)✓ Platform is running!$(NC)"
+	@echo "  Backend API: http://localhost:8001/docs"
+	@echo "  Frontend:    Run 'make dev-frontend-admin' in another terminal"
+
+down:
+	@echo "$(CYAN)Stopping all services...$(NC)"
+	@docker compose down
+	@docker compose -f docker-compose.infra.yml down
+	@echo "$(GREEN)✓ All services stopped$(NC)"
 
 # ===================================================================
 # Infrastructure - Platform
