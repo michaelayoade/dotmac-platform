@@ -1,0 +1,1 @@
+{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["../../src/skeletons/index.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAGH,OAAO,EACL,iBAAiB,EACjB,kBAAkB,EAClB,KAAK,sBAAsB,GAC5B,MAAM,qBAAqB,CAAC;AAG7B,OAAO,EAAE,aAAa,EAAE,cAAc,EAAE,KAAK,kBAAkB,EAAE,MAAM,iBAAiB,CAAC;AAGzF,OAAO,EACL,YAAY,EACZ,gBAAgB,EAChB,aAAa,EACb,KAAK,iBAAiB,EACtB,KAAK,qBAAqB,GAC3B,MAAM,gBAAgB,CAAC"}
