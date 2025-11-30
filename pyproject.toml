@@ -38,6 +38,8 @@ python-dateutil = "^2.9.0.post0"
 twilio = "^9.8.7"
 opentelemetry-instrumentation-requests = "^0.59b0"
 reportlab = "^4.4.5"
+pyrad = "^2.4"
+psycopg2-binary = "^2.9.11"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

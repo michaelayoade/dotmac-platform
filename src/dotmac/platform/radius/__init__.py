@@ -26,6 +26,13 @@ Components:
 - vendors/: Multi-vendor strategy pattern for NAS-specific attributes
 """
 
-from dotmac.platform.radius.router import router
+
+def __getattr__(name: str):
+    """Lazy import to avoid circular imports during model loading."""
+    if name == "router":
+        from dotmac.platform.radius.router import router
+        return router
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = ["router"]

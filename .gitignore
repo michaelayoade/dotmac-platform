@@ -1,6 +1,6 @@
 
 # Next.js build cache (too large for Git)
-.next/cache/
+.next/
 node_modules/
 .venv/
 __pycache__/
