@@ -1,3 +1,5 @@
 packages:
   - 'apps/*'
   - 'shared/packages/*'
+  # Pull shared libs from the monorepo root
+  - '../../../../../dotmac-shared/frontend/packages/*'
