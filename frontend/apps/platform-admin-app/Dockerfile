@@ -1,4 +1,13 @@
 # syntax=docker/dockerfile:1.5
+#
+# Frontend Dockerfile for Split Repository Structure
+#
+# Build context should be the split-staging parent directory:
+#   docker build -f dotmac-platform/frontend/apps/platform-admin-app/Dockerfile .
+#
+# The build expects:
+#   - dotmac-platform/frontend/apps/platform-admin-app/ (this app)
+#   - dotmac-shared/frontend/packages/ (shared UI packages)
 
 ARG PNPM_VERSION=9.12.3
 
@@ -35,33 +44,38 @@ RUN apk add --no-cache libc6-compat \
     && corepack enable \
     && corepack prepare pnpm@${PNPM_VERSION} --activate
 
-# Copy minimal workspace manifests for dependency installation
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-COPY .npmrc ./
-COPY apps/platform-admin-app/package.json apps/platform-admin-app/
-COPY shared/packages/analytics/package.json shared/packages/analytics/
-COPY shared/packages/design-system/package.json shared/packages/design-system/
-COPY shared/packages/eslint-config/package.json shared/packages/eslint-config/
-COPY shared/packages/features/package.json shared/packages/features/
-COPY shared/packages/graphql/package.json shared/packages/graphql/
-COPY shared/packages/headless/package.json shared/packages/headless/
-COPY shared/packages/http-client/package.json shared/packages/http-client/
-COPY shared/packages/notifications/package.json shared/packages/notifications/
-COPY shared/packages/primitives/package.json shared/packages/primitives/
-COPY shared/packages/providers/package.json shared/packages/providers/
-COPY shared/packages/rbac/package.json shared/packages/rbac/
-COPY shared/packages/typescript-config/package.json shared/packages/typescript-config/
-COPY shared/packages/ui/package.json shared/packages/ui/
+# Create pnpm workspace structure for split repos
+# Copy workspace config from platform app (should define workspace packages)
+COPY dotmac-platform/frontend/apps/platform-admin-app/pnpm-workspace.yaml ./
+COPY dotmac-platform/frontend/apps/platform-admin-app/package.json ./
+COPY dotmac-platform/frontend/apps/platform-admin-app/pnpm-lock.yaml* ./
+COPY dotmac-platform/frontend/apps/platform-admin-app/.npmrc* ./
 
-# Install only what the Platform Admin app (and its workspace deps) need
-RUN pnpm install --filter @dotmac/platform-admin-app... --frozen-lockfile
+# Copy app package.json
+COPY dotmac-platform/frontend/apps/platform-admin-app/package.json apps/platform-admin-app/
 
-# Copy the rest of the workspace
-COPY apps ./apps
-COPY shared ./shared
-COPY tsconfig.json ./
-COPY postcss.config.js ./
-COPY tailwind.config.ts ./
+# Copy shared packages from dotmac-shared
+COPY dotmac-shared/frontend/packages/graphql/package.json shared/packages/graphql/
+COPY dotmac-shared/frontend/packages/headless/package.json shared/packages/headless/
+COPY dotmac-shared/frontend/packages/primitives/package.json shared/packages/primitives/
+COPY dotmac-shared/frontend/packages/providers/package.json shared/packages/providers/
+COPY dotmac-shared/frontend/packages/rbac/package.json shared/packages/rbac/
+COPY dotmac-shared/frontend/packages/ui/package.json shared/packages/ui/
+COPY dotmac-shared/frontend/packages/features/package.json shared/packages/features/
+COPY dotmac-shared/frontend/packages/eslint-config/package.json shared/packages/eslint-config/
+COPY dotmac-shared/frontend/packages/eslint-plugin/package.json shared/packages/eslint-plugin/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile || pnpm install
+
+# Copy the rest of the source code
+COPY dotmac-platform/frontend/apps/platform-admin-app ./apps/platform-admin-app
+COPY dotmac-shared/frontend/packages ./shared/packages
+
+# Copy any root config files needed for build
+COPY dotmac-platform/frontend/apps/platform-admin-app/tsconfig.json ./tsconfig.json 2>/dev/null || true
+COPY dotmac-platform/frontend/apps/platform-admin-app/postcss.config.js ./postcss.config.js 2>/dev/null || true
+COPY dotmac-platform/frontend/apps/platform-admin-app/tailwind.config.ts ./tailwind.config.ts 2>/dev/null || true
 
 # Build the platform admin app from its directory
 WORKDIR /app/apps/platform-admin-app

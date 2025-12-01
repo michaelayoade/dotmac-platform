@@ -63,8 +63,8 @@ services:
 
   platform-frontend:
     build:
-      context: ./frontend
-      dockerfile: apps/platform-admin-app/Dockerfile
+      context: ..  # Parent directory (split-staging) for access to dotmac-shared
+      dockerfile: dotmac-platform/frontend/apps/platform-admin-app/Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: ${PLATFORM_NEXT_PUBLIC_API_BASE_URL:-}
         NEXT_PUBLIC_WS_URL: ${PLATFORM_NEXT_PUBLIC_WS_URL:-ws://localhost:8001}
