@@ -60,8 +60,6 @@ from dotmac.platform.monitoring.health_checks import HealthChecker, ensure_infra
 from dotmac.platform.platform_app import platform_app
 from dotmac.platform.redis_client import init_redis, redis_manager, shutdown_redis
 
-# API info for documentation
-from dotmac.platform.routers import get_api_info
 from dotmac.platform.secrets import load_secrets_from_vault_sync
 from dotmac.platform.settings import settings
 from dotmac.platform.telemetry import setup_telemetry
@@ -495,14 +493,36 @@ def create_application() -> FastAPI:
     @app.get("/api")
     async def api_info() -> dict[str, Any]:
         """API info endpoint (root)."""
-        api_info_payload: dict[str, Any] = get_api_info()
-        return api_info_payload
+        return {
+            "version": "v1",
+            "base_paths": {
+                "platform": "/api/platform/v1",
+                "isp": "/api/isp/v1",
+            },
+            "docs": {
+                "platform": "/api/platform/v1/docs",
+                "isp": "/api/isp/v1/docs",
+            },
+            "graphql": "/api/platform/v1/graphql",
+            "health": "/health",
+        }
 
     @app.get("/api/v1/info")
     async def api_v1_info() -> dict[str, Any]:
         """API info endpoint with versioned prefix for compatibility."""
-        api_info_payload: dict[str, Any] = get_api_info()
-        return api_info_payload
+        return {
+            "version": "v1",
+            "base_paths": {
+                "platform": "/api/platform/v1",
+                "isp": "/api/isp/v1",
+            },
+            "docs": {
+                "platform": "/api/platform/v1/docs",
+                "isp": "/api/isp/v1/docs",
+            },
+            "graphql": "/api/platform/v1/graphql",
+            "health": "/health",
+        }
 
     # Metrics endpoint (if metrics enabled)
     if settings.observability.enable_metrics:
