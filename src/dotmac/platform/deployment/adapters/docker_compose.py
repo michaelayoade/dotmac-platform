@@ -5,6 +5,7 @@ Handles deployment to standalone hosts using Docker Compose.
 """
 
 import asyncio
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,10 @@ class DockerComposeAdapter(DeploymentAdapter):
 
     Manages deployments using docker-compose for standalone or edge deployments.
     Suitable for small-scale on-premises installations.
+
+    Supports two modes:
+    1. Template-based: Uses docker_compose_path from template to deploy existing compose files
+    2. Generated: Generates a compose file dynamically (fallback if no path provided)
     """
 
     def __init__(self, config: dict[str, Any] | None = None):
@@ -27,14 +32,16 @@ class DockerComposeAdapter(DeploymentAdapter):
         Initialize Docker Compose adapter
 
         Config options:
-            - compose_files_path: Base path for compose files
+            - compose_files_path: Base path for generated compose files
             - docker_host: Docker host URL (default: local)
             - project_name_prefix: Prefix for compose project names
+            - use_template_compose: If True, prefer template's docker_compose_path (default: True)
         """
         super().__init__(config)
         self.compose_files_path = Path(self.config.get("compose_files_path", "/opt/dotmac/compose"))
         self.docker_host = self.config.get("docker_host")
         self.project_name_prefix = self.config.get("project_name_prefix", "dotmac")
+        self.use_template_compose = self.config.get("use_template_compose", True)
 
     async def provision(self, context: ExecutionContext) -> DeploymentResult:
         """Provision deployment with docker-compose"""
@@ -42,20 +49,36 @@ class DockerComposeAdapter(DeploymentAdapter):
         started_at = datetime.utcnow()
 
         try:
-            # Generate compose file
-            compose_file = await self._generate_compose_file(context)
-
-            # Write compose file
             project_name = self._get_project_name(context)
-            compose_path = self.compose_files_path / project_name / "docker-compose.yml"
-            compose_path.parent.mkdir(parents=True, exist_ok=True)
-            compose_path.write_text(yaml.dump(compose_file))
+            compose_path: Path
+
+            # Check if we should use template's compose file
+            if self.use_template_compose and context.docker_compose_path:
+                template_compose = Path(context.docker_compose_path)
+                if template_compose.exists():
+                    self._log_operation(
+                        "provision", context,
+                        f"Using template compose file: {template_compose}"
+                    )
+                    # Use the template's compose file directory directly
+                    compose_path = template_compose
+                    # Create .env file with context variables in the compose directory
+                    await self._create_env_file(template_compose.parent, context)
+                else:
+                    self._log_operation(
+                        "provision", context,
+                        f"Template compose file not found: {template_compose}, generating default"
+                    )
+                    compose_path = await self._generate_and_write_compose(context, project_name)
+            else:
+                # Generate compose file dynamically
+                compose_path = await self._generate_and_write_compose(context, project_name)
 
             # Run docker-compose up
             await self._compose_up(project_name, compose_path)
 
             # Get service endpoints
-            endpoints = await self._get_service_urls(project_name)
+            endpoints = await self._get_service_urls(project_name, context)
 
             completed_at = datetime.utcnow()
             duration = (completed_at - started_at).total_seconds()
@@ -66,9 +89,13 @@ class DockerComposeAdapter(DeploymentAdapter):
                 status=ExecutionStatus.SUCCEEDED,
                 message=f"Successfully provisioned deployment with docker-compose (project: {project_name})",
                 backend_job_id=project_name,
-                logs=f"Compose file created at {compose_path}",
+                logs=f"Compose file: {compose_path}",
                 endpoints=endpoints,
-                metadata={"project_name": project_name, "compose_path": str(compose_path)},
+                metadata={
+                    "project_name": project_name,
+                    "compose_path": str(compose_path),
+                    "used_template_compose": bool(context.docker_compose_path and Path(context.docker_compose_path).exists()),
+                },
                 started_at=started_at,
                 completed_at=completed_at,
                 duration_seconds=duration,
@@ -430,10 +457,61 @@ class DockerComposeAdapter(DeploymentAdapter):
         """Pull images"""
         await self._run_compose_command(project_name, ["pull"], compose_file=compose_path)
 
-    async def _get_service_urls(self, project_name: str) -> dict[str, str]:
-        """Get service URLs"""
-        # Simplified - in production, would inspect actual ports
-        return {"api": "http://localhost:8000"}
+    async def _get_service_urls(self, project_name: str, context: ExecutionContext | None = None) -> dict[str, str]:
+        """Get service URLs from running containers"""
+        endpoints: dict[str, str] = {}
+
+        try:
+            # Get container ports using docker-compose ps
+            output = await self._run_compose_command(project_name, ["ps", "--format", "json"])
+            if output:
+                import json
+                services = json.loads(output) if output.strip().startswith('[') else [json.loads(line) for line in output.strip().split('\n') if line]
+                for svc in services:
+                    name = svc.get("Service", svc.get("Name", ""))
+                    # Extract published ports
+                    publishers = svc.get("Publishers", [])
+                    for pub in publishers:
+                        if pub.get("PublishedPort"):
+                            port = pub["PublishedPort"]
+                            target = pub.get("TargetPort", port)
+                            endpoints[f"{name}_{target}"] = f"http://localhost:{port}"
+        except Exception:
+            pass
+
+        # Fallback defaults based on ISP compose structure
+        if not endpoints:
+            endpoints = {
+                "isp_backend": "http://localhost:8000",
+                "isp_frontend": "http://localhost:3001",
+            }
+
+        return endpoints
+
+    async def _generate_and_write_compose(self, context: ExecutionContext, project_name: str) -> Path:
+        """Generate and write a compose file to the compose files path"""
+        compose_file = await self._generate_compose_file(context)
+        compose_path = self.compose_files_path / project_name / "docker-compose.yml"
+        compose_path.parent.mkdir(parents=True, exist_ok=True)
+        compose_path.write_text(yaml.dump(compose_file))
+        return compose_path
+
+    async def _create_env_file(self, compose_dir: Path, context: ExecutionContext) -> None:
+        """Create .env file with context variables for docker-compose"""
+        env_vars = self._build_environment(context)
+
+        # Add ISP-specific environment variables
+        env_vars.update({
+            "ISP_ENVIRONMENT": context.environment,
+            "ISP_BACKEND_PORT": "8000",
+            "ISP_FRONTEND_PORT": "3001",
+        })
+
+        # Write .env file
+        env_path = compose_dir / ".env"
+        env_content = "\n".join(f"{k}={v}" for k, v in env_vars.items())
+        env_path.write_text(env_content)
+        self.logger.info(f"Created .env file at {env_path}")
 
     async def _run_compose_command(
         self, project_name: str, args: list[str], compose_file: Path | None = None

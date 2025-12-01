@@ -363,7 +363,19 @@ class DeploymentService:
             to_version=kwargs.get("to_version", instance.version),
             tags=instance.tags or {},
             triggered_by=kwargs.get("triggered_by"),
+            # Template artifacts for adapters
+            docker_compose_path=template.docker_compose_path,
+            helm_chart_url=template.helm_chart_url,
+            helm_chart_version=template.helm_chart_version,
+            ansible_playbook_path=template.ansible_playbook_path,
+            terraform_module_path=template.terraform_module_path,
         )
+
+    async def _ensure_adapter_ready(self, adapter: DeploymentAdapter) -> None:
+        """Run adapter preflight and raise if not ready."""
+        ready, details = await adapter.preflight_check()
+        if not ready:
+            raise ValueError(f"Deployment backend not ready: {details}")
 
     async def provision_deployment(
         self,
@@ -476,6 +488,7 @@ class DeploymentService:
         try:
             # Get adapter
             adapter = self._get_adapter(template.backend)
+            await self._ensure_adapter_ready(adapter)
 
             # Create execution context
             context = await self._create_execution_context(
@@ -624,6 +637,7 @@ class DeploymentService:
         try:
             # Get adapter
             adapter = self._get_adapter(template.backend)
+            await self._ensure_adapter_ready(adapter)
 
             original_config = deepcopy(instance.config) if instance.config is not None else None
 
@@ -744,6 +758,7 @@ class DeploymentService:
         try:
             # Get adapter
             adapter = self._get_adapter(template.backend)
+            await self._ensure_adapter_ready(adapter)
 
             target_cpu = (
                 request.cpu_cores if request.cpu_cores is not None else instance.allocated_cpu
@@ -818,6 +833,7 @@ class DeploymentService:
         if not template:
             raise ValueError(f"Template {instance.template_id} not found")
         adapter = self._get_adapter(template.backend)
+        await self._ensure_adapter_ready(adapter)
 
         execution = DeploymentExecution(
             instance_id=instance.id,
@@ -878,6 +894,7 @@ class DeploymentService:
         if not template:
             raise ValueError(f"Template {instance.template_id} not found")
         adapter = self._get_adapter(template.backend)
+        await self._ensure_adapter_ready(adapter)
 
         execution = DeploymentExecution(
             instance_id=instance.id,

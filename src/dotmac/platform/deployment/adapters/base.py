@@ -62,6 +62,13 @@ class ExecutionContext:
     triggered_by: int | None = None
     dry_run: bool = False
 
+    # Template artifacts (for adapters that use external files)
+    docker_compose_path: str | None = None
+    helm_chart_url: str | None = None
+    helm_chart_version: str | None = None
+    ansible_playbook_path: str | None = None
+    terraform_module_path: str | None = None
+
     def __post_init__(self) -> None:
         """Validate context after initialization"""
         if not self.namespace:
