@@ -6,11 +6,12 @@ Coordinates adapters, registry, and business logic.
 """
 
 import inspect
-import logging
+import secrets
 from copy import deepcopy
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
@@ -23,11 +24,21 @@ from .models import (
     DeploymentHealth,
     DeploymentInstance,
     DeploymentState,
+    DeploymentTemplate,
 )
 from .registry import AsyncDeploymentRegistry, DeploymentRegistry
 from .schemas import ProvisionRequest, ScaleRequest, UpgradeRequest
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
+
+
+class LicensePreflightError(Exception):
+    """Error during license preflight check."""
+
+    def __init__(self, message: str, code: str = "license_error"):
+        self.message = message
+        self.code = code
+        super().__init__(message)
 
 
 class DeploymentService:
@@ -105,6 +116,219 @@ class DeploymentService:
             self._adapter_cache[backend] = AdapterFactory.create_adapter(backend, config)
         return self._adapter_cache[backend]
 
+    async def _license_preflight(
+        self,
+        tenant_id: str,
+        template: DeploymentTemplate,
+    ) -> tuple[str, str]:
+        """
+        Perform license preflight check before provisioning.
+
+        Validates:
+        - Tenant has an active, non-expired license
+        - License has available activation slots
+        - Template plan matches license (if specified)
+
+        Returns:
+            Tuple of (license_id, activation_id) on success
+
+        Raises:
+            LicensePreflightError: If license validation fails
+        """
+        from dotmac.platform.licensing.models import (
+            Activation,
+            ActivationStatus,
+            ActivationType,
+            License,
+            LicenseStatus,
+        )
+
+        logger.info(
+            "deployment.license_preflight",
+            tenant_id=tenant_id,
+            template_name=template.name,
+        )
+
+        # Find active license for tenant
+        if isinstance(self.db, AsyncSession):
+            result = await self.db.execute(
+                select(License).where(
+                    License.tenant_id == str(tenant_id),
+                    License.status == LicenseStatus.ACTIVE,
+                ).order_by(License.created_at.desc()).limit(1)
+            )
+            license_obj = result.scalar_one_or_none()
+        else:
+            license_obj = (
+                self.db.query(License)
+                .filter(
+                    License.tenant_id == str(tenant_id),
+                    License.status == LicenseStatus.ACTIVE,
+                )
+                .order_by(License.created_at.desc())
+                .first()
+            )
+
+        if not license_obj:
+            logger.warning(
+                "deployment.license_preflight_failed",
+                tenant_id=tenant_id,
+                reason="no_active_license",
+            )
+            raise LicensePreflightError(
+                "No active license found for tenant",
+                code="no_license",
+            )
+
+        # Check license status
+        if license_obj.status != LicenseStatus.ACTIVE:
+            raise LicensePreflightError(
+                f"License is not active (status: {license_obj.status.value})",
+                code="license_inactive",
+            )
+
+        # Check expiry
+        if license_obj.expiry_date and license_obj.expiry_date < datetime.now(UTC):
+            grace_days = license_obj.grace_period_days or 0
+            from datetime import timedelta
+            grace_end = license_obj.expiry_date + timedelta(days=grace_days)
+
+            if datetime.now(UTC) > grace_end:
+                logger.warning(
+                    "deployment.license_preflight_failed",
+                    tenant_id=tenant_id,
+                    reason="license_expired",
+                    expiry_date=license_obj.expiry_date.isoformat(),
+                )
+                raise LicensePreflightError(
+                    "License has expired",
+                    code="license_expired",
+                )
+
+        # Check activation limit
+        if license_obj.current_activations >= license_obj.max_activations:
+            logger.warning(
+                "deployment.license_preflight_failed",
+                tenant_id=tenant_id,
+                reason="activation_limit",
+                current=license_obj.current_activations,
+                max=license_obj.max_activations,
+            )
+            raise LicensePreflightError(
+                f"Activation limit reached ({license_obj.current_activations}/{license_obj.max_activations})",
+                code="activation_limit",
+            )
+
+        # Check plan/template compatibility (if template has required features)
+        template_features = template.feature_flags or {}
+        license_features = license_obj.features or {}
+        required_features = template_features.get("required_license_features", [])
+
+        for required_feat in required_features:
+            feat_list = license_features.get("features", [])
+            has_feature = any(
+                f.get("code") == required_feat and f.get("value", False)
+                for f in feat_list if isinstance(f, dict)
+            )
+            if not has_feature:
+                raise LicensePreflightError(
+                    f"License missing required feature: {required_feat}",
+                    code="missing_feature",
+                )
+
+        # Create activation record
+        activation_token = secrets.token_urlsafe(32)
+        device_fingerprint = f"deployment-{template.name}-{tenant_id}"
+
+        activation = Activation(
+            license_id=license_obj.id,
+            activation_token=activation_token,
+            device_fingerprint=device_fingerprint,
+            machine_name=f"tenant-{tenant_id}-{template.deployment_type.value}",
+            application_version=template.version,
+            activation_type=ActivationType.ONLINE,
+            status=ActivationStatus.ACTIVE,
+            tenant_id=str(tenant_id),
+            last_heartbeat=datetime.now(UTC),
+        )
+
+        self.db.add(activation)
+
+        # Increment activation count
+        license_obj.current_activations += 1
+
+        if isinstance(self.db, AsyncSession):
+            await self.db.flush()  # Get the activation ID
+        else:
+            self.db.flush()
+
+        logger.info(
+            "deployment.license_preflight_success",
+            tenant_id=tenant_id,
+            license_id=license_obj.id,
+            activation_id=activation.id,
+            current_activations=license_obj.current_activations,
+        )
+
+        return license_obj.id, activation.id
+
+    async def _release_activation(
+        self,
+        license_id: str,
+        activation_id: str,
+    ) -> None:
+        """Release an activation when a deployment is destroyed."""
+        from dotmac.platform.licensing.models import (
+            Activation,
+            ActivationStatus,
+            License,
+        )
+
+        logger.info(
+            "deployment.release_activation",
+            license_id=license_id,
+            activation_id=activation_id,
+        )
+
+        # Deactivate the activation
+        if isinstance(self.db, AsyncSession):
+            activation_result = await self.db.execute(
+                select(Activation).where(Activation.id == activation_id)
+            )
+            activation = activation_result.scalar_one_or_none()
+        else:
+            activation = (
+                self.db.query(Activation).filter(Activation.id == activation_id).first()
+            )
+
+        if activation and activation.status == ActivationStatus.ACTIVE:
+            activation.status = ActivationStatus.DEACTIVATED
+            activation.deactivated_at = datetime.now(UTC)
+
+        # Decrement license activation count
+        if isinstance(self.db, AsyncSession):
+            license_result = await self.db.execute(
+                select(License).where(License.id == license_id)
+            )
+            license_obj = license_result.scalar_one_or_none()
+        else:
+            license_obj = self.db.query(License).filter(License.id == license_id).first()
+
+        if license_obj and license_obj.current_activations > 0:
+            license_obj.current_activations -= 1
+
+        # Persist changes
+        if isinstance(self.db, AsyncSession):
+            await self.db.flush()
+        else:
+            self.db.flush()
+
+        logger.info(
+            "deployment.activation_released",
+            license_id=license_id,
+            activation_id=activation_id,
+        )
+
     async def _create_execution_context(
         self, instance: DeploymentInstance, operation: str, **kwargs: Any
     ) -> ExecutionContext:
@@ -161,7 +385,10 @@ class DeploymentService:
             Tuple of (instance, execution)
         """
         logger.info(
-            f"Provisioning deployment for tenant {tenant_id}, template {request.template_id}"
+            "deployment.provision_start",
+            tenant_id=tenant_id,
+            template_id=request.template_id,
+            environment=request.environment,
         )
 
         # Get template
@@ -172,16 +399,46 @@ class DeploymentService:
         if not template.is_active:
             raise ValueError(f"Template {template.name} is not active")
 
-        # Check if instance already exists
+        # Check if instance already exists (409 Conflict scenario)
         existing = await self._registry_call(
             "get_instance_by_tenant", tenant_id, request.environment
         )
         if existing:
+            logger.warning(
+                "deployment.duplicate_environment",
+                tenant_id=tenant_id,
+                environment=request.environment,
+                existing_instance_id=existing.id,
+            )
             raise ValueError(
                 f"Deployment already exists for tenant {tenant_id} in {request.environment}"
             )
 
-        # Create instance record
+        # === LICENSE PREFLIGHT ===
+        # Validate license before any deployment work
+        license_id: str | None = None
+        activation_id: str | None = None
+
+        try:
+            license_id, activation_id = await self._license_preflight(
+                str(tenant_id), template
+            )
+            logger.info(
+                "deployment.license_preflight_passed",
+                tenant_id=tenant_id,
+                license_id=license_id,
+                activation_id=activation_id,
+            )
+        except LicensePreflightError as e:
+            logger.error(
+                "deployment.license_preflight_failed",
+                tenant_id=tenant_id,
+                error=e.message,
+                code=e.code,
+            )
+            raise ValueError(f"License validation failed: {e.message}")
+
+        # Create instance record with license link
         instance = DeploymentInstance(
             tenant_id=tenant_id,
             template_id=template.id,
@@ -196,6 +453,8 @@ class DeploymentService:
             tags=request.tags,
             notes=request.notes,
             deployed_by=triggered_by,
+            license_id=license_id,
+            activation_id=activation_id,
         )
         instance = await self._registry_call("create_instance", instance)
 
@@ -262,6 +521,16 @@ class DeploymentService:
                     DeploymentState.FAILED,
                     reason=result.message,
                 )
+                # Release activation on failed provision to avoid leaking slots
+                if license_id and activation_id:
+                    try:
+                        await self._release_activation(license_id, activation_id)
+                    except Exception:
+                        logger.warning(
+                            "deployment.activation_release_failed",
+                            license_id=license_id,
+                            activation_id=activation_id,
+                        )
                 logger.error(f"Failed to provision deployment {instance.id}: {result.message}")
 
             # Refresh instance
@@ -288,6 +557,17 @@ class DeploymentService:
             await self._registry_call(
                 "update_instance_state", instance.id, DeploymentState.FAILED, reason=str(e)
             )
+
+            # Release activation so licenses don't leak on failed provision
+            if license_id and activation_id:
+                try:
+                    await self._release_activation(license_id, activation_id)
+                except Exception:
+                    logger.warning(
+                        "deployment.activation_release_failed",
+                        license_id=license_id,
+                        activation_id=activation_id,
+                    )
 
             raise
 
@@ -690,6 +970,16 @@ class DeploymentService:
                 await self._registry_call(
                     "update_instance_state", instance.id, DeploymentState.DESTROYED, reason=reason
                 )
+                # Release activation when deployment is destroyed
+                if instance.license_id and instance.activation_id:
+                    try:
+                        await self._release_activation(instance.license_id, instance.activation_id)
+                    except Exception:
+                        logger.warning(
+                            "deployment.activation_release_failed",
+                            license_id=instance.license_id,
+                            activation_id=instance.activation_id,
+                        )
 
             return execution
 

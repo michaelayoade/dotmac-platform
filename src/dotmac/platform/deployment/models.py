@@ -203,6 +203,14 @@ class DeploymentInstance(Base, TenantMixin, TimestampMixin):
         PGUUID(as_uuid=True), ForeignKey("users.id")
     )  # User who approved
 
+    # License tracking - links deployment to tenant's license
+    license_id: Mapped[str | None] = mapped_column(
+        String(255), ForeignKey("licenses.id"), index=True
+    )  # Associated license for this deployment
+    activation_id: Mapped[str | None] = mapped_column(
+        String(255), ForeignKey("activations.id")
+    )  # Activation record created for this deployment
+
     # Relationships
     executions: Mapped[list["DeploymentExecution"]] = relationship(
         "DeploymentExecution",

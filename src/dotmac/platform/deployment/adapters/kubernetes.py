@@ -392,6 +392,117 @@ class KubernetesAdapter(DeploymentAdapter):
 
         return len(errors) == 0, errors
 
+    async def preflight_check(self) -> tuple[bool, dict[str, Any]]:
+        """
+        Perform Kubernetes adapter readiness check.
+
+        Verifies:
+        - kubectl is available and configured
+        - Kubernetes cluster is reachable
+        - Helm is available
+        - Helm repository is configured
+        - Required permissions are available
+        """
+        checks: dict[str, dict[str, str]] = {}
+        errors: list[str] = []
+
+        # Check kubectl availability
+        try:
+            version_output = await self._run_command(["kubectl", "version", "--client", "-o", "json"])
+            checks["kubectl_client"] = {
+                "status": "ok",
+                "message": "kubectl client is available",
+            }
+        except Exception as e:
+            checks["kubectl_client"] = {
+                "status": "failed",
+                "message": f"kubectl not available: {e}",
+            }
+            errors.append("kubectl is not installed or not in PATH")
+
+        # Check cluster connectivity
+        try:
+            cmd = ["kubectl"]
+            if self.kubeconfig_path:
+                cmd.extend(["--kubeconfig", self.kubeconfig_path])
+            cmd.extend(["cluster-info"])
+            await self._run_command(cmd)
+            checks["cluster_connectivity"] = {
+                "status": "ok",
+                "message": f"Connected to cluster {self.default_cluster}",
+            }
+        except Exception as e:
+            checks["cluster_connectivity"] = {
+                "status": "failed",
+                "message": f"Cannot connect to Kubernetes cluster: {e}",
+            }
+            errors.append("Cannot connect to Kubernetes cluster")
+
+        # Check namespace permissions (try listing namespaces)
+        try:
+            cmd = ["kubectl"]
+            if self.kubeconfig_path:
+                cmd.extend(["--kubeconfig", self.kubeconfig_path])
+            cmd.extend(["auth", "can-i", "create", "namespaces"])
+            result = await self._run_command(cmd)
+            if "yes" in result.lower():
+                checks["namespace_permissions"] = {
+                    "status": "ok",
+                    "message": "Can create namespaces",
+                }
+            else:
+                checks["namespace_permissions"] = {
+                    "status": "warning",
+                    "message": "Limited namespace permissions",
+                }
+        except Exception as e:
+            checks["namespace_permissions"] = {
+                "status": "warning",
+                "message": f"Could not verify permissions: {e}",
+            }
+
+        # Check Helm availability
+        try:
+            await self._run_command(["helm", "version", "--short"])
+            checks["helm_client"] = {
+                "status": "ok",
+                "message": "Helm client is available",
+            }
+        except Exception as e:
+            checks["helm_client"] = {
+                "status": "failed",
+                "message": f"Helm not available: {e}",
+            }
+            errors.append("Helm is not installed or not in PATH")
+
+        # Check Helm repository
+        if self.helm_repo_url:
+            try:
+                await self._run_command(["helm", "repo", "list"])
+                checks["helm_repository"] = {
+                    "status": "ok",
+                    "message": f"Helm repository {self.helm_repo_name} configured",
+                }
+            except Exception as e:
+                checks["helm_repository"] = {
+                    "status": "warning",
+                    "message": f"Helm repository not configured: {e}",
+                }
+        else:
+            checks["helm_repository"] = {
+                "status": "warning",
+                "message": "No Helm repository URL configured",
+            }
+
+        is_ready = len(errors) == 0
+        return is_ready, {
+            "ready": is_ready,
+            "adapter": "kubernetes",
+            "cluster": self.default_cluster,
+            "checks": checks,
+            "errors": errors,
+        }
+
     # Helper methods
 
     def _ensure_namespace(self, context: ExecutionContext) -> str:

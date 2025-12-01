@@ -245,6 +245,37 @@ class DeploymentAdapter(ABC):
         """
         pass
 
+    @abstractmethod
+    async def preflight_check(self) -> tuple[bool, dict[str, Any]]:
+        """
+        Perform adapter preflight/readiness check.
+
+        Verifies that the adapter is properly configured and can reach
+        the underlying infrastructure. This should be called before
+        attempting any deployment operations.
+
+        Checks typically include:
+        - Credentials are configured and valid
+        - Backend service is reachable (K8s API, AWX, Docker host)
+        - Required permissions are in place
+        - Required resources are available
+
+        Returns:
+            Tuple of (is_ready, details) where:
+            - is_ready: True if adapter is ready for operations
+            - details: Dict with check results, e.g.:
+              {
+                "ready": True/False,
+                "checks": {
+                    "credentials": {"status": "ok", "message": "..."},
+                    "connectivity": {"status": "ok", "message": "..."},
+                    "permissions": {"status": "ok", "message": "..."},
+                },
+                "errors": ["..."] if any failed
+              }
+        """
+        pass
+
     async def rollback(self, context: ExecutionContext) -> DeploymentResult:
         """
         Rollback to previous version (default implementation)

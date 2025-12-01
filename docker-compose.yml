@@ -1,8 +1,8 @@
 services:
   platform-backend:
     build:
-      context: .
-      dockerfile: ${PLATFORM_BACKEND_DOCKERFILE:-Dockerfile}
+      context: ..
+      dockerfile: dotmac-platform/Dockerfile
     command: ${PLATFORM_BACKEND_COMMAND:-uvicorn dotmac.platform.main:app --host 0.0.0.0 --port 8000}
     restart: unless-stopped
     environment:

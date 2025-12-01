@@ -280,6 +280,11 @@ def reset_platform_config():
     """Ensure global platform config is restored between tests."""
     import dotmac.platform as platform_module
 
+    # Check if config exists on the module
+    if not hasattr(platform_module, "config"):
+        yield
+        return
+
     with CONFIG_LOCK:
         original_config = platform_module.config
         cloned_config = _clone_platform_config(platform_module.config)
@@ -295,10 +300,13 @@ def reset_platform_config():
     finally:
         with CONFIG_LOCK:
             platform_module.config = original_config
+            # Only try to reset with PlatformConfig if it exists
             if not hasattr(platform_module.config, "get"):
-                from dotmac.platform import PlatformConfig
-
-                platform_module.config = PlatformConfig()
+                try:
+                    from dotmac.platform import PlatformConfig
+                    platform_module.config = PlatformConfig()
+                except ImportError:
+                    pass  # PlatformConfig doesn't exist, keep original_config
 
 
 __all__ = [

@@ -222,6 +222,132 @@ class AWXAdapter(DeploymentAdapter):
 
         return len(errors) == 0, errors
 
+    async def preflight_check(self) -> tuple[bool, dict[str, Any]]:
+        """
+        Perform AWX adapter readiness check.
+
+        Verifies:
+        - AWX URL is configured
+        - AWX credentials are configured
+        - AWX Tower is reachable
+        - AWX authentication is valid
+        - Organization is accessible
+        - Default inventory is accessible
+        """
+        checks: dict[str, dict[str, str]] = {}
+        errors: list[str] = []
+
+        # Check AWX URL is configured
+        if not self.awx_url:
+            checks["awx_url"] = {
+                "status": "failed",
+                "message": "AWX URL is not configured",
+            }
+            errors.append("AWX URL is not configured (set awx_url)")
+        else:
+            checks["awx_url"] = {
+                "status": "ok",
+                "message": f"AWX URL configured: {self.awx_url}",
+            }
+
+        # Check credentials are configured
+        if self.awx_token:
+            checks["credentials"] = {
+                "status": "ok",
+                "message": "AWX token is configured",
+            }
+        elif self.awx_username and self.awx_password:
+            checks["credentials"] = {
+                "status": "ok",
+                "message": "AWX username/password is configured",
+            }
+        else:
+            checks["credentials"] = {
+                "status": "failed",
+                "message": "No AWX credentials configured",
+            }
+            errors.append("No AWX credentials configured (set awx_token or awx_username/awx_password)")
+
+        # Check AWX connectivity
+        if self.awx_url:
+            try:
+                ping_result = await self._api_request("GET", "/api/v2/ping/")
+                checks["connectivity"] = {
+                    "status": "ok",
+                    "message": f"AWX is reachable (version: {ping_result.get('version', 'unknown')})",
+                }
+            except Exception as e:
+                checks["connectivity"] = {
+                    "status": "failed",
+                    "message": f"Cannot connect to AWX: {e}",
+                }
+                errors.append(f"Cannot connect to AWX: {e}")
+
+        # Check authentication (try to get current user)
+        if self.awx_url and (self.awx_token or (self.awx_username and self.awx_password)):
+            try:
+                user_info = await self._api_request("GET", "/api/v2/me/")
+                username = user_info.get("username", "unknown")
+                checks["authentication"] = {
+                    "status": "ok",
+                    "message": f"Authenticated as: {username}",
+                }
+            except Exception as e:
+                checks["authentication"] = {
+                    "status": "failed",
+                    "message": f"Authentication failed: {e}",
+                }
+                errors.append(f"AWX authentication failed: {e}")
+
+        # Check organization access
+        if self.organization_id:
+            try:
+                org = await self._api_request("GET", f"/api/v2/organizations/{self.organization_id}/")
+                checks["organization"] = {
+                    "status": "ok",
+                    "message": f"Organization accessible: {org.get('name', 'unknown')}",
+                }
+            except Exception as e:
+                checks["organization"] = {
+                    "status": "warning",
+                    "message": f"Cannot access organization {self.organization_id}: {e}",
+                }
+        else:
+            checks["organization"] = {
+                "status": "warning",
+                "message": "No organization_id configured",
+            }
+
+        # Check default inventory
+        if self.default_inventory_id:
+            try:
+                inv = await self._api_request("GET", f"/api/v2/inventories/{self.default_inventory_id}/")
+                checks["inventory"] = {
+                    "status": "ok",
+                    "message": f"Default inventory accessible: {inv.get('name', 'unknown')}",
+                }
+            except Exception as e:
+                checks["inventory"] = {
+                    "status": "warning",
+                    "message": f"Cannot access inventory {self.default_inventory_id}: {e}",
+                }
+        else:
+            checks["inventory"] = {
+                "status": "warning",
+                "message": "No default_inventory_id configured",
+            }
+
+        is_ready = len(errors) == 0
+        return is_ready, {
+            "ready": is_ready,
+            "adapter": "awx",
+            "awx_url": self.awx_url,
+            "organization_id": self.organization_id,
+            "default_inventory_id": self.default_inventory_id,
+            "checks": checks,
+            "errors": errors,
+        }
+
     # Helper methods
 
     def _build_extra_vars(self, context: ExecutionContext, operation: str) -> dict[str, Any]:

@@ -185,6 +185,173 @@ class DockerComposeAdapter(DeploymentAdapter):
             errors.append(f"Compose files path does not exist: {self.compose_files_path}")
         return len(errors) == 0, errors
 
+    async def preflight_check(self) -> tuple[bool, dict[str, Any]]:
+        """
+        Perform Docker Compose adapter readiness check.
+
+        Verifies:
+        - Docker is installed and running
+        - docker-compose is available
+        - Docker host is reachable (if remote)
+        - Compose files directory is accessible
+        """
+        checks: dict[str, dict[str, str]] = {}
+        errors: list[str] = []
+
+        # Check docker availability
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "docker", "version",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await process.communicate()
+            if process.returncode == 0:
+                checks["docker"] = {
+                    "status": "ok",
+                    "message": "Docker is available",
+                }
+            else:
+                checks["docker"] = {
+                    "status": "failed",
+                    "message": f"Docker not responding: {stderr.decode()}",
+                }
+                errors.append("Docker daemon is not responding")
+        except FileNotFoundError:
+            checks["docker"] = {
+                "status": "failed",
+                "message": "Docker is not installed",
+            }
+            errors.append("Docker is not installed or not in PATH")
+        except Exception as e:
+            checks["docker"] = {
+                "status": "failed",
+                "message": f"Docker check failed: {e}",
+            }
+            errors.append(f"Docker check failed: {e}")
+
+        # Check docker-compose availability
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "docker-compose", "version",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await process.communicate()
+            if process.returncode == 0:
+                checks["docker_compose"] = {
+                    "status": "ok",
+                    "message": "docker-compose is available",
+                }
+            else:
+                checks["docker_compose"] = {
+                    "status": "failed",
+                    "message": f"docker-compose error: {stderr.decode()}",
+                }
+                errors.append("docker-compose is not working correctly")
+        except FileNotFoundError:
+            # Try docker compose (V2)
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    "docker", "compose", "version",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await process.communicate()
+                if process.returncode == 0:
+                    checks["docker_compose"] = {
+                        "status": "ok",
+                        "message": "docker compose (V2) is available",
+                    }
+                else:
+                    checks["docker_compose"] = {
+                        "status": "failed",
+                        "message": "docker compose not available",
+                    }
+                    errors.append("docker compose is not available")
+            except Exception:
+                checks["docker_compose"] = {
+                    "status": "failed",
+                    "message": "docker-compose/docker compose not found",
+                }
+                errors.append("docker-compose is not installed or not in PATH")
+        except Exception as e:
+            checks["docker_compose"] = {
+                "status": "failed",
+                "message": f"docker-compose check failed: {e}",
+            }
+            errors.append(f"docker-compose check failed: {e}")
+
+        # Check Docker host connectivity (if remote)
+        if self.docker_host:
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    "docker", "-H", self.docker_host, "info",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await process.communicate()
+                if process.returncode == 0:
+                    checks["docker_host"] = {
+                        "status": "ok",
+                        "message": f"Connected to Docker host: {self.docker_host}",
+                    }
+                else:
+                    checks["docker_host"] = {
+                        "status": "failed",
+                        "message": f"Cannot connect to Docker host: {stderr.decode()}",
+                    }
+                    errors.append(f"Cannot connect to Docker host: {self.docker_host}")
+            except Exception as e:
+                checks["docker_host"] = {
+                    "status": "failed",
+                    "message": f"Docker host check failed: {e}",
+                }
+                errors.append(f"Docker host check failed: {e}")
+        else:
+            checks["docker_host"] = {
+                "status": "ok",
+                "message": "Using local Docker daemon",
+            }
+
+        # Check compose files directory
+        if self.compose_files_path.exists():
+            if self.compose_files_path.is_dir():
+                checks["compose_path"] = {
+                    "status": "ok",
+                    "message": f"Compose path exists: {self.compose_files_path}",
+                }
+            else:
+                checks["compose_path"] = {
+                    "status": "failed",
+                    "message": f"Compose path is not a directory: {self.compose_files_path}",
+                }
+                errors.append(f"Compose path is not a directory: {self.compose_files_path}")
+        else:
+            # Try to create it
+            try:
+                self.compose_files_path.mkdir(parents=True, exist_ok=True)
+                checks["compose_path"] = {
+                    "status": "ok",
+                    "message": f"Created compose path: {self.compose_files_path}",
+                }
+            except Exception as e:
+                checks["compose_path"] = {
+                    "status": "failed",
+                    "message": f"Cannot create compose path: {e}",
+                }
+                errors.append(f"Cannot create compose files directory: {self.compose_files_path}")
+
+        is_ready = len(errors) == 0
+        return is_ready, {
+            "ready": is_ready,
+            "adapter": "docker_compose",
+            "docker_host": self.docker_host or "local",
+            "compose_path": str(self.compose_files_path),
+            "checks": checks,
+            "errors": errors,
+        }
+
     # Helper methods
 
     def _get_project_name(self, context: ExecutionContext) -> str:

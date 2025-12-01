@@ -651,6 +651,13 @@ class Settings(BaseSettings):
         description="Enable platform administration routes (disable in single-tenant mode)",
     )
 
+    # Platform URL (used for generating deployment credentials and ISP communication)
+    platform_url: str = Field(
+        "http://localhost:8000",
+        description="Public URL of the Platform service (used for ISP deployment configs)",
+        validation_alias=AliasChoices("PLATFORM_URL", "PLATFORM_BASE_URL"),
+    )
+
     # Server configuration
     host: str = Field("0.0.0.0", description="Server host")  # nosec B104 - Production deployments use proxy
     port: int = Field(8000, description="Server port")

@@ -725,6 +725,7 @@ def patch_main_app_startup() -> None:
     try:
         import dotmac.platform.main as main_module
     except ImportError:
+        yield  # Must yield even on early exit for generator fixtures
         return
 
     mp = pytest.MonkeyPatch()

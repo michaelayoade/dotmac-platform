@@ -48,6 +48,12 @@ class AppBoundaryMiddleware(BaseHTTPMiddleware):
     # Rejected prefixes - fail fast with 410 Gone
     REJECTED_PREFIXES = ("/api/tenant/", "/api/v1/")
 
+    # Platform routes that bypass auth (self-service, service-to-service APIs)
+    PLATFORM_PUBLIC_PATHS = (
+        "/api/platform/v1/admin/onboarding/self-service",  # Self-service tenant signup
+        "/api/platform/v1/admin/service-api/",  # ISP-to-Platform service API (uses service tokens)
+    )
+
     async def dispatch(
         self,
         request: Request,
@@ -89,6 +95,10 @@ class AppBoundaryMiddleware(BaseHTTPMiddleware):
 
         return await call_next(request)
 
+    def _is_platform_public_path(self, path: str) -> bool:
+        """Check if path is a public platform route (no auth required)."""
+        return any(path.startswith(p) for p in self.PLATFORM_PUBLIC_PATHS)
+
     def _enforce_platform_boundary(
         self,
         path: str,
@@ -111,6 +121,11 @@ class AppBoundaryMiddleware(BaseHTTPMiddleware):
                     "deployment_mode": settings.DEPLOYMENT_MODE,
                 },
             )
+
+        # Skip auth for public platform paths (self-service, service API)
+        if self._is_platform_public_path(path):
+            logger.debug("platform_public_path_allowed", path=path)
+            return
 
         # Platform routes require authentication
         if not user:

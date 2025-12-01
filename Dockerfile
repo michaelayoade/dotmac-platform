@@ -22,8 +22,11 @@ RUN set -eux; \
 # Create non-root application user
 RUN useradd --create-home --shell /bin/bash appuser
 
+# Copy dotmac-shared first (dependency)
+COPY --chown=appuser:appuser dotmac-shared /dotmac-shared
+
 # Copy dependency files
-COPY --chown=appuser:appuser pyproject.toml poetry.lock ./
+COPY --chown=appuser:appuser dotmac-platform/pyproject.toml dotmac-platform/poetry.lock ./
 
 # Install Poetry and dependencies
 RUN pip install --no-cache-dir "poetry==1.8.3" && \
@@ -31,9 +34,9 @@ RUN pip install --no-cache-dir "poetry==1.8.3" && \
     poetry install --only=main --no-root --no-interaction --no-ansi
 
 # Copy application code
-COPY --chown=appuser:appuser src ./src
-COPY --chown=appuser:appuser alembic.ini ./
-COPY --chown=appuser:appuser alembic ./alembic
+COPY --chown=appuser:appuser dotmac-platform/src ./src
+COPY --chown=appuser:appuser dotmac-platform/alembic.ini ./
+COPY --chown=appuser:appuser dotmac-platform/alembic ./alembic
 
 # Ensure application files are owned by non-root user
 RUN chown -R appuser:appuser /app
@@ -42,11 +45,11 @@ RUN chown -R appuser:appuser /app
 RUN mkdir -p /var/lib/dotmac && chown -R appuser:appuser /var/lib/dotmac
 
 # Copy entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/
+COPY dotmac-platform/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Set Python path
-ENV PYTHONPATH=/app/src:$PYTHONPATH
+ENV PYTHONPATH=/app/src:/dotmac-shared/src:$PYTHONPATH
 
 # Use entrypoint (runs as root to fix permissions, then switches to appuser)
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
