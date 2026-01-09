@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
@@ -31,7 +32,7 @@ class DomainSettingUpdate(BaseModel):
 
 
 class DomainSettingRead(DomainSettingBase):
-    id: str
+    id: UUID
     created_at: datetime
     updated_at: datetime
 
