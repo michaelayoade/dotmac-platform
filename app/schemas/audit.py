@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.audit import AuditActorType
 
@@ -21,7 +21,7 @@ class AuditEventBase(BaseModel):
     request_id: str | None = None
     metadata_: dict | None = Field(
         default=None,
-        validation_alias=AliasChoices("metadata", "metadata_"),
+        validation_alias="metadata_",
         serialization_alias="metadata",
     )
 

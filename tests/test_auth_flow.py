@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import pyotp
@@ -13,6 +14,10 @@ from app.services.auth_flow import AuthFlow, decode_access_token, hash_password
 from tests.mocks import FakeHTTPXResponse
 
 
+def _unique_username() -> str:
+    return f"user-{uuid.uuid4().hex[:8]}@example.com"
+
+
 def _make_request(user_agent: str = "pytest"):
     scope = {
         "type": "http",
@@ -25,10 +30,11 @@ def _make_request(user_agent: str = "pytest"):
 
 
 def test_login_and_refresh_reuse_detection(db_session, person, monkeypatch):
+    username = _unique_username()
     credential = UserCredential(
         person_id=person.id,
         provider=AuthProvider.local,
-        username="user@example.com",
+        username=username,
         password_hash=hash_password("secret"),
         is_active=True,
     )
@@ -37,7 +43,7 @@ def test_login_and_refresh_reuse_detection(db_session, person, monkeypatch):
     db_session.refresh(credential)
 
     request = _make_request()
-    tokens = AuthFlow.login(db_session, "user@example.com", "secret", request, None)
+    tokens = AuthFlow.login(db_session, username, "secret", request, None)
     old_refresh = tokens["refresh_token"]
 
     rotated = AuthFlow.refresh(db_session, old_refresh, request)
@@ -48,7 +54,7 @@ def test_login_and_refresh_reuse_detection(db_session, person, monkeypatch):
     assert exc.value.status_code == 401
     assert "reuse" in str(exc.value.detail).lower()
 
-    session = db_session.query(AuthSession).first()
+    session = db_session.query(AuthSession).filter(AuthSession.person_id == person.id).first()
     assert session.status == SessionStatus.revoked
     assert session.revoked_at is not None
 
@@ -61,7 +67,7 @@ def test_mfa_setup_confirm(db_session, person, monkeypatch):
     credential = UserCredential(
         person_id=person.id,
         provider=AuthProvider.local,
-        username="mfa@example.com",
+        username=_unique_username(),
         password_hash=hash_password("secret"),
         is_active=True,
     )

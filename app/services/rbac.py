@@ -183,9 +183,9 @@ class RolePermissions(ListResponseMixin):
     ):
         query = db.query(RolePermission)
         if role_id:
-            query = query.filter(RolePermission.role_id == role_id)
+            query = query.filter(RolePermission.role_id == coerce_uuid(role_id))
         if permission_id:
-            query = query.filter(RolePermission.permission_id == permission_id)
+            query = query.filter(RolePermission.permission_id == coerce_uuid(permission_id))
         query = _apply_ordering(
             query,
             order_by,
@@ -257,9 +257,9 @@ class PersonRoles(ListResponseMixin):
     ):
         query = db.query(PersonRole)
         if person_id:
-            query = query.filter(PersonRole.person_id == person_id)
+            query = query.filter(PersonRole.person_id == coerce_uuid(person_id))
         if role_id:
-            query = query.filter(PersonRole.role_id == role_id)
+            query = query.filter(PersonRole.role_id == coerce_uuid(role_id))
         query = _apply_ordering(
             query,
             order_by,

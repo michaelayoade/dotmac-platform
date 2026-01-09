@@ -39,6 +39,7 @@ from app.services.auth_flow import (
     hash_password,
     request_password_reset,
     reset_password,
+    revoke_sessions_for_person,
     verify_password,
 )
 from app.services.email import send_password_reset_email
@@ -82,10 +83,24 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     )
 
 
-@router.post("/mfa/setup", response_model=MfaSetupResponse, status_code=status.HTTP_200_OK)
-def mfa_setup(payload: MfaSetupRequest, db: Session = Depends(get_db)):
+@router.post(
+    "/mfa/setup",
+    response_model=MfaSetupResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+    },
+)
+def mfa_setup(
+    payload: MfaSetupRequest,
+    auth: dict = Depends(require_user_auth),
+    db: Session = Depends(get_db),
+):
+    if str(payload.person_id) != auth["person_id"]:
+        raise HTTPException(status_code=403, detail="Forbidden")
     return auth_flow_service.auth_flow.mfa_setup(
-        db, str(payload.person_id), payload.label
+        db, auth["person_id"], payload.label
     )
 
 
@@ -99,9 +114,13 @@ def mfa_setup(payload: MfaSetupRequest, db: Session = Depends(get_db)):
         404: {"model": ErrorResponse},
     },
 )
-def mfa_confirm(payload: MfaConfirmRequest, db: Session = Depends(get_db)):
+def mfa_confirm(
+    payload: MfaConfirmRequest,
+    auth: dict = Depends(require_user_auth),
+    db: Session = Depends(get_db),
+):
     return auth_flow_service.auth_flow.mfa_confirm(
-        db, str(payload.method_id), payload.code
+        db, str(payload.method_id), payload.code, auth["person_id"]
     )
 
 
@@ -406,7 +425,7 @@ def change_password(
 ):
     credential = (
         db.query(UserCredential)
-        .filter(UserCredential.person_id == auth["person_id"])
+        .filter(UserCredential.person_id == coerce_uuid(auth["person_id"]))
         .filter(UserCredential.is_active.is_(True))
         .first()
     )
@@ -424,6 +443,7 @@ def change_password(
     credential.password_hash = hash_password(payload.new_password)
     credential.password_updated_at = now
     credential.must_change_password = False
+    revoke_sessions_for_person(db, auth["person_id"])
     db.commit()
 
     return PasswordChangeResponse(changed_at=now)

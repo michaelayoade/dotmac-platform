@@ -23,5 +23,10 @@ class Settings:
     avatar_allowed_types: str = os.getenv("AVATAR_ALLOWED_TYPES", "image/jpeg,image/png,image/gif,image/webp")
     avatar_url_prefix: str = os.getenv("AVATAR_URL_PREFIX", "/static/avatars")
 
+    # Branding
+    brand_name: str = os.getenv("BRAND_NAME", "Starter Template")
+    brand_tagline: str = os.getenv("BRAND_TAGLINE", "FastAPI starter")
+    brand_logo_url: str | None = os.getenv("BRAND_LOGO_URL") or None
+
 
 settings = Settings()

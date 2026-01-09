@@ -71,13 +71,15 @@ def test_list_people_filter_by_email(db_session):
 
 def test_list_people_filter_by_status(db_session):
     """Test listing people filtered by status."""
+    email1 = _unique_email()
     person1 = person_service.people.create(
         db_session,
-        PersonCreate(first_name="Active", last_name="User", email=_unique_email()),
+        PersonCreate(first_name="Active", last_name="User", email=email1),
     )
+    email2 = _unique_email()
     person2 = person_service.people.create(
         db_session,
-        PersonCreate(first_name="Inactive", last_name="User", email=_unique_email()),
+        PersonCreate(first_name="Inactive", last_name="User", email=email2),
     )
     # Update second person to inactive
     person_service.people.update(
@@ -86,9 +88,10 @@ def test_list_people_filter_by_status(db_session):
         PersonUpdate(status="inactive"),
     )
 
+    # Query for person1 specifically with active status filter
     active_results = person_service.people.list(
         db_session,
-        email=None,
+        email=email1,
         status="active",
         is_active=None,
         order_by="created_at",
@@ -96,7 +99,21 @@ def test_list_people_filter_by_status(db_session):
         limit=100,
         offset=0,
     )
-    assert any(p.id == person1.id for p in active_results)
+    assert len(active_results) == 1
+    assert active_results[0].id == person1.id
+
+    # Verify person2 is not returned when filtering for active
+    inactive_as_active = person_service.people.list(
+        db_session,
+        email=email2,
+        status="active",
+        is_active=None,
+        order_by="created_at",
+        order_dir="asc",
+        limit=100,
+        offset=0,
+    )
+    assert len(inactive_as_active) == 0
 
 
 def test_list_people_active_only(db_session):

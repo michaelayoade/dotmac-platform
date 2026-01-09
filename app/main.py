@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, Request
 from time import monotonic
 from threading import Lock
@@ -28,7 +30,20 @@ from app.observability import ObservabilityMiddleware
 from app.telemetry import setup_otel
 from app.errors import register_error_handlers
 
-app = FastAPI(title="Starter Template API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db = SessionLocal()
+    try:
+        seed_auth_settings(db)
+        seed_audit_settings(db)
+        seed_scheduler_settings(db)
+    finally:
+        db.close()
+    yield
+
+
+app = FastAPI(title="Starter Template API", lifespan=lifespan)
 
 _AUDIT_SETTINGS_CACHE: dict | None = None
 _AUDIT_SETTINGS_CACHE_AT: float | None = None
@@ -51,8 +66,10 @@ async def audit_middleware(request: Request, call_next):
         db.close()
     if not audit_settings["enabled"]:
         return await call_next(request)
+    header_key = audit_settings.get("read_trigger_header") or ""
+    header_value = request.headers.get(header_key, "") if header_key else ""
     track_read = request.method == "GET" and (
-        request.headers.get(audit_settings["read_trigger_header"], "").lower() == "true"
+        (header_value or "").lower() == "true"
         or request.query_params.get(audit_settings["read_trigger_query"]) == "true"
     )
     should_log = request.method in audit_settings["methods"] or track_read
@@ -179,13 +196,3 @@ def metrics():
     data = generate_latest()
     return Response(content=data, media_type=CONTENT_TYPE_LATEST)
 
-
-@app.on_event("startup")
-def _start_jobs():
-    db = SessionLocal()
-    try:
-        seed_auth_settings(db)
-        seed_audit_settings(db)
-        seed_scheduler_settings(db)
-    finally:
-        db.close()

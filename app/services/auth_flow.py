@@ -170,7 +170,7 @@ def _refresh_cookie_path(db: Session | None) -> str:
     return (
         _env_value("REFRESH_COOKIE_PATH")
         or _setting_value(db, "refresh_cookie_path")
-        or "/auth"
+        or "/"
     )
 
 
@@ -339,6 +339,32 @@ def verify_password(password: str, password_hash: str | None) -> bool:
     return PASSWORD_CONTEXT.verify(password, password_hash)
 
 
+def revoke_sessions_for_person(
+    db: Session,
+    person_id: str,
+    exclude_session_id: str | None = None,
+) -> int:
+    person_uuid = coerce_uuid(person_id)
+    query = (
+        db.query(AuthSession)
+        .filter(AuthSession.person_id == person_uuid)
+        .filter(AuthSession.status == SessionStatus.active)
+        .filter(AuthSession.revoked_at.is_(None))
+    )
+    if exclude_session_id:
+        query = query.filter(AuthSession.id != coerce_uuid(exclude_session_id))
+
+    sessions = query.all()
+    if not sessions:
+        return 0
+
+    now = _now()
+    for session in sessions:
+        session.status = SessionStatus.revoked
+        session.revoked_at = now
+    return len(sessions)
+
+
 class AuthFlow(ListResponseMixin):
     @staticmethod
     def _response_with_refresh_cookie(
@@ -482,10 +508,19 @@ class AuthFlow(ListResponseMixin):
         return {"method_id": method.id, "secret": secret, "otpauth_uri": otpauth_uri}
 
     @staticmethod
-    def mfa_confirm(db: Session, method_id: str, code: str):
+    def mfa_confirm(
+        db: Session,
+        method_id: str,
+        code: str,
+        expected_person_id: str | None = None,
+    ):
         method = db.get(MFAMethod, coerce_uuid(method_id))
         if not method:
             raise HTTPException(status_code=404, detail="MFA method not found")
+        if expected_person_id:
+            expected_uuid = coerce_uuid(expected_person_id)
+            if method.person_id != expected_uuid:
+                raise HTTPException(status_code=404, detail="MFA method not found")
         if method.method_type != MFAMethodType.totp:
             raise HTTPException(status_code=400, detail="Unsupported MFA method")
 
@@ -729,6 +764,7 @@ def reset_password(db: Session, token: str, new_password: str) -> datetime:
     credential.must_change_password = False
     credential.failed_login_attempts = 0
     credential.locked_until = None
+    revoke_sessions_for_person(db, str(person.id))
     db.commit()
 
     return now

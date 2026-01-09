@@ -11,6 +11,15 @@ from app.services.auth_flow import decode_access_token, hash_session_token
 from app.services.common import coerce_uuid
 
 
+def _make_aware(dt: datetime) -> datetime:
+    """Ensure datetime is timezone-aware (UTC). SQLite doesn't preserve tz info."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _get_db():
     db = SessionLocal()
     try:
@@ -76,7 +85,7 @@ def require_audit_auth(
                     raise HTTPException(status_code=401, detail="Invalid session")
                 if session.status != SessionStatus.active or session.revoked_at:
                     raise HTTPException(status_code=401, detail="Invalid session")
-                if session.expires_at <= now:
+                if _make_aware(session.expires_at) <= now:
                     raise HTTPException(status_code=401, detail="Session expired")
             actor_id = str(payload.get("sub"))
             if request is not None:
