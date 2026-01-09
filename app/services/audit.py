@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.models.audit import AuditEvent, AuditActorType
 from app.schemas.audit import AuditEventCreate
+from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
 
 
@@ -49,7 +50,7 @@ class AuditEvents(ListResponseMixin):
 
     @staticmethod
     def get(db: Session, event_id: str):
-        event = db.get(AuditEvent, event_id)
+        event = db.get(AuditEvent, coerce_uuid(event_id))
         if not event:
             raise HTTPException(status_code=404, detail="Audit event not found")
         return event
@@ -140,7 +141,7 @@ class AuditEvents(ListResponseMixin):
 
     @staticmethod
     def delete(db: Session, event_id: str):
-        event = db.get(AuditEvent, event_id)
+        event = db.get(AuditEvent, coerce_uuid(event_id))
         if not event:
             raise HTTPException(status_code=404, detail="Audit event not found")
         event.is_active = False

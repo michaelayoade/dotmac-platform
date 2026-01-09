@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.models.scheduler import ScheduledTask, ScheduleType
 from app.schemas.scheduler import ScheduledTaskCreate, ScheduledTaskUpdate
+from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
 
 
@@ -46,7 +47,7 @@ class ScheduledTasks(ListResponseMixin):
 
     @staticmethod
     def get(db: Session, task_id: str):
-        task = db.get(ScheduledTask, task_id)
+        task = db.get(ScheduledTask, coerce_uuid(task_id))
         if not task:
             raise HTTPException(status_code=404, detail="Scheduled task not found")
         return task
@@ -73,7 +74,7 @@ class ScheduledTasks(ListResponseMixin):
 
     @staticmethod
     def update(db: Session, task_id: str, payload: ScheduledTaskUpdate):
-        task = db.get(ScheduledTask, task_id)
+        task = db.get(ScheduledTask, coerce_uuid(task_id))
         if not task:
             raise HTTPException(status_code=404, detail="Scheduled task not found")
         data = payload.model_dump(exclude_unset=True)
@@ -92,7 +93,7 @@ class ScheduledTasks(ListResponseMixin):
 
     @staticmethod
     def delete(db: Session, task_id: str):
-        task = db.get(ScheduledTask, task_id)
+        task = db.get(ScheduledTask, coerce_uuid(task_id))
         if not task:
             raise HTTPException(status_code=404, detail="Scheduled task not found")
         db.delete(task)

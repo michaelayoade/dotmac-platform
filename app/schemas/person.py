@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class PersonBase(BaseModel):
@@ -29,11 +29,7 @@ class PersonBase(BaseModel):
     is_active: bool = True
     marketing_opt_in: bool = False
     notes: str | None = None
-    metadata_: dict | None = Field(
-        default=None,
-        validation_alias=AliasChoices("metadata", "metadata_"),
-        serialization_alias="metadata",
-    )
+    metadata_: dict | None = Field(default=None, serialization_alias="metadata")
 
 
 class PersonCreate(PersonBase):
@@ -65,11 +61,7 @@ class PersonUpdate(BaseModel):
     is_active: bool | None = None
     marketing_opt_in: bool | None = None
     notes: str | None = None
-    metadata_: dict | None = Field(
-        default=None,
-        validation_alias=AliasChoices("metadata", "metadata_"),
-        serialization_alias="metadata",
-    )
+    metadata_: dict | None = Field(default=None, serialization_alias="metadata")
 
 
 class PersonRead(PersonBase):

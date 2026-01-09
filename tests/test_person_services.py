@@ -2,7 +2,6 @@
 
 import uuid
 
-from app.models.person import PersonStatus
 from app.schemas.person import PersonCreate, PersonUpdate
 from app.services import person as person_service
 
@@ -84,7 +83,7 @@ def test_list_people_filter_by_status(db_session):
     person_service.people.update(
         db_session,
         str(person2.id),
-        PersonUpdate(status=PersonStatus.inactive),
+        PersonUpdate(status="inactive"),
     )
 
     active_results = person_service.people.list(

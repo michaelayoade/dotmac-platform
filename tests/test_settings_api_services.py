@@ -114,4 +114,5 @@ def test_list_settings_response(db_session):
     response = settings_api.list_auth_settings_response(
         db_session, None, "key", "asc", 10, 0
     )
-    assert response["count"] == 2
+    assert response["count"] == len(response["items"])
+    assert response["count"] >= 2

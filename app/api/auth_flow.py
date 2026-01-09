@@ -42,6 +42,7 @@ from app.services.auth_flow import (
     verify_password,
 )
 from app.services.email import send_password_reset_email
+from app.services.common import coerce_uuid
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -159,7 +160,7 @@ def get_me(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    person = db.get(Person, auth["person_id"])
+    person = db.get(Person, coerce_uuid(auth["person_id"]))
     if not person:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -195,7 +196,7 @@ def update_me(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    person = db.get(Person, auth["person_id"])
+    person = db.get(Person, coerce_uuid(auth["person_id"]))
     if not person:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -239,7 +240,7 @@ async def upload_avatar(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    person = db.get(Person, auth["person_id"])
+    person = db.get(Person, coerce_uuid(auth["person_id"]))
     if not person:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -267,7 +268,7 @@ def delete_avatar(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    person = db.get(Person, auth["person_id"])
+    person = db.get(Person, coerce_uuid(auth["person_id"]))
     if not person:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -288,9 +289,10 @@ def list_sessions(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
+    person_id = coerce_uuid(auth["person_id"])
     sessions = (
         db.query(AuthSession)
-        .filter(AuthSession.person_id == auth["person_id"])
+        .filter(AuthSession.person_id == person_id)
         .filter(AuthSession.status == SessionStatus.active)
         .filter(AuthSession.revoked_at.is_(None))
         .order_by(AuthSession.created_at.desc())
@@ -333,8 +335,8 @@ def revoke_session(
 ):
     session = (
         db.query(AuthSession)
-        .filter(AuthSession.id == session_id)
-        .filter(AuthSession.person_id == auth["person_id"])
+        .filter(AuthSession.id == coerce_uuid(session_id))
+        .filter(AuthSession.person_id == coerce_uuid(auth["person_id"]))
         .first()
     )
 
@@ -365,10 +367,12 @@ def revoke_all_other_sessions(
     db: Session = Depends(get_db),
 ):
     current_session_id = auth.get("session_id")
+    if current_session_id:
+        current_session_id = coerce_uuid(current_session_id)
 
     sessions = (
         db.query(AuthSession)
-        .filter(AuthSession.person_id == auth["person_id"])
+        .filter(AuthSession.person_id == coerce_uuid(auth["person_id"]))
         .filter(AuthSession.status == SessionStatus.active)
         .filter(AuthSession.revoked_at.is_(None))
         .filter(AuthSession.id != current_session_id)

@@ -8,6 +8,7 @@ from app.models.auth import ApiKey, Session as AuthSession, SessionStatus
 from app.models.rbac import Permission, PersonRole, RolePermission, Role
 from app.services.auth import hash_api_key
 from app.services.auth_flow import decode_access_token, hash_session_token
+from app.services.common import coerce_uuid
 
 
 def _get_db():
@@ -70,7 +71,7 @@ def require_audit_auth(
                 raise HTTPException(status_code=403, detail="Insufficient scope")
             session_id = payload.get("session_id")
             if session_id:
-                session = db.get(AuthSession, session_id)
+                session = db.get(AuthSession, coerce_uuid(session_id))
                 if not session:
                     raise HTTPException(status_code=401, detail="Invalid session")
                 if session.status != SessionStatus.active or session.revoked_at:
@@ -124,10 +125,12 @@ def require_user_auth(
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     now = datetime.now(timezone.utc)
+    person_uuid = coerce_uuid(person_id)
+    session_uuid = coerce_uuid(session_id)
     session = (
         db.query(AuthSession)
-        .filter(AuthSession.id == session_id)
-        .filter(AuthSession.person_id == person_id)
+        .filter(AuthSession.id == session_uuid)
+        .filter(AuthSession.person_id == person_uuid)
         .filter(AuthSession.status == SessionStatus.active)
         .filter(AuthSession.revoked_at.is_(None))
         .filter(AuthSession.expires_at > now)
@@ -155,7 +158,7 @@ def require_role(role_name: str):
         auth=Depends(require_user_auth),
         db: Session = Depends(_get_db),
     ):
-        person_id = auth["person_id"]
+        person_id = coerce_uuid(auth["person_id"])
         roles = set(auth.get("roles") or [])
         if role_name in roles:
             return auth
@@ -185,7 +188,7 @@ def require_permission(permission_key: str):
         auth=Depends(require_user_auth),
         db: Session = Depends(_get_db),
     ):
-        person_id = auth["person_id"]
+        person_id = coerce_uuid(auth["person_id"])
         roles = set(auth.get("roles") or [])
         scopes = set(auth.get("scopes") or [])
         if "admin" in roles or permission_key in scopes:

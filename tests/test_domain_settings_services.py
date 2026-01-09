@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 from fastapi import HTTPException
 
@@ -13,7 +15,7 @@ def test_domain_setting_domain_mismatch(db_session):
         db_session,
         DomainSettingCreate(
             domain=SettingDomain.auth,
-            key="refresh_cookie_secure",
+            key=f"test_setting_{uuid.uuid4().hex[:8]}",
             value_type=SettingValueType.boolean,
             value_text="true",
             value_json=True,
