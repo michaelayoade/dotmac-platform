@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <main class="mx-auto max-w-5xl px-6 py-16 bg-noise bg-mesh min-h-screen">
+    <div class="stagger-in rounded-3xl bg-white p-10 shadow-xl shadow-slate-200/40 dark:bg-slate-800 dark:shadow-slate-900/40 card-hover">
+      <div class="flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p class="text-sm font-semibold uppercase tracking-[0.3em] text-primary-600 dark:text-primary-400">
+            Starter Dashboard
+          </p>
+          <h1 class="mt-4 text-4xl font-bold leading-tight text-slate-900 dark:text-white md:text-5xl font-display tracking-tight">
+            Kickstart your
+            <span class="bg-gradient-to-r from-primary-500 to-accent-500 bg-clip-text text-transparent">next project.</span>
+          </h1>
+          <p class="mt-4 max-w-2xl text-lg text-slate-600 dark:text-slate-300">
+            A clean FastAPI base with auth, roles, settings, and task scheduling to
+            build on with your own domain models.
+          </p>
+        </div>
+        <div
+          class="stagger-in rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100 p-6 dark:border-slate-700 dark:from-slate-700 dark:to-slate-800"
+          x-data="{ count: 214 }"
+        >
+          <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Active people</p>
+          <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display counter-animate" x-text="count"></p>
+          <button
+            class="mt-4 inline-flex items-center rounded-full bg-gradient-to-r from-primary-600 to-primary-500 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover hover:shadow-primary-500/40"
+            x-on:click="count = count + 1"
+          >
+            Add person
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-12 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div class="stagger-in rounded-2xl border border-slate-200 p-6 dark:border-slate-700 card-hover">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Latest people</h2>
+            <span class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+              Updated
+            </span>
+          </div>
+          <div class="mt-4 divide-y divide-slate-100 dark:divide-slate-700">
+            {% for person in people %}
+              <div class="flex items-center justify-between py-3 text-sm">
+                <div>
+                  <p class="font-medium text-slate-900 dark:text-white">
+                    {{ person.first_name }} {{ person.last_name }}
+                  </p>
+                  <p class="text-slate-500 dark:text-slate-400">
+                    {{ person.email }}
+                  </p>
+                </div>
+                <span class="rounded-full bg-gradient-to-r from-green-100 to-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700 dark:from-green-900/30 dark:to-emerald-900/30 dark:text-emerald-400">
+                  Active
+                </span>
+              </div>
+            {% else %}
+              <div class="py-8 text-center">
+                <div class="mx-auto h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center mb-3">
+                  <svg class="h-6 w-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                  </svg>
+                </div>
+                <p class="text-sm text-slate-500 dark:text-slate-400">No people yet.</p>
+                <a href="/api/v1/people" class="mt-2 inline-block text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                  Add your first person &rarr;
+                </a>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="grid gap-4">
+          <div class="stagger-in group rounded-2xl border border-slate-200 p-6 dark:border-slate-700 card-hover bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-800/50">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/40 dark:to-primary-800/30 mb-3 transition-transform group-hover:scale-110">
+              <svg class="h-5 w-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+              </svg>
+            </div>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">People + roles</h2>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+              Manage users, access roles, and API keys in one place.
+            </p>
+          </div>
+          <div class="stagger-in group rounded-2xl border border-slate-200 p-6 dark:border-slate-700 card-hover bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-800/50">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent-100 to-accent-200 dark:from-accent-900/40 dark:to-accent-800/30 mb-3 transition-transform group-hover:scale-110">
+              <svg class="h-5 w-5 text-accent-600 dark:text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+              </svg>
+            </div>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Settings hub</h2>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+              Centralize configuration with audit-ready settings domains.
+            </p>
+          </div>
+          <div class="stagger-in group rounded-2xl border border-slate-200 p-6 dark:border-slate-700 card-hover bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-800/50">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/40 dark:to-green-800/30 mb-3 transition-transform group-hover:scale-110">
+              <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+            </div>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Scheduled tasks</h2>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+              Add recurring jobs and background work with Celery.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+{% endblock %}
