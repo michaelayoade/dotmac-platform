@@ -1,0 +1,93 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6">
+    <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+        <a href="/instances" class="hover:text-primary-600 dark:hover:text-primary-400">Instances</a>
+        <span>/</span>
+        <a href="/instances/{{ instance.instance_id }}" class="hover:text-primary-600 dark:hover:text-primary-400">{{ instance.org_code }}</a>
+        <span>/</span>
+        <span>Deployment</span>
+    </div>
+</div>
+
+<div class="mx-auto max-w-3xl"
+     {% if is_running %}hx-get="/instances/{{ instance.instance_id }}/deploy-log?deployment_id={{ deployment_id }}" hx-trigger="every 3s" hx-select="#deploy-steps" hx-target="#deploy-steps" hx-swap="outerHTML"{% endif %}>
+
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Deployment Pipeline</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    {% if deployment_id %}Deploy ID: <span class="font-mono">{{ deployment_id }}</span>{% endif %}
+                </p>
+            </div>
+            {% if is_running %}
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
+                <span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>Running
+            </span>
+            {% elif logs and logs[-1].status.value == 'success' %}
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>Complete
+            </span>
+            {% elif logs and logs[-1].status.value == 'failed' %}
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Failed
+            </span>
+            {% endif %}
+        </div>
+
+        <div id="deploy-steps" class="space-y-3">
+            {% for log in logs %}
+            <div class="rounded-lg border {{ 'border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10' if log.status.value == 'running' else 'border-slate-100 dark:border-slate-800' }} p-4" x-data="{ expanded: {{ 'true' if log.status.value == 'failed' else 'false' }} }">
+                <div class="flex items-center gap-3 cursor-pointer" @click="expanded = !expanded">
+                    {% if log.status.value == 'success' %}
+                        <svg class="h-5 w-5 flex-shrink-0 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    {% elif log.status.value == 'failed' %}
+                        <svg class="h-5 w-5 flex-shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    {% elif log.status.value == 'running' %}
+                        <svg class="h-5 w-5 flex-shrink-0 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    {% elif log.status.value == 'skipped' %}
+                        <svg class="h-5 w-5 flex-shrink-0 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+                    {% else %}
+                        <span class="h-5 w-5 flex-shrink-0 rounded-full border-2 border-slate-200 dark:border-slate-700"></span>
+                    {% endif %}
+
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium {{ 'text-slate-900 dark:text-white' if log.status.value != 'skipped' else 'text-slate-400 dark:text-slate-500' }}">
+                            {{ log.step | replace('_', ' ') | title }}
+                        </p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ log.message }}</p>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        {% if log.completed_at and log.started_at %}
+                        <span class="text-xs text-slate-400 font-mono">{{ (log.completed_at - log.started_at).total_seconds() | round(1) }}s</span>
+                        {% endif %}
+                        <svg class="h-4 w-4 text-slate-400 transition" :class="expanded ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </div>
+                </div>
+
+                {% if log.output %}
+                <div x-show="expanded" x-collapse class="mt-3 rounded-lg bg-slate-900 p-3 overflow-x-auto">
+                    <pre class="text-xs text-slate-300 font-mono whitespace-pre-wrap">{{ log.output }}</pre>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if not is_running %}
+        <div class="mt-6 flex justify-between items-center">
+            <a href="/instances/{{ instance.instance_id }}" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400">&larr; Back to Instance</a>
+            {% if logs and logs[-1].status.value == 'failed' %}
+            <form method="POST" action="/instances/{{ instance.instance_id }}/deploy">
+                <input type="hidden" name="admin_password" value="changeme123" />
+                <button type="submit" class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 transition">Retry Deploy</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

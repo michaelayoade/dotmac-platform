@@ -1,12 +1,42 @@
 services:
   app:
     build: .
-    container_name: starter_template_app
+    container_name: dotmac_platform_app
     restart: unless-stopped
     ports:
-      - "8001:8001"
+      - "8100:8001"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/starter_template}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/dotmac_platform}
+      REDIS_URL: ${REDIS_URL:-redis://:redis@redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://:redis@redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://:redis@redis:6379/1}
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./app:/app/app
+      - ./templates:/app/templates
+      - ./static:/app/static
+      - /root/.ssh:/root/.ssh:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  worker:
+    build: .
+    container_name: dotmac_platform_worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/dotmac_platform}
       REDIS_URL: ${REDIS_URL:-redis://:redis@redis:6379/0}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://:redis@redis:6379/0}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://:redis@redis:6379/1}
@@ -16,33 +46,18 @@ services:
       - db
       - redis
     volumes:
-      - ./app:/app/app
-      - ./templates:/app/templates
-      - ./static:/app/static
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
-
-  worker:
-    build: .
-    container_name: starter_template_worker
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/starter_template}
-      REDIS_URL: ${REDIS_URL:-redis://:redis@redis:6379/0}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://:redis@redis:6379/0}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://:redis@redis:6379/1}
-    env_file:
-      - .env
-    depends_on:
-      - db
-      - redis
+      - /root/.ssh:/root/.ssh:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/dotmac:/opt/dotmac/src:ro
+      - /opt/dotmac/instances:/opt/dotmac/instances
     command: ["celery", "-A", "app.celery_app", "worker", "-l", "info"]
 
   beat:
     build: .
-    container_name: starter_template_beat
+    container_name: dotmac_platform_beat
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/starter_template}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/dotmac_platform}
       REDIS_URL: ${REDIS_URL:-redis://:redis@redis:6379/0}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://:redis@redis:6379/0}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://:redis@redis:6379/1}
@@ -55,24 +70,29 @@ services:
 
   db:
     image: postgres:16
-    container_name: starter_template_db
+    container_name: dotmac_platform_db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-starter_template}
+      POSTGRES_DB: ${POSTGRES_DB:-dotmac_platform}
     ports:
-      - "5434:5432"
+      - "5436:5432"
     volumes:
-      - starter_template_db_data:/var/lib/postgresql/data
+      - dotmac_platform_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   redis:
     image: redis:7
-    container_name: starter_template_redis
+    container_name: dotmac_platform_redis
     restart: unless-stopped
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-redis}"]
     ports:
-      - "6379:6379"
+      - "6381:6379"
 
 volumes:
-  starter_template_db_data:
+  dotmac_platform_db_data:

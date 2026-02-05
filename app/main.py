@@ -15,6 +15,11 @@ from app.api.rbac import router as rbac_router
 from app.api.scheduler import router as scheduler_router
 from app.api.settings import router as settings_router
 from app.web_home import router as web_home_router
+from app.web.auth_web import router as auth_web_router
+from app.web.dashboard import router as dashboard_router
+from app.web.servers import router as servers_router
+from app.web.instances import router as instances_router
+from app.web.platform_settings import router as platform_settings_router
 from app.db import SessionLocal
 from app.services import audit as audit_service
 from app.api.deps import require_role, require_user_auth
@@ -43,7 +48,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Starter Template API", lifespan=lifespan)
+app = FastAPI(title="DotMac Platform API", lifespan=lifespan)
 
 _AUDIT_SETTINGS_CACHE: dict | None = None
 _AUDIT_SETTINGS_CACHE_AT: float | None = None
@@ -62,38 +67,30 @@ async def audit_middleware(request: Request, call_next):
     db = SessionLocal()
     try:
         audit_settings = _load_audit_settings(db)
-    finally:
-        db.close()
-    if not audit_settings["enabled"]:
-        return await call_next(request)
-    header_key = audit_settings.get("read_trigger_header") or ""
-    header_value = request.headers.get(header_key, "") if header_key else ""
-    track_read = request.method == "GET" and (
-        (header_value or "").lower() == "true"
-        or request.query_params.get(audit_settings["read_trigger_query"]) == "true"
-    )
-    should_log = request.method in audit_settings["methods"] or track_read
-    if _is_audit_path_skipped(path, audit_settings["skip_paths"]):
-        should_log = False
-    try:
-        response = await call_next(request)
-    except Exception:
-        if should_log:
-            db = SessionLocal()
-            try:
+        if not audit_settings["enabled"]:
+            return await call_next(request)
+        header_key = audit_settings.get("read_trigger_header") or ""
+        header_value = request.headers.get(header_key, "") if header_key else ""
+        track_read = request.method == "GET" and (
+            (header_value or "").lower() == "true"
+            or request.query_params.get(audit_settings["read_trigger_query"]) == "true"
+        )
+        should_log = request.method in audit_settings["methods"] or track_read
+        if _is_audit_path_skipped(path, audit_settings["skip_paths"]):
+            should_log = False
+        try:
+            response = await call_next(request)
+        except Exception:
+            if should_log:
                 audit_service.audit_events.log_request(
                     db, request, Response(status_code=500)
                 )
-            finally:
-                db.close()
-        raise
-    if should_log:
-        db = SessionLocal()
-        try:
+            raise
+        if should_log:
             audit_service.audit_events.log_request(db, request, response)
-        finally:
-            db.close()
-    return response
+        return response
+    finally:
+        db.close()
 
 
 def _load_audit_settings(db: Session):
@@ -106,34 +103,35 @@ def _load_audit_settings(db: Session):
             and now - _AUDIT_SETTINGS_CACHE_AT < _AUDIT_SETTINGS_CACHE_TTL_SECONDS
         ):
             return _AUDIT_SETTINGS_CACHE
-    defaults = {
-        "enabled": True,
-        "methods": {"POST", "PUT", "PATCH", "DELETE"},
-        "skip_paths": ["/static", "/web", "/health"],
-        "read_trigger_header": "x-audit-read",
-        "read_trigger_query": "audit",
-    }
-    rows = (
-        db.query(DomainSetting)
-        .filter(DomainSetting.domain == SettingDomain.audit)
-        .filter(DomainSetting.is_active.is_(True))
-        .all()
-    )
-    values = {row.key: row for row in rows}
-    if "enabled" in values:
-        defaults["enabled"] = _to_bool(values["enabled"])
-    if "methods" in values:
-        defaults["methods"] = _to_list(values["methods"], upper=True)
-    if "skip_paths" in values:
-        defaults["skip_paths"] = _to_list(values["skip_paths"], upper=False)
-    if "read_trigger_header" in values:
-        defaults["read_trigger_header"] = _to_str(values["read_trigger_header"])
-    if "read_trigger_query" in values:
-        defaults["read_trigger_query"] = _to_str(values["read_trigger_query"])
-    with _AUDIT_SETTINGS_LOCK:
+
+        defaults = {
+            "enabled": True,
+            "methods": {"POST", "PUT", "PATCH", "DELETE"},
+            "skip_paths": ["/static", "/web", "/health"],
+            "read_trigger_header": "x-audit-read",
+            "read_trigger_query": "audit",
+        }
+        rows = (
+            db.query(DomainSetting)
+            .filter(DomainSetting.domain == SettingDomain.audit)
+            .filter(DomainSetting.is_active.is_(True))
+            .all()
+        )
+        values = {row.key: row for row in rows}
+        if "enabled" in values:
+            defaults["enabled"] = _to_bool(values["enabled"])
+        if "methods" in values:
+            defaults["methods"] = _to_list(values["methods"], upper=True)
+        if "skip_paths" in values:
+            defaults["skip_paths"] = _to_list(values["skip_paths"], upper=False)
+        if "read_trigger_header" in values:
+            defaults["read_trigger_header"] = _to_str(values["read_trigger_header"])
+        if "read_trigger_query" in values:
+            defaults["read_trigger_query"] = _to_str(values["read_trigger_query"])
+
         _AUDIT_SETTINGS_CACHE = defaults
         _AUDIT_SETTINGS_CACHE_AT = now
-    return defaults
+        return defaults
 
 
 def _to_bool(setting: DomainSetting) -> bool:
@@ -182,6 +180,11 @@ _include_api_router(audit_router)
 _include_api_router(settings_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(scheduler_router, dependencies=[Depends(require_user_auth)])
 app.include_router(web_home_router)
+app.include_router(auth_web_router)
+app.include_router(dashboard_router)
+app.include_router(servers_router)
+app.include_router(instances_router)
+app.include_router(platform_settings_router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

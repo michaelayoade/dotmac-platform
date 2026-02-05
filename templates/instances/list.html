@@ -1,0 +1,93 @@
+{% extends "platform_base.html" %}
+
+{% block header_actions %}
+<a href="/instances/new" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 transition">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    New Instance
+</a>
+{% endblock %}
+
+{% block content %}
+{% if instances %}
+<div class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
+        <thead>
+            <tr class="bg-slate-50 dark:bg-slate-800/50">
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Instance</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Framework</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Sector</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Port</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Health</th>
+                <th class="px-5 py-3"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+            {% for item in instances %}
+            {% set inst = item.instance %}
+            {% set health = item.health %}
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition">
+                <td class="px-5 py-4">
+                    <a href="/instances/{{ inst.instance_id }}" class="font-medium text-slate-900 hover:text-primary-600 dark:text-white dark:hover:text-primary-400">{{ inst.org_code }}</a>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ inst.org_name }}</p>
+                </td>
+                <td class="px-5 py-4">
+                    <span class="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">{{ inst.framework.value }}</span>
+                </td>
+                <td class="px-5 py-4">
+                    <span class="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">{{ inst.sector_type.value }}</span>
+                </td>
+                <td class="px-5 py-4 text-sm text-slate-500 dark:text-slate-400 font-mono">:{{ inst.app_port }}</td>
+                <td class="px-5 py-4">
+                    {% if inst.status.value == 'running' %}
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>Running
+                        </span>
+                    {% elif inst.status.value == 'deploying' %}
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>Deploying
+                        </span>
+                    {% elif inst.status.value == 'error' %}
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Error
+                        </span>
+                    {% elif inst.status.value == 'stopped' %}
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>Stopped
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>Provisioned
+                        </span>
+                    {% endif %}
+                </td>
+                <td class="px-5 py-4">
+                    {% if health %}
+                        {% if health.status.value == 'healthy' %}
+                            <span class="text-xs text-green-600 dark:text-green-400">{{ health.response_ms }}ms</span>
+                        {% elif health.status.value == 'unhealthy' %}
+                            <span class="text-xs text-red-600 dark:text-red-400">Unhealthy</span>
+                        {% else %}
+                            <span class="text-xs text-slate-400">Unreachable</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-xs text-slate-400">&mdash;</span>
+                    {% endif %}
+                </td>
+                <td class="px-5 py-4 text-right">
+                    <a href="/instances/{{ inst.instance_id }}" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">View &rarr;</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="rounded-xl border-2 border-dashed border-slate-200 p-12 text-center dark:border-slate-800">
+    <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+    <h3 class="mt-4 text-sm font-semibold text-slate-900 dark:text-white">No instances yet</h3>
+    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Create your first ERP instance to get started.</p>
+    <a href="/instances/new" class="mt-4 inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">New Instance</a>
+</div>
+{% endif %}
+{% endblock %}

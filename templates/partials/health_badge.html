@@ -1,0 +1,15 @@
+{% if health %}
+    {% if health.status.value == 'healthy' %}
+        <span class="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
+            <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>Healthy &middot; {{ health.response_ms }}ms
+        </span>
+    {% elif health.status.value == 'unhealthy' %}
+        <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">
+            <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Unhealthy
+        </span>
+    {% else %}
+        <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">Unreachable</span>
+    {% endif %}
+{% else %}
+    <span class="text-xs text-slate-400">No data</span>
+{% endif %}

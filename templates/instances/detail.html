@@ -1,0 +1,220 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <div>
+        <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+            <a href="/instances" class="hover:text-primary-600 dark:hover:text-primary-400">Instances</a>
+            <span>/</span>
+            <span>{{ instance.org_code }}</span>
+        </div>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ instance.org_name }}</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+        {% if instance.status.value == 'provisioned' or instance.status.value == 'error' %}
+        <form method="POST" action="/instances/{{ instance.instance_id }}/deploy" class="inline" x-data="{ open: false }">
+            <button type="button" @click="open = true" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 transition">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                Deploy
+            </button>
+            <!-- Deploy modal -->
+            <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="open = false">
+                <div class="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl dark:bg-slate-800" @click.stop>
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Deploy {{ instance.org_code }}</h3>
+                    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">This will run the full 10-step deployment pipeline.</p>
+                    <div class="mt-4">
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Admin Password</label>
+                        <input type="password" name="admin_password" value="changeme123" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
+                    </div>
+                    <div class="mt-6 flex justify-end gap-3">
+                        <button type="button" @click="open = false" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 dark:border-slate-700 dark:text-slate-400">Cancel</button>
+                        <button type="submit" class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 transition">Start Deploy</button>
+                    </div>
+                </div>
+            </div>
+        </form>
+        {% endif %}
+        {% if instance.status.value == 'running' %}
+        <form method="POST" action="/instances/{{ instance.instance_id }}/restart">
+            <button type="submit" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 transition">Restart</button>
+        </form>
+        <form method="POST" action="/instances/{{ instance.instance_id }}/stop" onsubmit="return confirm('Stop this instance?')">
+            <button type="submit" class="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20 transition">Stop</button>
+        </form>
+        {% elif instance.status.value == 'stopped' %}
+        <form method="POST" action="/instances/{{ instance.instance_id }}/start">
+            <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 transition">Start</button>
+        </form>
+        {% endif %}
+        {% if instance.status.value == 'running' %}
+        <form method="POST" action="/instances/{{ instance.instance_id }}/migrate">
+            <button type="submit" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 transition">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
+                Migrate
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-2">
+    <!-- Instance Info -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Instance Details</h2>
+        <dl class="space-y-3">
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Org Code</dt>
+                <dd class="text-sm font-medium text-slate-900 dark:text-white font-mono">{{ instance.org_code }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Framework</dt>
+                <dd><span class="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">{{ instance.framework.value }}</span></dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Sector</dt>
+                <dd><span class="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">{{ instance.sector_type.value }}</span></dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Currency</dt>
+                <dd class="text-sm text-slate-900 dark:text-white">{{ instance.currency }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Ports</dt>
+                <dd class="text-sm text-slate-900 dark:text-white font-mono">App :{{ instance.app_port }} &middot; DB :{{ instance.db_port }} &middot; Redis :{{ instance.redis_port }}</dd>
+            </div>
+            {% if instance.domain %}
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Domain</dt>
+                <dd class="text-sm text-primary-600 dark:text-primary-400">{{ instance.domain }}</dd>
+            </div>
+            {% endif %}
+            {% if instance.app_url %}
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">URL</dt>
+                <dd><a href="{{ instance.app_url }}" target="_blank" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400">{{ instance.app_url }} &nearr;</a></dd>
+            </div>
+            {% endif %}
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Deploy Path</dt>
+                <dd class="text-sm text-slate-600 dark:text-slate-400 font-mono text-xs">{{ instance.deploy_path or '(not set)' }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Status</dt>
+                <dd>
+                    {% if instance.status.value == 'running' %}
+                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>Running</span>
+                    {% elif instance.status.value == 'deploying' %}
+                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400"><span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>Deploying</span>
+                    {% elif instance.status.value == 'error' %}
+                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Error</span>
+                    {% elif instance.status.value == 'stopped' %}
+                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>Stopped</span>
+                    {% else %}
+                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>Provisioned</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Created</dt>
+                <dd class="text-sm text-slate-600 dark:text-slate-400">{{ instance.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
+            </div>
+        </dl>
+    </div>
+
+    <!-- Health -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Health</h2>
+            <div hx-get="/instances/{{ instance.instance_id }}/health" hx-trigger="every 30s" hx-swap="innerHTML">
+                {% if latest_health %}
+                    {% if latest_health.status.value == 'healthy' %}
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>Healthy &middot; {{ latest_health.response_ms }}ms
+                        </span>
+                    {% elif latest_health.status.value == 'unhealthy' %}
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Unhealthy
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">Unreachable</span>
+                    {% endif %}
+                {% else %}
+                    <span class="text-xs text-slate-400">No data</span>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if recent_checks %}
+        <div class="space-y-2">
+            {% for check in recent_checks %}
+            <div class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 dark:border-slate-800">
+                <div class="flex items-center gap-2">
+                    {% if check.status.value == 'healthy' %}
+                        <span class="h-2 w-2 rounded-full bg-green-500"></span>
+                    {% elif check.status.value == 'unhealthy' %}
+                        <span class="h-2 w-2 rounded-full bg-red-500"></span>
+                    {% else %}
+                        <span class="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                    {% endif %}
+                    <span class="text-xs text-slate-500 dark:text-slate-400">{{ check.checked_at.strftime('%H:%M:%S') if check.checked_at else '' }}</span>
+                </div>
+                <div class="flex items-center gap-3 text-xs text-slate-400">
+                    {% if check.response_ms %}<span>{{ check.response_ms }}ms</span>{% endif %}
+                    {% if check.db_healthy is not none %}
+                        <span>DB: {% if check.db_healthy %}OK{% else %}FAIL{% endif %}</span>
+                    {% endif %}
+                    {% if check.redis_healthy is not none %}
+                        <span>Redis: {% if check.redis_healthy %}OK{% else %}FAIL{% endif %}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-slate-500 dark:text-slate-400">No health checks recorded yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Deployment Logs -->
+{% if deploy_logs %}
+<div class="mt-6 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Latest Deployment</h2>
+        {% if latest_deploy_id %}
+        <a href="/instances/{{ instance.instance_id }}/deploy-log?deployment_id={{ latest_deploy_id }}" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400">View Full Log &rarr;</a>
+        {% endif %}
+    </div>
+    <div class="space-y-2">
+        {% for log in deploy_logs %}
+        <div class="flex items-center gap-3 rounded-lg border border-slate-100 px-3 py-2 dark:border-slate-800">
+            {% if log.status.value == 'success' %}
+                <svg class="h-5 w-5 flex-shrink-0 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            {% elif log.status.value == 'failed' %}
+                <svg class="h-5 w-5 flex-shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            {% elif log.status.value == 'running' %}
+                <svg class="h-5 w-5 flex-shrink-0 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            {% elif log.status.value == 'skipped' %}
+                <svg class="h-5 w-5 flex-shrink-0 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+            {% else %}
+                <span class="h-5 w-5 flex-shrink-0 rounded-full border-2 border-slate-200 dark:border-slate-700"></span>
+            {% endif %}
+            <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ log.message }}</p>
+            </div>
+            {% if log.completed_at and log.started_at %}
+            <span class="text-xs text-slate-400">{{ (log.completed_at - log.started_at).total_seconds() | round(1) }}s</span>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if instance.notes %}
+<div class="mt-6 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+    <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Notes</h2>
+    <p class="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ instance.notes }}</p>
+</div>
+{% endif %}
+{% endblock %}

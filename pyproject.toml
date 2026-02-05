@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "starter_template"
+name = "dotmac_platform"
 version = "0.1.0"
-description = "Starter API and web UI template"
+description = "DotMac Deployment Control Plane"
 authors = ["Codex <codex@local>"]
 package-mode = false
 
@@ -29,6 +29,7 @@ python-jose = {version = "3.3.0", extras = ["cryptography"]}
 passlib = {version = "1.7.4", extras = ["bcrypt"]}
 pyotp = "2.9.0"
 cryptography = "42.0.8"
+paramiko = "^3.4.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "8.2.2"

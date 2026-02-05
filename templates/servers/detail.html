@@ -1,0 +1,118 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <div>
+        <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+            <a href="/servers" class="hover:text-primary-600 dark:hover:text-primary-400">Servers</a>
+            <span>/</span>
+            <span>{{ server.name }}</span>
+        </div>
+    </div>
+    <div class="flex gap-2">
+        <form method="POST" action="/servers/{{ server.server_id }}/test" hx-post="/servers/{{ server.server_id }}/test" hx-target="#test-result" hx-swap="innerHTML">
+            <button type="submit" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 transition">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Test Connection
+            </button>
+        </form>
+        <form method="POST" action="/servers/{{ server.server_id }}/delete" onsubmit="return confirm('Delete this server?')">
+            <button type="submit" class="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20 transition">Delete</button>
+        </form>
+    </div>
+</div>
+
+<div id="test-result" class="mb-6"></div>
+
+<div class="grid gap-6 lg:grid-cols-2">
+    <!-- Server Info -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Server Details</h2>
+        <dl class="space-y-3">
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Hostname</dt>
+                <dd class="text-sm font-medium text-slate-900 dark:text-white font-mono">{{ server.hostname }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">SSH</dt>
+                <dd class="text-sm font-medium text-slate-900 dark:text-white font-mono">{{ server.ssh_user }}@{{ server.hostname }}:{{ server.ssh_port }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Key Path</dt>
+                <dd class="text-sm text-slate-600 dark:text-slate-400 font-mono text-xs">{{ server.ssh_key_path }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Base Domain</dt>
+                <dd class="text-sm text-slate-900 dark:text-white">{{ server.base_domain or '(none)' }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Type</dt>
+                <dd>
+                    {% if server.is_local %}
+                        <span class="rounded-md bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700 dark:bg-primary-900/20 dark:text-primary-400">Local</span>
+                    {% else %}
+                        <span class="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">Remote</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Status</dt>
+                <dd>
+                    {% if server.status.value == 'connected' %}
+                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>Connected</span>
+                    {% elif server.status.value == 'unreachable' %}
+                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Unreachable</span>
+                    {% else %}
+                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>Unknown</span>
+                    {% endif %}
+                </dd>
+            </div>
+            {% if server.last_connected %}
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Last Connected</dt>
+                <dd class="text-sm text-slate-600 dark:text-slate-400">{{ server.last_connected.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+    </div>
+
+    <!-- Instances on this server -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Instances ({{ instances | length }})</h2>
+            <a href="/instances/new" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400">+ New</a>
+        </div>
+        {% if instances %}
+        <div class="space-y-3">
+            {% for inst in instances %}
+            <a href="/instances/{{ inst.instance_id }}" class="flex items-center justify-between rounded-lg border border-slate-100 p-3 hover:border-primary-200 transition dark:border-slate-800 dark:hover:border-primary-700">
+                <div>
+                    <p class="font-medium text-slate-900 dark:text-white text-sm">{{ inst.org_code }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ inst.org_name }}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-slate-400 font-mono">:{{ inst.app_port }}</span>
+                    {% if inst.status.value == 'running' %}
+                        <span class="h-2 w-2 rounded-full bg-green-500"></span>
+                    {% elif inst.status.value == 'error' %}
+                        <span class="h-2 w-2 rounded-full bg-red-500"></span>
+                    {% else %}
+                        <span class="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-slate-500 dark:text-slate-400">No instances on this server yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% if server.notes %}
+<div class="mt-6 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+    <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Notes</h2>
+    <p class="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ server.notes }}</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -8,10 +8,14 @@ from app.db import Base
 from app.models import (  # noqa: F401
     auth,
     audit,
+    deployment_log,
     domain_settings,
+    health_check,
+    instance,
     person,
     rbac,
     scheduler,
+    server,
 )
 
 config = context.config

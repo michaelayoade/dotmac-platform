@@ -1,0 +1,114 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<!-- Stats Row -->
+<div class="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-8">
+    <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-100 dark:bg-primary-900/30">
+                <svg class="h-5 w-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+            </div>
+            <div>
+                <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ stats.total_instances }}</p>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Instances</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
+                <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div>
+                <p class="text-2xl font-bold text-green-600 dark:text-green-400 font-display">{{ stats.healthy }}</p>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Healthy</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/30">
+                <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div>
+                <p class="text-2xl font-bold text-red-600 dark:text-red-400 font-display">{{ stats.unhealthy + stats.error }}</p>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Issues</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
+                <svg class="h-5 w-5 text-slate-600 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
+            </div>
+            <div>
+                <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ stats.total_servers }}</p>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Servers</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Instance Grid -->
+<div class="flex items-center justify-between mb-4">
+    <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Instances</h2>
+    <a href="/instances/new" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 transition">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        New Instance
+    </a>
+</div>
+
+{% if instances %}
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" hx-trigger="every 30s" hx-get="/dashboard" hx-select="#instance-grid" hx-target="#instance-grid" hx-swap="outerHTML">
+    <div id="instance-grid" class="contents">
+    {% for item in instances %}
+        {% set inst = item.instance %}
+        {% set health = item.health %}
+        <a href="/instances/{{ inst.instance_id }}" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-primary-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-700">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h3 class="font-semibold text-slate-900 dark:text-white font-display">{{ inst.org_code }}</h3>
+                    <p class="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{{ inst.org_name }}</p>
+                </div>
+                <!-- Status dot -->
+                {% if inst.status.value == 'running' and health and health.status.value == 'healthy' %}
+                    <span class="flex h-3 w-3 rounded-full bg-green-500 pulse-dot" title="Healthy"></span>
+                {% elif inst.status.value == 'running' %}
+                    <span class="flex h-3 w-3 rounded-full bg-yellow-500 pulse-dot" title="Running (unhealthy)"></span>
+                {% elif inst.status.value == 'deploying' %}
+                    <span class="flex h-3 w-3 rounded-full bg-blue-500 pulse-dot" title="Deploying"></span>
+                {% elif inst.status.value == 'error' %}
+                    <span class="flex h-3 w-3 rounded-full bg-red-500" title="Error"></span>
+                {% else %}
+                    <span class="flex h-3 w-3 rounded-full bg-slate-300 dark:bg-slate-600" title="{{ inst.status.value }}"></span>
+                {% endif %}
+            </div>
+            <div class="mt-4 flex flex-wrap gap-2">
+                <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">{{ inst.framework.value }}</span>
+                <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">{{ inst.sector_type.value }}</span>
+                <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">:{{ inst.app_port }}</span>
+            </div>
+            {% if health %}
+            <div class="mt-3 text-xs text-slate-400 dark:text-slate-500">
+                {{ health.response_ms }}ms &middot; {{ health.checked_at.strftime('%H:%M') if health.checked_at else '' }}
+            </div>
+            {% endif %}
+        </a>
+    {% endfor %}
+    </div>
+</div>
+{% else %}
+<div class="rounded-xl border-2 border-dashed border-slate-200 p-12 text-center dark:border-slate-800">
+    <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+    <h3 class="mt-4 text-sm font-semibold text-slate-900 dark:text-white">No instances yet</h3>
+    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Get started by adding a server and creating your first instance.</p>
+    <div class="mt-6 flex justify-center gap-3">
+        <a href="/servers/new" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">Add Server</a>
+        <a href="/instances/new" class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">New Instance</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

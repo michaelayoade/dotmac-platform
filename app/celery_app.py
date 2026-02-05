@@ -6,4 +6,4 @@ celery_app = Celery("starter_template")
 celery_app.conf.update(get_celery_config())
 celery_app.conf.beat_schedule = build_beat_schedule()
 celery_app.conf.beat_scheduler = "app.celery_scheduler.DbScheduler"
-celery_app.autodiscover_tasks(["app.tasks"])
+celery_app.autodiscover_tasks(["app.tasks", "app.tasks.deploy", "app.tasks.health"])

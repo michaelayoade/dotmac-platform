@@ -18,6 +18,7 @@ class SettingDomain(enum.Enum):
     auth = "auth"
     audit = "audit"
     scheduler = "scheduler"
+    platform = "platform"
 
 
 class DomainSetting(Base):

@@ -1,0 +1,72 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+{% if saved %}
+<div class="mb-6 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300">
+    <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+    Settings saved successfully.
+</div>
+{% endif %}
+
+<form method="POST" action="/settings" class="max-w-2xl space-y-8">
+    <!-- Deployment Source -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <h2 class="mb-1 text-base font-semibold text-slate-900 dark:text-white font-display">Deployment Source</h2>
+        <p class="mb-5 text-sm text-slate-500 dark:text-slate-400">Configure the Git repository used to deploy ERP instances to servers.</p>
+
+        <div class="space-y-4">
+            <div>
+                <label for="dotmac_git_repo_url" class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Git Repository URL</label>
+                <input type="text" id="dotmac_git_repo_url" name="dotmac_git_repo_url"
+                       value="{{ platform_settings.dotmac_git_repo_url }}"
+                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 dark:focus:border-primary-500"
+                       placeholder="https://github.com/org/repo.git" />
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">HTTPS or SSH URL for the DotMac ERP repository. Used during deployment to clone source code onto target servers.</p>
+            </div>
+
+            <div>
+                <label for="dotmac_git_branch" class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Git Branch</label>
+                <input type="text" id="dotmac_git_branch" name="dotmac_git_branch"
+                       value="{{ platform_settings.dotmac_git_branch }}"
+                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 dark:focus:border-primary-500"
+                       placeholder="main" />
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Branch to check out when cloning. Defaults to <code class="rounded bg-slate-100 px-1 dark:bg-slate-800">main</code>.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Server Paths -->
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <h2 class="mb-1 text-base font-semibold text-slate-900 dark:text-white font-display">Server Paths</h2>
+        <p class="mb-5 text-sm text-slate-500 dark:text-slate-400">Default filesystem paths used on target servers during deployment.</p>
+
+        <div class="space-y-4">
+            <div>
+                <label for="dotmac_source_path" class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Source Path</label>
+                <input type="text" id="dotmac_source_path" name="dotmac_source_path"
+                       value="{{ platform_settings.dotmac_source_path }}"
+                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 dark:focus:border-primary-500"
+                       placeholder="/opt/dotmac" />
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Where the DotMac ERP source code is cloned on target servers. The Docker build context points here.</p>
+            </div>
+
+            <div>
+                <label for="default_deploy_path" class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Instances Path</label>
+                <input type="text" id="default_deploy_path" name="default_deploy_path"
+                       value="{{ platform_settings.default_deploy_path }}"
+                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 dark:focus:border-primary-500"
+                       placeholder="/opt/dotmac/instances" />
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Base directory for instance configs. Each instance gets a subdirectory (e.g., <code class="rounded bg-slate-100 px-1 dark:bg-slate-800">/opt/dotmac/instances/acme/</code>).</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save -->
+    <div class="flex justify-end">
+        <button type="submit"
+                class="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition">
+            Save Settings
+        </button>
+    </div>
+</form>
+{% endblock %}
