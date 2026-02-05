@@ -159,11 +159,11 @@ def instance_deploy(
     from app.tasks.deploy import deploy_instance
 
     deploy_svc = DeployService(db)
-    deployment_id = deploy_svc.create_deployment(instance_id)
+    deployment_id = deploy_svc.create_deployment(instance_id, admin_password)
     db.commit()
 
-    # Kick off async deployment via Celery
-    deploy_instance.delay(str(instance_id), deployment_id, admin_password)
+    # Kick off async deployment via Celery (password stored in DB, not task args)
+    deploy_instance.delay(str(instance_id), deployment_id)
 
     return RedirectResponse(
         f"/instances/{instance_id}/deploy-log?deployment_id={deployment_id}",
@@ -320,6 +320,31 @@ def instance_migrate(
     )
     db.commit()
     return RedirectResponse(f"/instances/{instance_id}", status_code=302)
+
+
+@router.post("/{instance_id}/delete")
+def instance_delete(
+    request: Request,
+    instance_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.models.instance import InstanceStatus
+    from app.services.instance_service import InstanceService
+
+    svc = InstanceService(db)
+    instance = svc.get_or_404(instance_id)
+
+    if instance.status == InstanceStatus.running:
+        raise ValueError("Cannot delete a running instance. Stop it first.")
+
+    svc.delete(instance_id)
+    db.commit()
+    return RedirectResponse("/instances", status_code=302)
 
 
 @router.get("/{instance_id}/health", response_class=HTMLResponse)

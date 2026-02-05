@@ -24,7 +24,13 @@ class NginxService:
     """Generate and deploy nginx server blocks for ERP instances."""
 
     def generate_vhost(self, domain: str, app_port: int) -> str:
-        """Generate nginx server block configuration."""
+        """Generate HTTP-only nginx server block.
+
+        Certbot ``--nginx`` will later modify this config to add the
+        ``listen 443 ssl`` block and a redirect on port 80.  Generating
+        only port-80 here avoids ``nginx -t`` failures from missing
+        certificate files on first deploy.
+        """
         upstream_name = domain.replace(".", "_")
         return textwrap.dedent(f"""\
             upstream {upstream_name} {{
@@ -34,16 +40,6 @@ class NginxService:
             server {{
                 listen 80;
                 server_name {domain};
-                return 301 https://$host$request_uri;
-            }}
-
-            server {{
-                listen 443 ssl http2;
-                server_name {domain};
-
-                # SSL certs will be managed by certbot
-                # ssl_certificate /etc/letsencrypt/live/{domain}/fullchain.pem;
-                # ssl_certificate_key /etc/letsencrypt/live/{domain}/privkey.pem;
 
                 client_max_body_size 50M;
 

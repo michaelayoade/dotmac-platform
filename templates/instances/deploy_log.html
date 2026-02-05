@@ -81,9 +81,22 @@
         <div class="mt-6 flex justify-between items-center">
             <a href="/instances/{{ instance.instance_id }}" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400">&larr; Back to Instance</a>
             {% if logs and logs[-1].status.value == 'failed' %}
-            <form method="POST" action="/instances/{{ instance.instance_id }}/deploy">
-                <input type="hidden" name="admin_password" value="changeme123" />
-                <button type="submit" class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 transition">Retry Deploy</button>
+            <form method="POST" action="/instances/{{ instance.instance_id }}/deploy" x-data="{ open: false }">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button type="button" @click="open = true" class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 transition">Retry Deploy</button>
+                <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="open = false">
+                    <div class="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl dark:bg-slate-800" @click.stop>
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Retry Deploy</h3>
+                        <div class="mt-4">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Admin Password</label>
+                            <input type="password" name="admin_password" placeholder="Enter admin password" required class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
+                        </div>
+                        <div class="mt-6 flex justify-end gap-3">
+                            <button type="button" @click="open = false" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 dark:border-slate-700 dark:text-slate-400">Cancel</button>
+                            <button type="submit" class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 transition">Start Deploy</button>
+                        </div>
+                    </div>
+                </div>
             </form>
             {% endif %}
         </div>

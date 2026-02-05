@@ -43,6 +43,7 @@ _PRESERVE_SECRETS = {
     "POSTGRES_PASSWORD",     # DB already initialised with this password
     "REDIS_PASSWORD",        # Redis already running with this password
     "JWT_SECRET",            # Active JWTs would be invalidated
+    "OPENBAO_TOKEN",         # Must match running OpenBao container's root token
 }
 
 # Derived secrets — recomputed from the preserved base secrets above.
@@ -51,7 +52,11 @@ _DERIVED_FROM_REDIS = {"REDIS_URL", "CELERY_BROKER_URL", "CELERY_RESULT_BACKEND"
 
 
 def parse_env_file(content: str) -> dict[str, str]:
-    """Parse a .env file into a dict, ignoring comments and blank lines."""
+    """Parse a .env file into a dict, ignoring comments and blank lines.
+
+    Strips surrounding single or double quotes from values, matching the
+    behaviour of ``docker compose`` and ``python-dotenv``.
+    """
     env: dict[str, str] = {}
     for line in content.splitlines():
         line = line.strip()
@@ -60,7 +65,11 @@ def parse_env_file(content: str) -> dict[str, str]:
         if "=" not in line:
             continue
         key, _, value = line.partition("=")
-        env[key.strip()] = value.strip()
+        value = value.strip()
+        # Strip matching quotes
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        env[key.strip()] = value
     return env
 
 
@@ -232,7 +241,7 @@ class InstanceService:
         pg_password = existing.get("POSTGRES_PASSWORD") or secrets.token_urlsafe(16)
         redis_password = existing.get("REDIS_PASSWORD") or secrets.token_urlsafe(16)
         jwt_secret = existing.get("JWT_SECRET") or secrets.token_urlsafe(32)
-        bao_token = secrets.token_urlsafe(16)  # OpenBao dev-mode; always regenerate
+        bao_token = existing.get("OPENBAO_TOKEN") or secrets.token_urlsafe(16)
 
         if existing.get("TOTP_ENCRYPTION_KEY"):
             totp_key = existing["TOTP_ENCRYPTION_KEY"]

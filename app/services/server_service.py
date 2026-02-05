@@ -70,6 +70,12 @@ class ServerService:
 
     def delete(self, server_id: UUID) -> None:
         server = self.get_or_404(server_id)
+        count = self.instance_count(server_id)
+        if count > 0:
+            raise ValueError(
+                f"Cannot delete server '{server.name}' — it still has {count} instance(s). "
+                "Delete or migrate them first."
+            )
         self.db.delete(server)
         self.db.flush()
         logger.info("Deleted server: %s", server.name)

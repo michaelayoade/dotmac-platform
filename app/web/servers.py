@@ -185,9 +185,23 @@ def server_delete(
     require_admin(auth)
     validate_csrf_token(request, csrf_token)
 
+    from app.services.instance_service import InstanceService
     from app.services.server_service import ServerService
 
     svc = ServerService(db)
-    svc.delete(server_id)
-    db.commit()
-    return RedirectResponse("/servers", status_code=302)
+    try:
+        svc.delete(server_id)
+        db.commit()
+        return RedirectResponse("/servers", status_code=302)
+    except ValueError:
+        db.rollback()
+        server = svc.get_or_404(server_id)
+        instances = InstanceService(db).list_for_server(server_id)
+        return templates.TemplateResponse(
+            "servers/detail.html",
+            ctx(
+                request, auth, server.name, active_page="servers",
+                server=server, instances=instances,
+                errors=["Cannot delete server while it has instances. Remove all instances first."],
+            ),
+        )

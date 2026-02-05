@@ -20,6 +20,7 @@ def poll_instance_health() -> dict:
 
         svc = HealthService(db)
         results = svc.poll_all_running()
+        svc.prune_old_checks()
 
     logger.info(
         "Health poll complete: %s healthy, %s unhealthy, %s unreachable (of %s)",

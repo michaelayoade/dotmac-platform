@@ -26,6 +26,8 @@ class DeploymentLog(Base):
     )
     deployment_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     step: Mapped[str] = mapped_column(String(60), nullable=False)
+    # Temporary storage for deploy secrets (cleared after use)
+    deploy_secret: Mapped[str | None] = mapped_column(Text)
     status: Mapped[DeployStepStatus] = mapped_column(
         Enum(DeployStepStatus), default=DeployStepStatus.pending
     )

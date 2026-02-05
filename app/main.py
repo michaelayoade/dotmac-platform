@@ -14,7 +14,6 @@ from app.api.persons import router as people_router
 from app.api.rbac import router as rbac_router
 from app.api.scheduler import router as scheduler_router
 from app.api.settings import router as settings_router
-from app.web_home import router as web_home_router
 from app.web.auth_web import router as auth_web_router
 from app.web.dashboard import router as dashboard_router
 from app.web.servers import router as servers_router
@@ -179,7 +178,6 @@ _include_api_router(people_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(audit_router)
 _include_api_router(settings_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(scheduler_router, dependencies=[Depends(require_user_auth)])
-app.include_router(web_home_router)
 app.include_router(auth_web_router)
 app.include_router(dashboard_router)
 app.include_router(servers_router)
@@ -194,7 +192,7 @@ def health_check():
     return {"status": "ok"}
 
 
-@app.get("/metrics")
+@app.get("/metrics", dependencies=[Depends(require_user_auth)])
 def metrics():
     data = generate_latest()
     return Response(content=data, media_type=CONTENT_TYPE_LATEST)

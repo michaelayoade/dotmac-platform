@@ -62,23 +62,65 @@ class DeployService:
     def __init__(self, db: Session):
         self.db = db
 
-    def create_deployment(self, instance_id: UUID) -> str:
-        """Create pending deployment log entries for all steps."""
+    def has_active_deployment(self, instance_id: UUID) -> bool:
+        """Check if there is already an active (pending/running) deployment."""
+        from sqlalchemy import select, func
+
+        stmt = select(func.count(DeploymentLog.id)).where(
+            DeploymentLog.instance_id == instance_id,
+            DeploymentLog.status.in_([
+                DeployStepStatus.pending,
+                DeployStepStatus.running,
+            ]),
+        )
+        return (self.db.scalar(stmt) or 0) > 0
+
+    def create_deployment(self, instance_id: UUID, admin_password: str | None = None) -> str:
+        """Create pending deployment log entries for all steps.
+
+        If admin_password is provided, it's stored on the first step's
+        deploy_secret field and cleared after the deploy task reads it.
+        This avoids passing passwords through Celery task arguments.
+
+        Raises ValueError if a deployment is already in progress.
+        """
+        if self.has_active_deployment(instance_id):
+            raise ValueError("A deployment is already in progress for this instance")
+
         deployment_id = str(uuid.uuid4())[:8]
 
-        for step in DEPLOY_STEPS:
+        for i, step in enumerate(DEPLOY_STEPS):
             log = DeploymentLog(
                 instance_id=instance_id,
                 deployment_id=deployment_id,
                 step=step,
                 status=DeployStepStatus.pending,
                 message=STEP_LABELS.get(step, step),
+                deploy_secret=admin_password if i == 0 and admin_password else None,
             )
             self.db.add(log)
 
         self.db.flush()
         logger.info("Created deployment %s for instance %s", deployment_id, instance_id)
         return deployment_id
+
+    def get_deploy_secret(self, instance_id: UUID, deployment_id: str) -> str | None:
+        """Retrieve and clear the deploy secret (admin password) for a deployment."""
+        from sqlalchemy import select
+
+        stmt = select(DeploymentLog).where(
+            DeploymentLog.instance_id == instance_id,
+            DeploymentLog.deployment_id == deployment_id,
+            DeploymentLog.step == DEPLOY_STEPS[0],
+        )
+        log = self.db.scalar(stmt)
+        if not log or not log.deploy_secret:
+            return None
+        secret = log.deploy_secret
+        log.deploy_secret = None  # Clear after reading
+        self.db.flush()
+        self.db.commit()
+        return secret
 
     def get_deployment_logs(
         self, instance_id: UUID, deployment_id: str | None = None
@@ -220,15 +262,21 @@ class DeployService:
             if not results["bootstrap"]:
                 raise DeployError("bootstrap", "Bootstrap failed")
 
-            # Step 9: Nginx + certbot
+            # Step 9: Nginx + certbot (non-fatal — DNS may not be ready)
             results["nginx"] = self._step_nginx(
                 instance, deployment_id, ssh
             )
+            if not results["nginx"]:
+                logger.warning("Nginx config failed for %s — continuing", instance.org_code)
 
             # Step 10: Verify health
             results["verify"] = self._step_verify(
                 instance, deployment_id, ssh
             )
+            if not results["verify"]:
+                instance.status = InstanceStatus.error
+                self.db.commit()
+                return {"success": False, "error": "Health check failed", "results": results}
 
             instance.status = InstanceStatus.running
             self.db.commit()
@@ -243,12 +291,18 @@ class DeployService:
                         instance_id, deployment_id, step,
                         DeployStepStatus.skipped, "Skipped due to earlier failure"
                     )
+            # Best-effort rollback: stop any containers that were started
+            self._rollback_containers(instance, ssh, e.step)
             instance.status = InstanceStatus.error
             self.db.commit()
             return {"success": False, "error": str(e), "step": e.step}
 
         except Exception as e:
             logger.exception("Unexpected deployment error")
+            try:
+                self._rollback_containers(instance, ssh, "unknown")
+            except Exception:
+                logger.exception("Rollback also failed")
             instance.status = InstanceStatus.error
             self.db.commit()
             return {"success": False, "error": str(e)}
@@ -433,20 +487,37 @@ class DeployService:
             )
             return False
 
-        # Wait for DB to be healthy
-        time.sleep(8)
+        # Wait for DB to be healthy (poll up to 30 seconds)
         slug = _safe_slug(instance.org_code.lower())
-        check = ssh.exec_command(
-            f"docker inspect --format='{{{{.State.Health.Status}}}}' "
-            f"dotmac_{slug}_db",
-            timeout=30,
-        )
+        db_container = f"dotmac_{slug}_db"
+        db_healthy = False
+        for attempt in range(6):
+            time.sleep(5)
+            check = ssh.exec_command(
+                f"docker inspect --format='{{{{.State.Health.Status}}}}' {db_container}",
+                timeout=10,
+            )
+            health_status = check.stdout.strip().strip("'")
+            if health_status == "healthy":
+                db_healthy = True
+                break
+            logger.info("DB health attempt %d/6: %s", attempt + 1, health_status)
+
+        if db_healthy:
+            self._update_step(
+                instance.instance_id, deployment_id, step,
+                DeployStepStatus.success,
+                f"Infrastructure started. DB: healthy"
+            )
+            return True
+
         self._update_step(
             instance.instance_id, deployment_id, step,
-            DeployStepStatus.success,
-            f"Infrastructure started. DB: {check.stdout.strip()}"
+            DeployStepStatus.failed,
+            f"DB did not become healthy within 30s (last: {health_status})",
+            check.stderr if check else None,
         )
-        return True
+        return False
 
     def _step_start_app(
         self, instance: Instance, deployment_id: str, ssh
@@ -626,6 +697,25 @@ class DeployService:
             result.stdout + "\n" + result.stderr
         )
         return False
+
+
+    def _rollback_containers(
+        self, instance: Instance, ssh, failed_step: str
+    ) -> None:
+        """Best-effort rollback: stop containers started during this deploy."""
+        # Only roll back if we got past the build step (containers may be running)
+        container_steps = {"start_infra", "start_app", "migrate", "bootstrap", "nginx", "verify"}
+        if failed_step not in container_steps:
+            return
+        try:
+            logger.info("Rolling back containers for %s", instance.org_code)
+            ssh.exec_command(
+                "docker compose down",
+                timeout=60,
+                cwd=instance.deploy_path,
+            )
+        except Exception:
+            logger.exception("Failed to roll back containers for %s", instance.org_code)
 
 
 class DeployError(Exception):
