@@ -1,5 +1,8 @@
-def list_response(items: list, limit: int, offset: int) -> dict:
-    return {"items": items, "count": len(items), "limit": limit, "offset": offset}
+def list_response(items: list, limit: int, offset: int, total: int | None = None) -> dict:
+    result = {"items": items, "count": len(items), "limit": limit, "offset": offset}
+    if total is not None:
+        result["total"] = total
+    return result
 
 
 class ListResponseMixin:

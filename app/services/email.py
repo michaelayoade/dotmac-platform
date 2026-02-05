@@ -1,12 +1,16 @@
 import logging
 import os
 import smtplib
+import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+_SMTP_MAX_RETRIES = 2
+_SMTP_RETRY_DELAY = 1  # seconds
 
 
 def _env_value(name: str) -> str | None:
@@ -42,7 +46,7 @@ def _get_smtp_config() -> dict:
         "use_tls": _env_bool("SMTP_USE_TLS", True),
         "use_ssl": _env_bool("SMTP_USE_SSL", False),
         "from_email": _env_value("SMTP_FROM_EMAIL") or "noreply@example.com",
-        "from_name": _env_value("SMTP_FROM_NAME") or "Starter Template",
+        "from_name": _env_value("SMTP_FROM_NAME") or _env_value("BRAND_NAME") or "DotMac Platform",
     }
 
 
@@ -63,26 +67,46 @@ def send_email(
         msg.attach(MIMEText(body_text, "plain"))
     msg.attach(MIMEText(body_html, "html"))
 
-    try:
-        if config["use_ssl"]:
-            server = smtplib.SMTP_SSL(config["host"], config["port"])
-        else:
-            server = smtplib.SMTP(config["host"], config["port"])
+    last_err: Exception | None = None
+    for attempt in range(_SMTP_MAX_RETRIES + 1):
+        server = None
+        try:
+            if config["use_ssl"]:
+                server = smtplib.SMTP_SSL(config["host"], config["port"])
+            else:
+                server = smtplib.SMTP(config["host"], config["port"])
 
-        if config["use_tls"] and not config["use_ssl"]:
-            server.starttls()
+            if config["use_tls"] and not config["use_ssl"]:
+                server.starttls()
 
-        if config["username"] and config["password"]:
-            server.login(config["username"], config["password"])
+            if config["username"] and config["password"]:
+                server.login(config["username"], config["password"])
 
-        server.sendmail(config["from_email"], to_email, msg.as_string())
-        server.quit()
+            server.sendmail(config["from_email"], to_email, msg.as_string())
 
-        logger.info("Email sent to %s", to_email)
-        return True
-    except Exception as exc:
-        logger.error("Failed to send email to %s: %s", to_email, exc)
-        return False
+            logger.info("Email sent to %s", to_email)
+            return True
+        except smtplib.SMTPAuthenticationError as exc:
+            # Auth errors are not retryable
+            logger.error("Failed to send email to %s: %s", to_email, exc)
+            return False
+        except Exception as exc:
+            last_err = exc
+            if attempt < _SMTP_MAX_RETRIES:
+                logger.warning(
+                    "SMTP attempt %d/%d to %s failed: %s",
+                    attempt + 1, _SMTP_MAX_RETRIES + 1, to_email, exc,
+                )
+                time.sleep(_SMTP_RETRY_DELAY * (attempt + 1))
+        finally:
+            if server is not None:
+                try:
+                    server.quit()
+                except Exception:
+                    pass
+
+    logger.error("Failed to send email to %s after %d attempts: %s", to_email, _SMTP_MAX_RETRIES + 1, last_err)
+    return False
 
 
 def send_password_reset_email(

@@ -44,6 +44,7 @@ from app.services.auth_flow import (
 )
 from app.services.email import send_password_reset_email
 from app.services.common import coerce_uuid
+from app.rate_limit import login_limiter, password_reset_limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -78,6 +79,7 @@ def get_db():
     },
 )
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    login_limiter.check(request)
     return auth_flow_service.auth_flow.login_response(
         db, payload.username, payload.password, request, payload.provider
     )
@@ -219,9 +221,15 @@ def update_me(
     if not person:
         raise HTTPException(status_code=404, detail="User not found")
 
+    _ME_UPDATABLE_FIELDS = {
+        "first_name", "last_name", "display_name", "phone",
+        "date_of_birth", "gender", "preferred_contact_method",
+        "locale", "timezone",
+    }
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
-        setattr(person, field, value)
+        if field in _ME_UPDATABLE_FIELDS:
+            setattr(person, field, value)
 
     db.commit()
     db.refresh(person)
@@ -456,12 +464,14 @@ def change_password(
 )
 def forgot_password(
     payload: ForgotPasswordRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
     Request a password reset email.
     Always returns success to prevent email enumeration.
     """
+    password_reset_limiter.check(request)
     result = request_password_reset(db, payload.email)
 
     if result:
@@ -486,10 +496,12 @@ def forgot_password(
 )
 def reset_password_endpoint(
     payload: ResetPasswordRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
     Reset password using the token from forgot-password email.
     """
+    password_reset_limiter.check(request)
     reset_at = reset_password(db, payload.token, payload.new_password)
     return ResetPasswordResponse(reset_at=reset_at)

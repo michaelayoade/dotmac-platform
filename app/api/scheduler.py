@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_role
 from app.db import SessionLocal
 from app.schemas.common import ListResponse
 from app.schemas.scheduler import (
@@ -39,6 +40,7 @@ def list_scheduled_tasks(
     "/tasks",
     response_model=ScheduledTaskRead,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role("admin"))],
 )
 def create_scheduled_task(
     payload: ScheduledTaskCreate, db: Session = Depends(get_db)
@@ -51,24 +53,40 @@ def get_scheduled_task(task_id: str, db: Session = Depends(get_db)):
     return scheduler_service.scheduled_tasks.get(db, task_id)
 
 
-@router.patch("/tasks/{task_id}", response_model=ScheduledTaskRead)
+@router.patch(
+    "/tasks/{task_id}",
+    response_model=ScheduledTaskRead,
+    dependencies=[Depends(require_role("admin"))],
+)
 def update_scheduled_task(
     task_id: str, payload: ScheduledTaskUpdate, db: Session = Depends(get_db)
 ):
     return scheduler_service.scheduled_tasks.update(db, task_id, payload)
 
 
-@router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/tasks/{task_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_role("admin"))],
+)
 def delete_scheduled_task(task_id: str, db: Session = Depends(get_db)):
     scheduler_service.scheduled_tasks.delete(db, task_id)
 
 
-@router.post("/tasks/refresh", status_code=status.HTTP_200_OK)
+@router.post(
+    "/tasks/refresh",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_role("admin"))],
+)
 def refresh_schedule():
     return scheduler_service.refresh_schedule()
 
 
-@router.post("/tasks/{task_id}/enqueue", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/tasks/{task_id}/enqueue",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_role("admin"))],
+)
 def enqueue_scheduled_task(task_id: str, db: Session = Depends(get_db)):
     task = scheduler_service.scheduled_tasks.get(db, task_id)
     return scheduler_service.enqueue_task(

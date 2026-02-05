@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_role
 from app.db import SessionLocal
 from app.schemas.common import ListResponse
 from app.schemas.settings import DomainSettingRead, DomainSettingUpdate
@@ -22,7 +23,7 @@ def list_auth_settings(
     is_active: bool | None = None,
     order_by: str = Query(default="created_at"),
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
-    limit: int = Query(default=200, ge=1, le=500),
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
@@ -36,6 +37,7 @@ def list_auth_settings(
     response_model=DomainSettingRead,
     status_code=status.HTTP_200_OK,
     tags=["settings-auth"],
+    dependencies=[Depends(require_role("admin"))],
 )
 def upsert_auth_setting(
     key: str, payload: DomainSettingUpdate, db: Session = Depends(get_db)
@@ -61,7 +63,7 @@ def list_audit_settings(
     is_active: bool | None = None,
     order_by: str = Query(default="created_at"),
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
-    limit: int = Query(default=200, ge=1, le=500),
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
@@ -75,6 +77,7 @@ def list_audit_settings(
     response_model=DomainSettingRead,
     status_code=status.HTTP_200_OK,
     tags=["settings-audit"],
+    dependencies=[Depends(require_role("admin"))],
 )
 def upsert_audit_setting(
     key: str, payload: DomainSettingUpdate, db: Session = Depends(get_db)
@@ -100,7 +103,7 @@ def list_scheduler_settings(
     is_active: bool | None = None,
     order_by: str = Query(default="created_at"),
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
-    limit: int = Query(default=200, ge=1, le=500),
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
@@ -114,6 +117,7 @@ def list_scheduler_settings(
     response_model=DomainSettingRead,
     status_code=status.HTTP_200_OK,
     tags=["settings-scheduler"],
+    dependencies=[Depends(require_role("admin"))],
 )
 def upsert_scheduler_setting(
     key: str, payload: DomainSettingUpdate, db: Session = Depends(get_db)

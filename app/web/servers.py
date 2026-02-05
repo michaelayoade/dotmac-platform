@@ -1,7 +1,10 @@
 """
 Server Management — Web routes for VPS server CRUD and connectivity testing.
 """
+import logging
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -83,11 +86,18 @@ def server_create(
         )
         db.commit()
         return RedirectResponse(f"/servers/{server.server_id}", status_code=302)
-    except Exception as e:
+    except ValueError as e:
         db.rollback()
         return templates.TemplateResponse(
             "servers/form.html",
             ctx(request, auth, "Add Server", active_page="servers", server=None, errors=[str(e)]),
+        )
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to create server")
+        return templates.TemplateResponse(
+            "servers/form.html",
+            ctx(request, auth, "Add Server", active_page="servers", server=None, errors=["An unexpected error occurred. Please try again."]),
         )
 
 

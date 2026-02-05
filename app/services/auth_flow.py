@@ -585,6 +585,7 @@ class AuthFlow(ListResponseMixin):
             .filter(AuthSession.token_hash == token_hash)
             .filter(AuthSession.status == SessionStatus.active)
             .filter(AuthSession.revoked_at.is_(None))
+            .with_for_update()
             .first()
         )
         if not session:

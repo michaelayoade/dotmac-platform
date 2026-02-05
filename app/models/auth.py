@@ -42,7 +42,7 @@ class UserCredential(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     person_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("people.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("people.id"), nullable=False, index=True
     )
     provider: Mapped[AuthProvider] = mapped_column(
         Enum(AuthProvider), default=AuthProvider.local, nullable=False
@@ -85,7 +85,7 @@ class MFAMethod(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     person_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("people.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("people.id"), nullable=False, index=True
     )
     method_type: Mapped[MFAMethodType] = mapped_column(
         Enum(MFAMethodType), nullable=False
@@ -117,6 +117,7 @@ class Session(Base):
     __table_args__ = (
         Index("ix_sessions_token_hash", "token_hash"),
         Index("ix_sessions_previous_token_hash", "previous_token_hash"),
+        Index("ix_sessions_person_id", "person_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -150,7 +151,7 @@ class ApiKey(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     person_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("people.id")
+        UUID(as_uuid=True), ForeignKey("people.id"), index=True
     )
     label: Mapped[str | None] = mapped_column(String(120))
     key_hash: Mapped[str] = mapped_column(String(255), nullable=False)

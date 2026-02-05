@@ -6,13 +6,13 @@ from app.models.rbac import Permission, PersonRole, Role, RolePermission
 class TestRolesAPI:
     """Tests for the /rbac/roles endpoints."""
 
-    def test_create_role(self, client, auth_headers):
+    def test_create_role(self, client, admin_headers):
         """Test creating a new role."""
         payload = {
             "name": f"test_role_{uuid.uuid4().hex[:8]}",
             "description": "Test role description",
         }
-        response = client.post("/rbac/roles", json=payload, headers=auth_headers)
+        response = client.post("/rbac/roles", json=payload, headers=admin_headers)
         assert response.status_code == 201
         data = response.json()
         assert data["name"] == payload["name"]
@@ -24,6 +24,12 @@ class TestRolesAPI:
         payload = {"name": "unauthorized_role", "description": "Test"}
         response = client.post("/rbac/roles", json=payload)
         assert response.status_code == 401
+
+    def test_create_role_forbidden_non_admin(self, client, auth_headers):
+        """Test creating a role with non-admin auth."""
+        payload = {"name": "forbidden_role", "description": "Test"}
+        response = client.post("/rbac/roles", json=payload, headers=auth_headers)
+        assert response.status_code == 403
 
     def test_get_role(self, client, auth_headers, role):
         """Test getting a role by ID."""
@@ -68,52 +74,52 @@ class TestRolesAPI:
         )
         assert response.status_code == 200
 
-    def test_update_role(self, client, auth_headers, role):
+    def test_update_role(self, client, admin_headers, role):
         """Test updating a role."""
         payload = {"description": "Updated description"}
         response = client.patch(
-            f"/rbac/roles/{role.id}", json=payload, headers=auth_headers
+            f"/rbac/roles/{role.id}", json=payload, headers=admin_headers
         )
         assert response.status_code == 200
         data = response.json()
         assert data["description"] == "Updated description"
 
-    def test_update_role_not_found(self, client, auth_headers):
+    def test_update_role_not_found(self, client, admin_headers):
         """Test updating a non-existent role."""
         fake_id = str(uuid.uuid4())
         payload = {"description": "Updated"}
         response = client.patch(
-            f"/rbac/roles/{fake_id}", json=payload, headers=auth_headers
+            f"/rbac/roles/{fake_id}", json=payload, headers=admin_headers
         )
         assert response.status_code == 404
 
-    def test_delete_role(self, client, auth_headers, db_session):
+    def test_delete_role(self, client, admin_headers, db_session):
         """Test deleting a role."""
         role = Role(name=f"to_delete_{uuid.uuid4().hex[:8]}", description="To delete")
         db_session.add(role)
         db_session.commit()
         db_session.refresh(role)
 
-        response = client.delete(f"/rbac/roles/{role.id}", headers=auth_headers)
+        response = client.delete(f"/rbac/roles/{role.id}", headers=admin_headers)
         assert response.status_code == 204
 
-    def test_delete_role_not_found(self, client, auth_headers):
+    def test_delete_role_not_found(self, client, admin_headers):
         """Test deleting a non-existent role."""
         fake_id = str(uuid.uuid4())
-        response = client.delete(f"/rbac/roles/{fake_id}", headers=auth_headers)
+        response = client.delete(f"/rbac/roles/{fake_id}", headers=admin_headers)
         assert response.status_code == 404
 
 
 class TestPermissionsAPI:
     """Tests for the /rbac/permissions endpoints."""
 
-    def test_create_permission(self, client, auth_headers):
+    def test_create_permission(self, client, admin_headers):
         """Test creating a new permission."""
         payload = {
             "key": f"test:perm:{uuid.uuid4().hex[:8]}",
             "description": "Test permission description",
         }
-        response = client.post("/rbac/permissions", json=payload, headers=auth_headers)
+        response = client.post("/rbac/permissions", json=payload, headers=admin_headers)
         assert response.status_code == 201
         data = response.json()
         assert data["key"] == payload["key"]
@@ -166,17 +172,17 @@ class TestPermissionsAPI:
         data = response.json()
         assert len(data["items"]) <= 2
 
-    def test_update_permission(self, client, auth_headers, permission):
+    def test_update_permission(self, client, admin_headers, permission):
         """Test updating a permission."""
         payload = {"description": "Updated permission description"}
         response = client.patch(
-            f"/rbac/permissions/{permission.id}", json=payload, headers=auth_headers
+            f"/rbac/permissions/{permission.id}", json=payload, headers=admin_headers
         )
         assert response.status_code == 200
         data = response.json()
         assert data["description"] == "Updated permission description"
 
-    def test_delete_permission(self, client, auth_headers, db_session):
+    def test_delete_permission(self, client, admin_headers, db_session):
         """Test deleting a permission."""
         perm = Permission(
             key=f"to:delete:{uuid.uuid4().hex[:8]}",
@@ -187,7 +193,7 @@ class TestPermissionsAPI:
         db_session.refresh(perm)
 
         response = client.delete(
-            f"/rbac/permissions/{perm.id}", headers=auth_headers
+            f"/rbac/permissions/{perm.id}", headers=admin_headers
         )
         assert response.status_code == 204
 
@@ -195,14 +201,14 @@ class TestPermissionsAPI:
 class TestRolePermissionsAPI:
     """Tests for the /rbac/role-permissions endpoints."""
 
-    def test_create_role_permission(self, client, auth_headers, role, permission):
+    def test_create_role_permission(self, client, admin_headers, role, permission):
         """Test creating a role-permission link."""
         payload = {
             "role_id": str(role.id),
             "permission_id": str(permission.id),
         }
         response = client.post(
-            "/rbac/role-permissions", json=payload, headers=auth_headers
+            "/rbac/role-permissions", json=payload, headers=admin_headers
         )
         assert response.status_code == 201
         data = response.json()
@@ -244,7 +250,7 @@ class TestRolePermissionsAPI:
         data = response.json()
         assert len(data["items"]) >= 1
 
-    def test_delete_role_permission(self, client, auth_headers, db_session, role, permission):
+    def test_delete_role_permission(self, client, admin_headers, db_session, role, permission):
         """Test deleting a role-permission link."""
         link = RolePermission(role_id=role.id, permission_id=permission.id)
         db_session.add(link)
@@ -252,7 +258,7 @@ class TestRolePermissionsAPI:
         db_session.refresh(link)
 
         response = client.delete(
-            f"/rbac/role-permissions/{link.id}", headers=auth_headers
+            f"/rbac/role-permissions/{link.id}", headers=admin_headers
         )
         assert response.status_code == 204
 
@@ -260,14 +266,14 @@ class TestRolePermissionsAPI:
 class TestPersonRolesAPI:
     """Tests for the /rbac/person-roles endpoints."""
 
-    def test_create_person_role(self, client, auth_headers, person, role):
+    def test_create_person_role(self, client, admin_headers, person, role):
         """Test creating a person-role link."""
         payload = {
             "person_id": str(person.id),
             "role_id": str(role.id),
         }
         response = client.post(
-            "/rbac/person-roles", json=payload, headers=auth_headers
+            "/rbac/person-roles", json=payload, headers=admin_headers
         )
         assert response.status_code == 201
         data = response.json()
@@ -309,7 +315,7 @@ class TestPersonRolesAPI:
         data = response.json()
         assert len(data["items"]) >= 1
 
-    def test_delete_person_role(self, client, auth_headers, db_session, person, role):
+    def test_delete_person_role(self, client, admin_headers, db_session, person, role):
         """Test deleting a person-role link."""
         link = PersonRole(person_id=person.id, role_id=role.id)
         db_session.add(link)
@@ -317,7 +323,7 @@ class TestPersonRolesAPI:
         db_session.refresh(link)
 
         response = client.delete(
-            f"/rbac/person-roles/{link.id}", headers=auth_headers
+            f"/rbac/person-roles/{link.id}", headers=admin_headers
         )
         assert response.status_code == 204
 
@@ -325,13 +331,13 @@ class TestPersonRolesAPI:
 class TestRBACAPIV1:
     """Tests for the /api/v1/rbac endpoints."""
 
-    def test_create_role_v1(self, client, auth_headers):
+    def test_create_role_v1(self, client, admin_headers):
         """Test creating a role via v1 API."""
         payload = {
             "name": f"v1_role_{uuid.uuid4().hex[:8]}",
             "description": "V1 role",
         }
-        response = client.post("/api/v1/rbac/roles", json=payload, headers=auth_headers)
+        response = client.post("/api/v1/rbac/roles", json=payload, headers=admin_headers)
         assert response.status_code == 201
 
     def test_list_roles_v1(self, client, auth_headers):

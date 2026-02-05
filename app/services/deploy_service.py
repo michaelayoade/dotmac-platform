@@ -25,6 +25,7 @@ from app.services.ssh_service import SSHResult, get_ssh_for_server
 logger = logging.getLogger(__name__)
 
 DEPLOY_STEPS = [
+    "backup",
     "generate",
     "transfer",
     "ensure_source",
@@ -37,7 +38,15 @@ DEPLOY_STEPS = [
     "verify",
 ]
 
+RECONFIGURE_STEPS = [
+    "generate",
+    "transfer",
+    "restart",
+    "verify",
+]
+
 STEP_LABELS = {
+    "backup": "Pre-deploy database backup",
     "generate": "Generate instance files",
     "transfer": "Transfer files to server",
     "ensure_source": "Ensure DotMac source on target",
@@ -48,6 +57,7 @@ STEP_LABELS = {
     "bootstrap": "Bootstrap organization and admin",
     "nginx": "Configure nginx + SSL",
     "verify": "Verify instance health",
+    "restart": "Restart application containers",
 }
 
 
@@ -75,24 +85,46 @@ class DeployService:
         )
         return (self.db.scalar(stmt) or 0) > 0
 
-    def create_deployment(self, instance_id: UUID, admin_password: str | None = None) -> str:
+    def create_deployment(
+        self,
+        instance_id: UUID,
+        admin_password: str | None = None,
+        deployment_type: str = "full",
+        git_ref: str | None = None,
+    ) -> str:
         """Create pending deployment log entries for all steps.
 
-        If admin_password is provided, it's stored on the first step's
-        deploy_secret field and cleared after the deploy task reads it.
-        This avoids passing passwords through Celery task arguments.
+        Args:
+            instance_id: Instance to deploy.
+            admin_password: Stored on first step's deploy_secret (cleared after use).
+            deployment_type: "full" for full deploy, "reconfigure" for env-only.
+            git_ref: Git branch/tag override for this deployment.
+
+        Uses SELECT FOR UPDATE on the instance row to prevent concurrent
+        deployments (TOCTOU race between check and create).
 
         Raises ValueError if a deployment is already in progress.
         """
+        from sqlalchemy import select
+
+        # Lock the instance row to prevent concurrent deployment creation
+        stmt = select(Instance).where(Instance.instance_id == instance_id).with_for_update()
+        instance = self.db.scalar(stmt)
+        if not instance:
+            raise ValueError("Instance not found")
+
         if self.has_active_deployment(instance_id):
             raise ValueError("A deployment is already in progress for this instance")
 
         deployment_id = str(uuid.uuid4())[:8]
+        steps = RECONFIGURE_STEPS if deployment_type == "reconfigure" else DEPLOY_STEPS
 
-        for i, step in enumerate(DEPLOY_STEPS):
+        for i, step in enumerate(steps):
             log = DeploymentLog(
                 instance_id=instance_id,
                 deployment_id=deployment_id,
+                deployment_type=deployment_type,
+                git_ref=git_ref,
                 step=step,
                 status=DeployStepStatus.pending,
                 message=STEP_LABELS.get(step, step),
@@ -101,7 +133,10 @@ class DeployService:
             self.db.add(log)
 
         self.db.flush()
-        logger.info("Created deployment %s for instance %s", deployment_id, instance_id)
+        logger.info(
+            "Created %s deployment %s for instance %s (git_ref=%s)",
+            deployment_type, deployment_id, instance_id, git_ref,
+        )
         return deployment_id
 
     def get_deploy_secret(self, instance_id: UUID, deployment_id: str) -> str | None:
@@ -174,7 +209,12 @@ class DeployService:
         if message:
             log.message = message
         if output:
-            log.output = output[:10000]  # Cap output length
+            if len(output) > 10000:
+                logger.warning(
+                    "Truncating deploy output for %s/%s step %s (%d chars)",
+                    instance_id, deployment_id, step, len(output),
+                )
+            log.output = output[:10000]
 
         if status == DeployStepStatus.running:
             log.started_at = now
@@ -189,8 +229,10 @@ class DeployService:
         instance_id: UUID,
         deployment_id: str,
         admin_password: str,
+        deployment_type: str = "full",
+        git_ref: str | None = None,
     ) -> dict:
-        """Execute the full deployment pipeline."""
+        """Execute the deployment pipeline (full or reconfigure)."""
         instance = self.db.get(Instance, instance_id)
         if not instance:
             return {"success": False, "error": "Instance not found"}
@@ -204,8 +246,21 @@ class DeployService:
 
         ssh = get_ssh_for_server(server)
         results = {}
+        steps = RECONFIGURE_STEPS if deployment_type == "reconfigure" else DEPLOY_STEPS
 
         try:
+            if deployment_type == "reconfigure":
+                return self._run_reconfigure(
+                    instance, deployment_id, admin_password, ssh, results, steps,
+                )
+
+            # Full deployment pipeline
+
+            # Step 0: Pre-deploy backup (non-fatal for first deploy)
+            results["backup"] = self._step_backup(instance, deployment_id)
+            if not results["backup"]:
+                logger.warning("Pre-deploy backup failed for %s — continuing", instance.org_code)
+
             # Step 1: Generate instance files
             results["generate"] = self._step_generate(
                 instance, deployment_id, admin_password
@@ -222,7 +277,7 @@ class DeployService:
 
             # Step 3: Ensure DotMac source exists on target
             results["ensure_source"] = self._step_ensure_source(
-                instance, deployment_id, ssh
+                instance, deployment_id, ssh, git_ref=git_ref,
             )
             if not results["ensure_source"]:
                 raise DeployError("ensure_source", "Failed to ensure source code on server")
@@ -248,7 +303,7 @@ class DeployService:
             if not results["start_app"]:
                 raise DeployError("start_app", "App containers failed to start")
 
-            # Step 7: Run migrations
+            # Step 7: Run migrations (use module-aware schema list)
             results["migrate"] = self._step_migrate(
                 instance, deployment_id, ssh
             )
@@ -278,6 +333,9 @@ class DeployService:
                 self.db.commit()
                 return {"success": False, "error": "Health check failed", "results": results}
 
+            # Record deployed git ref
+            if git_ref:
+                instance.deployed_git_ref = git_ref
             instance.status = InstanceStatus.running
             self.db.commit()
             return {"success": True, "results": results}
@@ -285,7 +343,7 @@ class DeployService:
         except DeployError as e:
             logger.error("Deployment failed at step %s: %s", e.step, e.message)
             # Mark remaining steps as skipped
-            for step in DEPLOY_STEPS:
+            for step in steps:
                 if step not in results:
                     self._update_step(
                         instance_id, deployment_id, step,
@@ -306,6 +364,104 @@ class DeployService:
             instance.status = InstanceStatus.error
             self.db.commit()
             return {"success": False, "error": str(e)}
+
+    def _run_reconfigure(
+        self,
+        instance: Instance,
+        deployment_id: str,
+        admin_password: str,
+        ssh,
+        results: dict,
+        steps: list[str],
+    ) -> dict:
+        """Lightweight reconfigure: regenerate .env, transfer, restart, verify."""
+        instance_id = instance.instance_id
+
+        results["generate"] = self._step_generate(instance, deployment_id, admin_password)
+        if not results["generate"]:
+            raise DeployError("generate", "File generation failed")
+
+        results["transfer"] = self._step_transfer(instance, deployment_id, ssh)
+        if not results["transfer"]:
+            raise DeployError("transfer", "File transfer failed")
+
+        # Restart app containers (not infra)
+        results["restart"] = self._step_restart(instance, deployment_id, ssh)
+        if not results["restart"]:
+            raise DeployError("restart", "Restart failed")
+
+        results["verify"] = self._step_verify(instance, deployment_id, ssh)
+        if not results["verify"]:
+            instance.status = InstanceStatus.error
+            self.db.commit()
+            return {"success": False, "error": "Health check failed", "results": results}
+
+        instance.status = InstanceStatus.running
+        self.db.commit()
+        return {"success": True, "results": results}
+
+    def _step_backup(self, instance: Instance, deployment_id: str) -> bool:
+        """Pre-deploy backup step — non-fatal on first deploy."""
+        step = "backup"
+        self._update_step(
+            instance.instance_id, deployment_id, step, DeployStepStatus.running
+        )
+        try:
+            if instance.status == InstanceStatus.provisioned:
+                self._update_step(
+                    instance.instance_id, deployment_id, step,
+                    DeployStepStatus.skipped, "First deploy — no existing data to back up"
+                )
+                return True
+
+            from app.services.backup_service import BackupService, BackupType
+            backup_svc = BackupService(self.db)
+            backup = backup_svc.create_backup(instance.instance_id, BackupType.pre_deploy)
+
+            if backup.status.value == "completed":
+                self._update_step(
+                    instance.instance_id, deployment_id, step,
+                    DeployStepStatus.success,
+                    f"Backup completed: {backup.file_path} ({backup.size_bytes or 0} bytes)"
+                )
+                return True
+
+            self._update_step(
+                instance.instance_id, deployment_id, step,
+                DeployStepStatus.failed,
+                f"Backup failed: {backup.error_message or 'unknown error'}"
+            )
+            return False
+        except Exception as e:
+            self._update_step(
+                instance.instance_id, deployment_id, step,
+                DeployStepStatus.skipped, f"Backup skipped: {e}"
+            )
+            return True  # Non-fatal
+
+    def _step_restart(self, instance: Instance, deployment_id: str, ssh) -> bool:
+        """Restart app containers only (for reconfigure)."""
+        step = "restart"
+        self._update_step(
+            instance.instance_id, deployment_id, step, DeployStepStatus.running
+        )
+        result = ssh.exec_command(
+            "docker compose restart app worker beat",
+            timeout=120,
+            cwd=instance.deploy_path,
+        )
+        if result.ok:
+            time.sleep(5)
+            self._update_step(
+                instance.instance_id, deployment_id, step,
+                DeployStepStatus.success, "Containers restarted"
+            )
+            return True
+        self._update_step(
+            instance.instance_id, deployment_id, step,
+            DeployStepStatus.failed, "Restart failed", result.stderr
+        )
+        return False
 
     def _step_generate(
         self, instance: Instance, deployment_id: str, admin_password: str
@@ -355,7 +511,8 @@ class DeployService:
         return False
 
     def _step_ensure_source(
-        self, instance: Instance, deployment_id: str, ssh
+        self, instance: Instance, deployment_id: str, ssh,
+        git_ref: str | None = None,
     ) -> bool:
         step = "ensure_source"
         self._update_step(
@@ -367,7 +524,8 @@ class DeployService:
         ps = PlatformSettingsService(self.db)
         src_path = ps.get("dotmac_source_path")
         git_repo_url = ps.get("dotmac_git_repo_url")
-        git_branch = ps.get("dotmac_git_branch")
+        # Version pinning: per-instance override > deployment arg > platform default
+        git_branch = git_ref or instance.git_branch or instance.git_tag or ps.get("dotmac_git_branch")
 
         q_src = shlex.quote(src_path)
         q_branch = shlex.quote(git_branch)
@@ -554,17 +712,22 @@ class DeployService:
             "Creating database schemas..."
         )
 
-        # Pre-create all PostgreSQL schemas required by ERP migrations.
-        # Without this, alembic fails when trying to create types/tables
-        # in schemas that don't exist yet.
-        schemas = [
-            "ap", "ar", "attendance", "audit", "automation", "banking",
-            "common", "cons", "core_config", "core_fx", "core_org",
-            "exp", "expense", "fa", "fin_inst", "fleet", "gl", "inv",
-            "ipsas", "lease", "leave", "payments", "perf", "platform",
-            "pm", "proc", "recruit", "rpt", "scheduling", "support",
-            "sync", "tax", "training",
-        ]
+        # Pre-create PostgreSQL schemas for enabled modules.
+        # Falls back to all schemas if module service is unavailable.
+        try:
+            from app.services.module_service import ModuleService
+            mod_svc = ModuleService(self.db)
+            schemas = mod_svc.get_enabled_schemas(instance.instance_id)
+        except Exception:
+            logger.warning("Could not resolve modules — using all schemas")
+            schemas = [
+                "ap", "ar", "attendance", "audit", "automation", "banking",
+                "common", "cons", "core_config", "core_fx", "core_org",
+                "exp", "expense", "fa", "fin_inst", "fleet", "gl", "inv",
+                "ipsas", "lease", "leave", "payments", "perf", "platform",
+                "pm", "proc", "recruit", "rpt", "scheduling", "support",
+                "sync", "tax", "training",
+            ]
         schema_sql = "; ".join(
             f"CREATE SCHEMA IF NOT EXISTS {s}" for s in schemas
         )
@@ -719,14 +882,59 @@ class DeployService:
         # Only roll back if we got past the build step (containers may be running)
         container_steps = {"start_infra", "start_app", "migrate", "bootstrap", "nginx", "verify"}
         if failed_step not in container_steps:
+            logger.info(
+                "Rollback skipped for %s — failed at step '%s' (pre-container)",
+                instance.org_code, failed_step,
+            )
             return
+
+        logger.info(
+            "Starting rollback for %s (failed at step '%s')",
+            instance.org_code, failed_step,
+        )
+
+        # Capture container state for diagnostics
         try:
-            logger.info("Rolling back containers for %s", instance.org_code)
-            ssh.exec_command(
+            ps_result = ssh.exec_command(
+                "docker compose ps --format '{{.Name}} {{.Status}}'",
+                timeout=15,
+                cwd=instance.deploy_path,
+            )
+            if ps_result.ok:
+                logger.info("Container state before rollback:\n%s", ps_result.stdout.strip())
+        except Exception:
+            pass
+
+        # Collect logs from failing containers before teardown
+        try:
+            slug = _safe_slug(instance.org_code.lower())
+            for svc in ("app", "worker", "db"):
+                container = f"dotmac_{slug}_{svc}"
+                log_result = ssh.exec_command(
+                    f"docker logs --tail 50 {container} 2>&1",
+                    timeout=10,
+                )
+                if log_result.stdout.strip():
+                    logger.info(
+                        "Rollback logs [%s]:\n%s", container, log_result.stdout[-2000:]
+                    )
+        except Exception:
+            logger.debug("Could not collect container logs during rollback")
+
+        # Tear down containers
+        try:
+            result = ssh.exec_command(
                 "docker compose down",
                 timeout=60,
                 cwd=instance.deploy_path,
             )
+            if result.ok:
+                logger.info("Rollback complete for %s — containers stopped", instance.org_code)
+            else:
+                logger.warning(
+                    "docker compose down returned non-zero for %s: %s",
+                    instance.org_code, result.stderr[:500],
+                )
         except Exception:
             logger.exception("Failed to roll back containers for %s", instance.org_code)
 

@@ -30,6 +30,9 @@ def _parse_ref(reference: str) -> tuple[str, str, str]:
     field = parsed.fragment or "value"
     if not mount or not path:
         raise HTTPException(status_code=500, detail="Invalid OpenBao reference")
+    # Reject path traversal sequences
+    if ".." in path.split("/"):
+        raise HTTPException(status_code=500, detail="Invalid OpenBao reference: path traversal not allowed")
     return mount, path, field
 
 

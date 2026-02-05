@@ -1,10 +1,13 @@
 """
 Health Service — Poll running instances and record health status.
+
+Includes resource monitoring: CPU, memory, disk, DB size, active connections.
 """
 from __future__ import annotations
 
 import json
 import logging
+import shlex
 import time
 from datetime import datetime, timezone
 from uuid import UUID
@@ -118,6 +121,11 @@ class HealthService:
                     response_ms=response_ms,
                     error_message=(result.stderr or "No response")[:500],
                 )
+
+            # Collect resource stats (best-effort)
+            resource_stats = self.collect_resource_stats(instance, ssh)
+            self._apply_resource_stats(check, resource_stats)
+
         except Exception as e:
             response_ms = int((time.monotonic() - start) * 1000)
             check = HealthCheck(
@@ -130,6 +138,77 @@ class HealthService:
         self.db.add(check)
         self.db.flush()
         return check
+
+    def collect_resource_stats(self, instance: Instance, ssh) -> dict:
+        """Collect resource stats for an instance's containers via SSH."""
+        stats: dict = {}
+        slug = instance.org_code.lower()
+        app_container = f"dotmac_{slug}_app"
+        db_container = f"dotmac_{slug}_db"
+
+        try:
+            # Docker stats for app container (CPU + memory)
+            result = ssh.exec_command(
+                f"docker stats {app_container} --no-stream --format '{{{{.CPUPerc}}}} {{{{.MemUsage}}}}'",
+                timeout=10,
+            )
+            if result.ok and result.stdout.strip():
+                parts = result.stdout.strip().split()
+                if len(parts) >= 2:
+                    cpu_str = parts[0].replace("%", "")
+                    try:
+                        stats["cpu_percent"] = float(cpu_str)
+                    except ValueError:
+                        pass
+                    mem_str = parts[1]
+                    try:
+                        if "GiB" in mem_str:
+                            stats["memory_mb"] = int(float(mem_str.replace("GiB", "")) * 1024)
+                        elif "MiB" in mem_str:
+                            stats["memory_mb"] = int(float(mem_str.replace("MiB", "")))
+                    except ValueError:
+                        pass
+
+            # DB size
+            db_name = f"dotmac_{slug}"
+            size_result = ssh.exec_command(
+                f"docker exec {db_container} psql -U postgres -d {shlex.quote(db_name)} "
+                f"-t -c \"SELECT pg_database_size('{db_name}') / 1048576\"",
+                timeout=10,
+            )
+            if size_result.ok and size_result.stdout.strip():
+                try:
+                    stats["db_size_mb"] = int(size_result.stdout.strip())
+                except ValueError:
+                    pass
+
+            # Active DB connections
+            conn_result = ssh.exec_command(
+                f"docker exec {db_container} psql -U postgres -d {shlex.quote(db_name)} "
+                f"-t -c \"SELECT count(*) FROM pg_stat_activity WHERE datname = '{db_name}'\"",
+                timeout=10,
+            )
+            if conn_result.ok and conn_result.stdout.strip():
+                try:
+                    stats["active_connections"] = int(conn_result.stdout.strip())
+                except ValueError:
+                    pass
+
+        except Exception:
+            logger.debug("Resource stats collection failed for %s", instance.org_code)
+
+        return stats
+
+    def _apply_resource_stats(self, check: HealthCheck, stats: dict) -> None:
+        """Apply collected resource stats to a health check record."""
+        if "cpu_percent" in stats:
+            check.cpu_percent = stats["cpu_percent"]
+        if "memory_mb" in stats:
+            check.memory_mb = stats["memory_mb"]
+        if "db_size_mb" in stats:
+            check.db_size_mb = stats["db_size_mb"]
+        if "active_connections" in stats:
+            check.active_connections = stats["active_connections"]
 
     def poll_all_running(self) -> dict:
         """Poll all running instances. Returns stats."""
@@ -200,7 +279,7 @@ class HealthService:
         return list(self.db.scalars(stmt).all())
 
     def prune_old_checks(self, instance_id: UUID) -> int:
-        """Keep only the latest N checks per instance."""
+        """Keep only the latest N checks for a single instance."""
         keep = platform_settings.health_checks_to_keep
         stmt = (
             select(HealthCheck.id)
@@ -214,6 +293,18 @@ class HealthService:
                 delete(HealthCheck).where(HealthCheck.id.in_(old_ids))
             )
         return len(old_ids)
+
+    def prune_all_old_checks(self) -> int:
+        """Prune old health checks for all instances."""
+        stmt = select(Instance.instance_id).where(Instance.status == InstanceStatus.running)
+        instance_ids = list(self.db.scalars(stmt).all())
+        total = 0
+        for iid in instance_ids:
+            total += self.prune_old_checks(iid)
+        if total:
+            self.db.commit()
+            logger.info("Pruned %d old health checks across %d instances", total, len(instance_ids))
+        return total
 
     def get_dashboard_stats(self) -> dict:
         """Get aggregated health stats for the dashboard."""
@@ -256,3 +347,28 @@ class HealthService:
         ) or 0
 
         return stats
+
+    def get_top_resource_consumers(self, limit: int = 5) -> list[dict]:
+        """Get instances with highest resource usage from latest health checks."""
+        stmt = select(Instance).where(Instance.status == InstanceStatus.running)
+        running = list(self.db.scalars(stmt).all())
+        if not running:
+            return []
+
+        ids = [i.instance_id for i in running]
+        checks = self.get_latest_checks_batch(ids)
+
+        consumers = []
+        for inst in running:
+            check = checks.get(inst.instance_id)
+            if check:
+                consumers.append({
+                    "instance": inst,
+                    "cpu_percent": check.cpu_percent or 0,
+                    "memory_mb": check.memory_mb or 0,
+                    "db_size_mb": check.db_size_mb or 0,
+                    "active_connections": check.active_connections or 0,
+                })
+
+        consumers.sort(key=lambda x: x["cpu_percent"], reverse=True)
+        return consumers[:limit]

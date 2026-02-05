@@ -1,6 +1,7 @@
 {% extends "platform_base.html" %}
 
 {% block content %}
+{# ===== HEADER: Breadcrumb + Org Name + Action Buttons ===== #}
 <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
     <div>
         <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
@@ -11,7 +12,8 @@
         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ instance.org_name }}</p>
     </div>
     <div class="flex flex-wrap gap-2">
-        {% if instance.status.value == 'provisioned' or instance.status.value == 'error' %}
+        {# Deploy button (provisioned/error only) #}
+        {% if instance.status.value in ('provisioned', 'error') %}
         <form method="POST" action="/instances/{{ instance.instance_id }}/deploy" class="inline" x-data="{ open: false }">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <button type="button" @click="open = true" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 transition">
@@ -25,7 +27,7 @@
                     <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">This will run the full 10-step deployment pipeline.</p>
                     <div class="mt-4">
                         <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Admin Password</label>
-                        <input type="password" name="admin_password" value="changeme123" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
+                        <input type="password" name="admin_password" placeholder="Enter admin password" required class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
                     </div>
                     <div class="mt-6 flex justify-end gap-3">
                         <button type="button" @click="open = false" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 dark:border-slate-700 dark:text-slate-400">Cancel</button>
@@ -35,6 +37,19 @@
             </div>
         </form>
         {% endif %}
+
+        {# Reconfigure button (running only) #}
+        {% if instance.status.value == 'running' %}
+        <form method="POST" action="/instances/{{ instance.instance_id }}/reconfigure" onsubmit="return confirm('Reconfigure this instance? This will regenerate config files and restart services.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <button type="submit" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 transition">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                Reconfigure
+            </button>
+        </form>
+        {% endif %}
+
+        {# Start / Stop / Restart buttons #}
         {% if instance.status.value == 'running' %}
         <form method="POST" action="/instances/{{ instance.instance_id }}/restart">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
@@ -50,6 +65,8 @@
             <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 transition">Start</button>
         </form>
         {% endif %}
+
+        {# Migrate button (running only) #}
         {% if instance.status.value == 'running' %}
         <form method="POST" action="/instances/{{ instance.instance_id }}/migrate">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
@@ -59,7 +76,29 @@
             </button>
         </form>
         {% endif %}
-        {% if instance.status.value in ('stopped', 'error', 'provisioned') %}
+
+        {# Suspend / Reactivate / Archive buttons based on status #}
+        {% if instance.status.value in ('running', 'stopped') and not instance.suspended_at %}
+        <form method="POST" action="/instances/{{ instance.instance_id }}/suspend" onsubmit="return confirm('Suspend this instance? Users will lose access.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <button type="submit" class="rounded-lg border border-amber-200 px-3 py-2 text-sm font-medium text-amber-600 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-900/20 transition">Suspend</button>
+        </form>
+        {% endif %}
+        {% if instance.status.value == 'suspended' or instance.suspended_at %}
+        <form method="POST" action="/instances/{{ instance.instance_id }}/reactivate">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 transition">Reactivate</button>
+        </form>
+        {% endif %}
+        {% if instance.status.value in ('stopped', 'suspended', 'error') %}
+        <form method="POST" action="/instances/{{ instance.instance_id }}/archive" onsubmit="return confirm('Archive instance {{ instance.org_code }}? This will preserve data but make the instance inaccessible.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <button type="submit" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 transition">Archive</button>
+        </form>
+        {% endif %}
+
+        {# Delete button (stopped, error, provisioned, suspended) #}
+        {% if instance.status.value in ('stopped', 'error', 'provisioned', 'suspended') %}
         <form method="POST" action="/instances/{{ instance.instance_id }}/delete" onsubmit="return confirm('Delete instance {{ instance.org_code }}? This cannot be undone.')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <button type="submit" class="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20 transition">Delete</button>
@@ -68,6 +107,7 @@
     </div>
 </div>
 
+{# ===== TOP GRID: Instance Details + Health ===== #}
 <div class="grid gap-6 lg:grid-cols-2">
     <!-- Instance Info -->
     <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
@@ -88,6 +128,30 @@
             <div class="flex justify-between">
                 <dt class="text-sm text-slate-500 dark:text-slate-400">Currency</dt>
                 <dd class="text-sm text-slate-900 dark:text-white">{{ instance.currency }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Plan</dt>
+                <dd>
+                    {% if instance.plan %}
+                        <span class="rounded-md bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-400">{{ instance.plan.name }}</span>
+                    {% else %}
+                        <span class="text-sm text-slate-400">No plan</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Version</dt>
+                <dd class="text-sm font-mono text-slate-900 dark:text-white">
+                    {% if instance.deployed_git_ref %}
+                        {{ instance.deployed_git_ref[:12] }}
+                    {% elif instance.git_tag %}
+                        {{ instance.git_tag }}
+                    {% elif instance.git_branch %}
+                        {{ instance.git_branch }}
+                    {% else %}
+                        <span class="text-slate-400">--</span>
+                    {% endif %}
+                </dd>
             </div>
             <div class="flex justify-between">
                 <dt class="text-sm text-slate-500 dark:text-slate-400">Ports</dt>
@@ -120,11 +184,27 @@
                         <span class="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Error</span>
                     {% elif instance.status.value == 'stopped' %}
                         <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>Stopped</span>
+                    {% elif instance.status.value == 'suspended' %}
+                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Suspended</span>
+                    {% elif instance.status.value == 'archived' %}
+                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400"><span class="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>Archived</span>
                     {% else %}
                         <span class="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>Provisioned</span>
                     {% endif %}
                 </dd>
             </div>
+            {% if instance.trial_expires_at %}
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Trial Expires</dt>
+                <dd class="text-sm text-slate-600 dark:text-slate-400">{{ instance.trial_expires_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
+            </div>
+            {% endif %}
+            {% if instance.suspended_at %}
+            <div class="flex justify-between">
+                <dt class="text-sm text-slate-500 dark:text-slate-400">Suspended At</dt>
+                <dd class="text-sm text-amber-600 dark:text-amber-400">{{ instance.suspended_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
+            </div>
+            {% endif %}
             <div class="flex justify-between">
                 <dt class="text-sm text-slate-500 dark:text-slate-400">Created</dt>
                 <dd class="text-sm text-slate-600 dark:text-slate-400">{{ instance.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
@@ -154,6 +234,30 @@
                 {% endif %}
             </div>
         </div>
+
+        {# CPU / Memory / DB Size from latest health check #}
+        {% if latest_health %}
+        <div class="mb-4 grid grid-cols-3 gap-3">
+            <div class="rounded-lg border border-slate-100 px-3 py-2 text-center dark:border-slate-800">
+                <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">CPU</p>
+                <p class="mt-0.5 text-lg font-semibold text-slate-900 dark:text-white">
+                    {% if latest_health.cpu_percent is not none %}{{ latest_health.cpu_percent }}%{% else %}--{% endif %}
+                </p>
+            </div>
+            <div class="rounded-lg border border-slate-100 px-3 py-2 text-center dark:border-slate-800">
+                <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Memory</p>
+                <p class="mt-0.5 text-lg font-semibold text-slate-900 dark:text-white">
+                    {% if latest_health.memory_mb is not none %}{{ latest_health.memory_mb }} MB{% else %}--{% endif %}
+                </p>
+            </div>
+            <div class="rounded-lg border border-slate-100 px-3 py-2 text-center dark:border-slate-800">
+                <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">DB Size</p>
+                <p class="mt-0.5 text-lg font-semibold text-slate-900 dark:text-white">
+                    {% if latest_health.db_size_mb is not none %}{{ latest_health.db_size_mb }} MB{% else %}--{% endif %}
+                </p>
+            </div>
+        </div>
+        {% endif %}
 
         {% if recent_checks %}
         <div class="space-y-2">
@@ -187,7 +291,7 @@
     </div>
 </div>
 
-<!-- Deployment Logs -->
+{# ===== DEPLOYMENT LOGS ===== #}
 {% if deploy_logs %}
 <div class="mt-6 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
     <div class="flex items-center justify-between mb-4">
@@ -222,6 +326,263 @@
 </div>
 {% endif %}
 
+{# ===== TABBED SECTIONS ===== #}
+<div class="mt-6" x-data="{ activeTab: 'modules' }">
+    {# Tab Navigation #}
+    <div class="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
+        <button @click="activeTab = 'modules'" :class="activeTab === 'modules' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'" class="rounded-lg px-4 py-2 text-sm font-medium transition">Modules</button>
+        <button @click="activeTab = 'flags'" :class="activeTab === 'flags' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'" class="rounded-lg px-4 py-2 text-sm font-medium transition">Feature Flags</button>
+        <button @click="activeTab = 'plan'" :class="activeTab === 'plan' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'" class="rounded-lg px-4 py-2 text-sm font-medium transition">Plan</button>
+        <button @click="activeTab = 'backups'" :class="activeTab === 'backups' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'" class="rounded-lg px-4 py-2 text-sm font-medium transition">Backups</button>
+        <button @click="activeTab = 'domains'" :class="activeTab === 'domains' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'" class="rounded-lg px-4 py-2 text-sm font-medium transition">Domains</button>
+    </div>
+
+    {# ---- MODULES TAB ---- #}
+    <div x-show="activeTab === 'modules'" x-cloak class="mt-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Modules</h2>
+        {% if modules %}
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {% for mod in modules %}
+            <div class="flex items-center justify-between rounded-lg border border-slate-100 px-4 py-3 dark:border-slate-800">
+                <div class="min-w-0">
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">{{ mod.module }}</p>
+                    {% if mod.is_core %}
+                    <p class="text-[10px] font-medium uppercase tracking-wider text-slate-400">Core</p>
+                    {% endif %}
+                </div>
+                {% if mod.is_core %}
+                {# Core modules: locked toggle #}
+                <div class="relative">
+                    <div class="h-6 w-11 rounded-full bg-primary-500 opacity-60 cursor-not-allowed">
+                        <span class="absolute left-[22px] top-0.5 h-5 w-5 rounded-full bg-white shadow transition"></span>
+                    </div>
+                </div>
+                {% else %}
+                <form method="POST" action="/instances/{{ instance.instance_id }}/modules/{{ mod.module_id }}/toggle">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <button type="submit" class="relative h-6 w-11 rounded-full transition {{ 'bg-primary-500' if mod.enabled else 'bg-slate-200 dark:bg-slate-700' }}">
+                        <span class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition {{ 'left-[22px]' if mod.enabled else 'left-0.5' }}"></span>
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-slate-500 dark:text-slate-400">No modules configured for this instance.</p>
+        {% endif %}
+    </div>
+
+    {# ---- FEATURE FLAGS TAB ---- #}
+    <div x-show="activeTab === 'flags'" x-cloak class="mt-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Feature Flags</h2>
+        {% if flags %}
+        <div class="space-y-3">
+            {% for flag in flags %}
+            <div class="flex items-center justify-between rounded-lg border border-slate-100 px-4 py-3 dark:border-slate-800">
+                <div class="min-w-0 flex-1 mr-4">
+                    <div class="flex items-center gap-2">
+                        <p class="text-sm font-medium text-slate-900 dark:text-white font-mono">{{ flag.key }}</p>
+                        {% if flag.is_custom %}
+                        <span class="rounded bg-accent-100 px-1.5 py-0.5 text-[10px] font-medium text-accent-700 dark:bg-accent-900/30 dark:text-accent-400">Custom</span>
+                        {% endif %}
+                    </div>
+                    {% if flag.description %}
+                    <p class="mt-0.5 text-xs text-slate-400">{{ flag.description }}</p>
+                    {% endif %}
+                </div>
+                <form method="POST" action="/instances/{{ instance.instance_id }}/flags/{{ flag.key }}/toggle">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <input type="hidden" name="value" value="{{ 'false' if flag.value else 'true' }}" />
+                    <button type="submit" class="relative h-6 w-11 rounded-full transition {{ 'bg-primary-500' if flag.value else 'bg-slate-200 dark:bg-slate-700' }}">
+                        <span class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition {{ 'left-[22px]' if flag.value else 'left-0.5' }}"></span>
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-slate-500 dark:text-slate-400">No feature flags configured for this instance.</p>
+        {% endif %}
+    </div>
+
+    {# ---- PLAN TAB ---- #}
+    <div x-show="activeTab === 'plan'" x-cloak class="mt-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Subscription Plan</h2>
+        {% if plans %}
+        <form method="POST" action="/instances/{{ instance.instance_id }}/plan">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <div class="space-y-3">
+                {% for plan in plans %}
+                <label class="flex cursor-pointer items-start gap-4 rounded-lg border px-4 py-3 transition {{ 'border-primary-300 bg-primary-50/50 dark:border-primary-700 dark:bg-primary-950/30' if instance.plan_id == plan.plan_id else 'border-slate-100 hover:border-slate-200 dark:border-slate-800 dark:hover:border-slate-700' }}">
+                    <input type="radio" name="plan_id" value="{{ plan.plan_id }}" {{ 'checked' if instance.plan_id == plan.plan_id else '' }} class="mt-1 h-4 w-4 border-slate-300 text-primary-600 focus:ring-primary-500" />
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-semibold text-slate-900 dark:text-white">{{ plan.name }}</p>
+                        {% if plan.description %}
+                        <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{{ plan.description }}</p>
+                        {% endif %}
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+            <div class="mt-4 flex justify-end">
+                <button type="submit" class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 transition">Update Plan</button>
+            </div>
+        </form>
+        {% else %}
+        <p class="text-sm text-slate-500 dark:text-slate-400">No plans available.</p>
+        {% endif %}
+    </div>
+
+    {# ---- BACKUPS TAB ---- #}
+    <div x-show="activeTab === 'backups'" x-cloak class="mt-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Backups</h2>
+            <form method="POST" action="/instances/{{ instance.instance_id }}/backup">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 transition">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    Create Backup
+                </button>
+            </form>
+        </div>
+        {% if backups %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-100 dark:border-slate-800">
+                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Type</th>
+                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
+                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Size</th>
+                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">File</th>
+                        <th class="pb-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Created</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for backup in backups %}
+                    <tr>
+                        <td class="py-2.5 pr-4">
+                            <span class="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">{{ backup.backup_type.value }}</span>
+                        </td>
+                        <td class="py-2.5 pr-4">
+                            {% if backup.status.value == 'completed' %}
+                                <span class="inline-flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>Completed</span>
+                            {% elif backup.status.value == 'running' %}
+                                <span class="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400"><span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>Running</span>
+                            {% elif backup.status.value == 'failed' %}
+                                <span class="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Failed</span>
+                            {% else %}
+                                <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>{{ backup.status.value|title }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2.5 pr-4 text-slate-600 dark:text-slate-400">
+                            {% if backup.size_bytes %}
+                                {% if backup.size_bytes > 1073741824 %}
+                                    {{ (backup.size_bytes / 1073741824) | round(1) }} GB
+                                {% elif backup.size_bytes > 1048576 %}
+                                    {{ (backup.size_bytes / 1048576) | round(1) }} MB
+                                {% elif backup.size_bytes > 1024 %}
+                                    {{ (backup.size_bytes / 1024) | round(1) }} KB
+                                {% else %}
+                                    {{ backup.size_bytes }} B
+                                {% endif %}
+                            {% else %}
+                                --
+                            {% endif %}
+                        </td>
+                        <td class="py-2.5 pr-4 font-mono text-xs text-slate-500 dark:text-slate-400 max-w-[200px] truncate">{{ backup.file_path or '--' }}</td>
+                        <td class="py-2.5 text-slate-600 dark:text-slate-400">{{ backup.created_at.strftime('%Y-%m-%d %H:%M') if backup.created_at else '--' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-sm text-slate-500 dark:text-slate-400">No backups yet. Create one to get started.</p>
+        {% endif %}
+    </div>
+
+    {# ---- DOMAINS TAB ---- #}
+    <div x-show="activeTab === 'domains'" x-cloak class="mt-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Custom Domains</h2>
+
+        {# Add Domain Form #}
+        <form method="POST" action="/instances/{{ instance.instance_id }}/domains/add" class="mb-6 flex gap-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <input type="text" name="domain" placeholder="e.g. erp.example.com" required class="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
+            <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 transition">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                Add Domain
+            </button>
+        </form>
+
+        {% if domains %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-100 dark:border-slate-800">
+                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Domain</th>
+                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Primary</th>
+                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
+                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Verification Token</th>
+                        <th class="pb-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for d in domains %}
+                    <tr>
+                        <td class="py-2.5 pr-4 font-medium text-slate-900 dark:text-white">{{ d.domain }}</td>
+                        <td class="py-2.5 pr-4">
+                            {% if d.is_primary %}
+                                <span class="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700 dark:bg-primary-900/30 dark:text-primary-400">Primary</span>
+                            {% else %}
+                                <span class="text-xs text-slate-400">--</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2.5 pr-4">
+                            {% if d.status.value == 'verified' %}
+                                <span class="inline-flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>Verified</span>
+                            {% elif d.status.value == 'pending' %}
+                                <span class="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>Pending</span>
+                            {% elif d.status.value == 'failed' %}
+                                <span class="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Failed</span>
+                            {% else %}
+                                <span class="text-xs text-slate-500">{{ d.status.value|title }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2.5 pr-4">
+                            {% if d.verification_token %}
+                            <code class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono text-slate-600 dark:bg-slate-800 dark:text-slate-400 select-all">{{ d.verification_token }}</code>
+                            {% else %}
+                            <span class="text-xs text-slate-400">--</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2.5 text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                {% if d.status.value != 'verified' %}
+                                <form method="POST" action="/instances/{{ instance.instance_id }}/domains/{{ d.domain_id }}/verify" class="inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                    <button type="submit" class="rounded-md px-2 py-1 text-xs font-medium text-primary-600 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-900/20 transition">Verify</button>
+                                </form>
+                                {% endif %}
+                                <form method="POST" action="/instances/{{ instance.instance_id }}/domains/{{ d.domain_id }}/delete" onsubmit="return confirm('Remove domain {{ d.domain }}?')" class="inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                    <button type="submit" class="rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 transition">Remove</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-sm text-slate-500 dark:text-slate-400">No custom domains configured. Add one above.</p>
+        {% endif %}
+    </div>
+</div>
+
+{# ===== NOTES ===== #}
 {% if instance.notes %}
 <div class="mt-6 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
     <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Notes</h2>

@@ -117,13 +117,16 @@ def optional_web_auth(
         return WebAuthContext()
 
     try:
-        from datetime import datetime, timezone
-
         payload = decode_access_token(db, token)
         person_id = payload.get("sub")
         session_id = payload.get("session_id")
 
         if not person_id or not session_id:
+            return WebAuthContext()
+
+        # Validate session is still active (matches require_web_auth behaviour)
+        session = db.get(AuthSession, coerce_uuid(session_id))
+        if not session or session.status != SessionStatus.active:
             return WebAuthContext()
 
         person = db.get(Person, coerce_uuid(person_id))

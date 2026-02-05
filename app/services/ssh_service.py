@@ -1,7 +1,8 @@
 """
 SSH Service — Paramiko wrapper for remote server management.
 
-Provides connection pooling, command execution, and SFTP operations.
+Provides connection pooling, command execution, SFTP operations,
+and circuit breaker for unreachable servers.
 """
 from __future__ import annotations
 
@@ -16,6 +17,51 @@ from typing import Optional
 import paramiko
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Circuit breaker: track per-server failure counts
+# ---------------------------------------------------------------------------
+_CIRCUIT_STATE: dict[str, dict] = {}  # server_id -> {"failures": int, "open_until": float}
+_CIRCUIT_LOCK = threading.Lock()
+_CIRCUIT_FAILURE_THRESHOLD = 3
+_CIRCUIT_RESET_TIMEOUT = 60  # seconds
+
+
+def _circuit_check(server_id: str | None) -> None:
+    """Raise if circuit is open for this server."""
+    if not server_id:
+        return
+    with _CIRCUIT_LOCK:
+        state = _CIRCUIT_STATE.get(server_id)
+        if state and state["failures"] >= _CIRCUIT_FAILURE_THRESHOLD:
+            if time.time() < state["open_until"]:
+                raise ConnectionError(
+                    f"Circuit breaker open for server {server_id}: "
+                    f"{state['failures']} consecutive failures"
+                )
+            # Half-open: allow one attempt
+            state["failures"] = _CIRCUIT_FAILURE_THRESHOLD - 1
+
+
+def _circuit_record_success(server_id: str | None) -> None:
+    if not server_id:
+        return
+    with _CIRCUIT_LOCK:
+        _CIRCUIT_STATE.pop(server_id, None)
+
+
+def _circuit_record_failure(server_id: str | None) -> None:
+    if not server_id:
+        return
+    with _CIRCUIT_LOCK:
+        state = _CIRCUIT_STATE.setdefault(server_id, {"failures": 0, "open_until": 0})
+        state["failures"] += 1
+        if state["failures"] >= _CIRCUIT_FAILURE_THRESHOLD:
+            state["open_until"] = time.time() + _CIRCUIT_RESET_TIMEOUT
+            logger.warning(
+                "Circuit breaker opened for server %s after %d failures",
+                server_id, state["failures"],
+            )
 
 # Connection cache: server_id -> (client, timestamp)
 _SSH_POOL: dict[str, tuple[paramiko.SSHClient, float]] = {}
@@ -56,7 +102,9 @@ class SSHService:
         self.server_id = server_id
 
     def _get_client(self) -> paramiko.SSHClient:
-        """Get or create an SSH client, with connection caching."""
+        """Get or create an SSH client, with connection caching and circuit breaker."""
+        _circuit_check(self.server_id)
+
         with _SSH_POOL_LOCK:
             if self.server_id and self.server_id in _SSH_POOL:
                 client, ts = _SSH_POOL[self.server_id]
@@ -88,7 +136,25 @@ class SSHService:
             connect_kwargs["allow_agent"] = True
             connect_kwargs["look_for_keys"] = True
 
-        client.connect(**connect_kwargs)
+        # Retry connection up to 3 times with backoff
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                client.connect(**connect_kwargs)
+                _circuit_record_success(self.server_id)
+                break
+            except Exception as e:
+                last_err = e
+                if attempt < 2:
+                    wait = (attempt + 1) * 2
+                    logger.warning(
+                        "SSH connect attempt %d/3 to %s failed: %s (retry in %ds)",
+                        attempt + 1, self.hostname, e, wait,
+                    )
+                    time.sleep(wait)
+        else:
+            _circuit_record_failure(self.server_id)
+            raise last_err  # type: ignore[misc]
 
         with _SSH_POOL_LOCK:
             if self.server_id:

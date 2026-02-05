@@ -18,3 +18,8 @@ tests/
 node_modules/
 static/avatars/*
 !static/avatars/.gitkeep
+docs/
+docker-compose.yml
+docker-compose.*.yml
+.claude/
+Dockerfile

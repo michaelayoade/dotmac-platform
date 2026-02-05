@@ -81,13 +81,23 @@ class People(ListResponseMixin):
         )
         return _apply_pagination(query, limit, offset).all()
 
+    _UPDATABLE_FIELDS = {
+        "first_name", "last_name", "display_name", "avatar_url", "bio",
+        "email", "email_verified", "phone", "date_of_birth", "gender",
+        "preferred_contact_method", "locale", "timezone",
+        "address_line1", "address_line2", "city", "region",
+        "postal_code", "country_code", "status", "is_active",
+        "marketing_opt_in", "notes", "metadata_",
+    }
+
     @staticmethod
     def update(db: Session, person_id: str, payload: PersonUpdate):
         person = db.get(Person, coerce_uuid(person_id))
         if not person:
             raise HTTPException(status_code=404, detail="Person not found")
         for key, value in payload.model_dump(exclude_unset=True).items():
-            setattr(person, key, value)
+            if key in People._UPDATABLE_FIELDS:
+                setattr(person, key, value)
         db.commit()
         db.refresh(person)
         return person

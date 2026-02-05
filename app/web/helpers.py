@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 import secrets
 import time
 
@@ -48,7 +49,8 @@ def ctx(request, auth, title: str, active_page: str = "", **extra) -> dict:
 # CSRF protection
 # ---------------------------------------------------------------------------
 
-_CSRF_SECRET_KEY = secrets.token_bytes(32)
+_csrf_env = os.getenv("CSRF_SECRET_KEY")
+_CSRF_SECRET_KEY = bytes.fromhex(_csrf_env) if _csrf_env else secrets.token_bytes(32)
 _CSRF_TOKEN_TTL = 3600 * 4  # 4 hours
 
 

@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
@@ -42,6 +43,12 @@ async def lifespan(app: FastAPI):
         seed_auth_settings(db)
         seed_audit_settings(db)
         seed_scheduler_settings(db)
+        # Seed modules and plans
+        from app.services.module_service import ModuleService
+        from app.services.plan_service import PlanService
+        ModuleService(db).seed_modules()
+        PlanService(db).seed_plans()
+        db.commit()
     finally:
         db.close()
     yield
@@ -106,7 +113,7 @@ def _load_audit_settings(db: Session):
         defaults = {
             "enabled": True,
             "methods": {"POST", "PUT", "PATCH", "DELETE"},
-            "skip_paths": ["/static", "/web", "/health"],
+            "skip_paths": ["/static", "/health"],
             "read_trigger_header": "x-audit-read",
             "read_trigger_query": "audit",
         }
@@ -178,6 +185,10 @@ _include_api_router(people_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(audit_router)
 _include_api_router(settings_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(scheduler_router, dependencies=[Depends(require_user_auth)])
+
+from app.api.instances import router as instances_api_router
+_include_api_router(instances_api_router, dependencies=[Depends(require_user_auth)])
+
 app.include_router(auth_web_router)
 app.include_router(dashboard_router)
 app.include_router(servers_router)
@@ -189,7 +200,37 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    checks = {"db": False, "redis": False}
+
+    # Check database connectivity
+    try:
+        db = SessionLocal()
+        db.execute(DomainSetting.__table__.select().limit(1))
+        checks["db"] = True
+    except Exception:
+        pass
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+    # Check Redis connectivity
+    try:
+        import redis as redis_lib
+
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        r = redis_lib.from_url(redis_url, socket_timeout=2)
+        r.ping()
+        checks["redis"] = True
+    except Exception:
+        pass
+
+    all_ok = all(checks.values())
+    return {
+        "status": "ok" if all_ok else "degraded",
+        "checks": checks,
+    }
 
 
 @app.get("/metrics", dependencies=[Depends(require_user_auth)])

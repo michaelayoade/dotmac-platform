@@ -39,36 +39,42 @@ class TestAuthSettingsAPI:
         response = client.get("/settings/auth/nonexistent_key", headers=auth_headers)
         assert response.status_code == 400
 
-    def test_upsert_auth_setting_create(self, client, auth_headers):
-        """Test creating an auth setting via upsert."""
+    def test_upsert_auth_setting_create(self, client, admin_headers):
+        """Test creating an auth setting via upsert (admin only)."""
         key = "jwt_access_ttl_minutes"
         payload = {"value_text": "45"}
-        response = client.put(f"/settings/auth/{key}", json=payload, headers=auth_headers)
+        response = client.put(f"/settings/auth/{key}", json=payload, headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == key
         assert data["value_text"] == "45"
 
-    def test_upsert_auth_setting_update(self, client, auth_headers, db_session):
-        """Test updating an auth setting via upsert."""
+    def test_upsert_auth_setting_update(self, client, admin_headers, db_session):
+        """Test updating an auth setting via upsert (admin only)."""
         payload = {"value_text": "strict"}
         response = client.put(
             "/settings/auth/refresh_cookie_samesite",
             json=payload,
-            headers=auth_headers,
+            headers=admin_headers,
         )
         assert response.status_code == 200
         data = response.json()
         assert data["value_text"] == "strict"
 
-    def test_upsert_auth_setting_with_json(self, client, auth_headers):
-        """Test creating an auth setting with JSON value."""
+    def test_upsert_auth_setting_with_json(self, client, admin_headers):
+        """Test creating an auth setting with JSON value (admin only)."""
         key = "refresh_cookie_secure"
         payload = {"value_json": True}
-        response = client.put(f"/settings/auth/{key}", json=payload, headers=auth_headers)
+        response = client.put(f"/settings/auth/{key}", json=payload, headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["value_json"] is True
+
+    def test_upsert_auth_setting_forbidden_non_admin(self, client, auth_headers):
+        """Test upserting an auth setting with non-admin auth returns 403."""
+        payload = {"value_text": "test"}
+        response = client.put("/settings/auth/test_key", json=payload, headers=auth_headers)
+        assert response.status_code == 403
 
 
 class TestAuditSettingsAPI:
@@ -101,11 +107,11 @@ class TestAuditSettingsAPI:
         response = client.get("/settings/audit/nonexistent_key", headers=auth_headers)
         assert response.status_code == 400
 
-    def test_upsert_audit_setting(self, client, auth_headers):
-        """Test creating an audit setting via upsert."""
+    def test_upsert_audit_setting(self, client, admin_headers):
+        """Test creating an audit setting via upsert (admin only)."""
         key = "methods"
         payload = {"value_json": ["POST", "GET"]}
-        response = client.put(f"/settings/audit/{key}", json=payload, headers=auth_headers)
+        response = client.put(f"/settings/audit/{key}", json=payload, headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == key
@@ -143,12 +149,12 @@ class TestSchedulerSettingsAPI:
         )
         assert response.status_code == 400
 
-    def test_upsert_scheduler_setting(self, client, auth_headers):
-        """Test creating a scheduler setting via upsert."""
+    def test_upsert_scheduler_setting(self, client, admin_headers):
+        """Test creating a scheduler setting via upsert (admin only)."""
         key = "beat_refresh_seconds"
         payload = {"value_text": "45"}
         response = client.put(
-            f"/settings/scheduler/{key}", json=payload, headers=auth_headers
+            f"/settings/scheduler/{key}", json=payload, headers=admin_headers
         )
         assert response.status_code == 200
         data = response.json()
@@ -173,12 +179,12 @@ class TestSettingsAPIV1:
         response = client.get("/api/v1/settings/scheduler", headers=auth_headers)
         assert response.status_code == 200
 
-    def test_upsert_auth_setting_v1(self, client, auth_headers):
-        """Test upserting an auth setting via v1 API."""
+    def test_upsert_auth_setting_v1(self, client, admin_headers):
+        """Test upserting an auth setting via v1 API (admin only)."""
         key = "jwt_refresh_ttl_days"
         payload = {"value_text": "10"}
         response = client.put(
-            f"/api/v1/settings/auth/{key}", json=payload, headers=auth_headers
+            f"/api/v1/settings/auth/{key}", json=payload, headers=admin_headers
         )
         assert response.status_code == 200
 

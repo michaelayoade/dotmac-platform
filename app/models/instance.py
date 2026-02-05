@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,6 +27,9 @@ class InstanceStatus(str, enum.Enum):
     running = "running"
     stopped = "stopped"
     error = "error"
+    trial = "trial"
+    suspended = "suspended"
+    archived = "archived"
 
 
 class Instance(Base):
@@ -36,7 +39,7 @@ class Instance(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     server_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("servers.server_id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("servers.server_id"), nullable=False, index=True
     )
     org_code: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
     org_name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -60,6 +63,18 @@ class Instance(Base):
         Enum(InstanceStatus), default=InstanceStatus.provisioned
     )
     notes: Mapped[str | None] = mapped_column(Text)
+    # Plan association
+    plan_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("plans.plan_id"), nullable=True
+    )
+    # Version pinning
+    git_branch: Mapped[str | None] = mapped_column(String(120))
+    git_tag: Mapped[str | None] = mapped_column(String(120))
+    deployed_git_ref: Mapped[str | None] = mapped_column(String(120))
+    # Lifecycle
+    trial_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -70,3 +85,4 @@ class Instance(Base):
     )
 
     server = relationship("Server")
+    plan = relationship("Plan")

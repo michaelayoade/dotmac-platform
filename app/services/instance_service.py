@@ -328,6 +328,34 @@ class InstanceService:
             SPLYNX_API_SECRET={existing.get("SPLYNX_API_SECRET", "")}
         """)
 
+        # --- Inject feature flags ---
+        try:
+            from app.services.feature_flag_service import FeatureFlagService
+            flag_svc = FeatureFlagService(self.db)
+            flag_vars = flag_svc.get_env_vars(instance.instance_id)
+            if flag_vars:
+                env_content += "\n# Feature Flags\n"
+                for fk, fv in sorted(flag_vars.items()):
+                    env_content += f"{fk}={fv}\n"
+        except Exception:
+            pass  # Feature flags are optional
+
+        # --- Inject plan limits ---
+        if instance.plan_id:
+            try:
+                from app.services.plan_service import PlanService
+                plan_svc = PlanService(self.db)
+                plan = plan_svc.get_by_id(instance.plan_id)
+                if plan:
+                    env_content += "\n# Plan Limits\n"
+                    env_content += f"PLAN_NAME={plan.name}\n"
+                    if plan.max_users:
+                        env_content += f"MAX_USERS={plan.max_users}\n"
+                    if plan.max_storage_gb:
+                        env_content += f"MAX_STORAGE_GB={plan.max_storage_gb}\n"
+            except Exception:
+                pass
+
         # --- Preserve any custom variables not in the template ---
         template_keys = set(parse_env_file(env_content).keys())
         custom_lines: list[str] = []

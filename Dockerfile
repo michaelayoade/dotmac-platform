@@ -17,6 +17,13 @@ RUN poetry install --only main --no-interaction --no-ansi
 
 COPY . .
 
+# Create non-root user for running the application
+RUN groupadd --gid 1000 appuser \
+    && useradd --uid 1000 --gid appuser --shell /bin/bash --create-home appuser \
+    && chown -R appuser:appuser /app
+
+USER appuser
+
 EXPOSE 8001
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]

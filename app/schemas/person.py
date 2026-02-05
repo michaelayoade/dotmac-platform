@@ -10,7 +10,7 @@ class PersonBase(BaseModel):
     last_name: str = Field(min_length=1, max_length=80)
     display_name: str | None = Field(default=None, max_length=120)
     avatar_url: str | None = Field(default=None, max_length=512)
-    bio: str | None = None
+    bio: str | None = Field(default=None, max_length=2000)
     email: EmailStr
     email_verified: bool = False
     phone: str | None = Field(default=None, max_length=40)
@@ -24,11 +24,11 @@ class PersonBase(BaseModel):
     city: str | None = Field(default=None, max_length=80)
     region: str | None = Field(default=None, max_length=80)
     postal_code: str | None = Field(default=None, max_length=20)
-    country_code: str | None = Field(default=None, max_length=2)
+    country_code: str | None = Field(default=None, max_length=2, pattern=r"^[A-Z]{2}$")
     status: str = "active"
     is_active: bool = True
     marketing_opt_in: bool = False
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=5000)
     metadata_: dict | None = Field(default=None, serialization_alias="metadata")
 
 
@@ -42,7 +42,7 @@ class PersonUpdate(BaseModel):
     last_name: str | None = Field(default=None, max_length=80)
     display_name: str | None = Field(default=None, max_length=120)
     avatar_url: str | None = Field(default=None, max_length=512)
-    bio: str | None = None
+    bio: str | None = Field(default=None, max_length=2000)
     email: EmailStr | None = None
     email_verified: bool | None = None
     phone: str | None = Field(default=None, max_length=40)
@@ -56,11 +56,11 @@ class PersonUpdate(BaseModel):
     city: str | None = Field(default=None, max_length=80)
     region: str | None = Field(default=None, max_length=80)
     postal_code: str | None = Field(default=None, max_length=20)
-    country_code: str | None = Field(default=None, max_length=2)
+    country_code: str | None = Field(default=None, max_length=2, pattern=r"^[A-Z]{2}$")
     status: str | None = None
     is_active: bool | None = None
     marketing_opt_in: bool | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=5000)
     metadata_: dict | None = Field(default=None, serialization_alias="metadata")
 
 

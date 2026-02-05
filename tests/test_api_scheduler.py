@@ -79,15 +79,15 @@ class TestScheduledTasksAPI:
         response = client.get("/scheduler/tasks")
         assert response.status_code == 401
 
-    def test_create_scheduled_task(self, client, auth_headers):
-        """Test creating a new scheduled task."""
+    def test_create_scheduled_task(self, client, admin_headers):
+        """Test creating a new scheduled task (admin only)."""
         payload = {
             "name": f"new_task_{uuid.uuid4().hex[:8]}",
             "task_name": "app.tasks.new_task",
             "interval_seconds": 300,
             "enabled": True,
         }
-        response = client.post("/scheduler/tasks", json=payload, headers=auth_headers)
+        response = client.post("/scheduler/tasks", json=payload, headers=admin_headers)
         assert response.status_code == 201
         data = response.json()
         assert data["name"] == payload["name"]
@@ -95,7 +95,18 @@ class TestScheduledTasksAPI:
         assert data["interval_seconds"] == payload["interval_seconds"]
         assert "id" in data
 
-    def test_create_scheduled_task_with_args(self, client, auth_headers):
+    def test_create_scheduled_task_forbidden_non_admin(self, client, auth_headers):
+        """Test creating a scheduled task with non-admin auth returns 403."""
+        payload = {
+            "name": f"forbidden_task_{uuid.uuid4().hex[:8]}",
+            "task_name": "app.tasks.forbidden",
+            "interval_seconds": 300,
+            "enabled": True,
+        }
+        response = client.post("/scheduler/tasks", json=payload, headers=auth_headers)
+        assert response.status_code == 403
+
+    def test_create_scheduled_task_with_args(self, client, admin_headers):
         """Test creating a scheduled task with arguments."""
         payload = {
             "name": f"args_task_{uuid.uuid4().hex[:8]}",
@@ -105,7 +116,7 @@ class TestScheduledTasksAPI:
             "args_json": ["arg1", "arg2"],
             "kwargs_json": {"key1": "value1"},
         }
-        response = client.post("/scheduler/tasks", json=payload, headers=auth_headers)
+        response = client.post("/scheduler/tasks", json=payload, headers=admin_headers)
         assert response.status_code == 201
         data = response.json()
         assert data["args_json"] == ["arg1", "arg2"]
@@ -137,28 +148,36 @@ class TestScheduledTasksAPI:
         response = client.get(f"/scheduler/tasks/{fake_id}", headers=auth_headers)
         assert response.status_code == 404
 
-    def test_update_scheduled_task(self, client, auth_headers, scheduled_task):
-        """Test updating a scheduled task."""
+    def test_update_scheduled_task(self, client, admin_headers, scheduled_task):
+        """Test updating a scheduled task (admin only)."""
         payload = {"interval_seconds": 900, "enabled": False}
         response = client.patch(
-            f"/scheduler/tasks/{scheduled_task.id}", json=payload, headers=auth_headers
+            f"/scheduler/tasks/{scheduled_task.id}", json=payload, headers=admin_headers
         )
         assert response.status_code == 200
         data = response.json()
         assert data["interval_seconds"] == 900
         assert data["enabled"] is False
 
-    def test_update_scheduled_task_not_found(self, client, auth_headers):
+    def test_update_scheduled_task_forbidden_non_admin(self, client, auth_headers, scheduled_task):
+        """Test updating a scheduled task with non-admin auth returns 403."""
+        payload = {"interval_seconds": 900}
+        response = client.patch(
+            f"/scheduler/tasks/{scheduled_task.id}", json=payload, headers=auth_headers
+        )
+        assert response.status_code == 403
+
+    def test_update_scheduled_task_not_found(self, client, admin_headers):
         """Test updating a non-existent scheduled task."""
         fake_id = str(uuid.uuid4())
         payload = {"interval_seconds": 120}
         response = client.patch(
-            f"/scheduler/tasks/{fake_id}", json=payload, headers=auth_headers
+            f"/scheduler/tasks/{fake_id}", json=payload, headers=admin_headers
         )
         assert response.status_code == 404
 
-    def test_delete_scheduled_task(self, client, auth_headers, db_session):
-        """Test deleting a scheduled task."""
+    def test_delete_scheduled_task(self, client, admin_headers, db_session):
+        """Test deleting a scheduled task (admin only)."""
         task = ScheduledTask(
             name=f"to_delete_{uuid.uuid4().hex[:8]}",
             task_name="app.tasks.to_delete",
@@ -170,25 +189,32 @@ class TestScheduledTasksAPI:
         db_session.commit()
         db_session.refresh(task)
 
-        response = client.delete(f"/scheduler/tasks/{task.id}", headers=auth_headers)
+        response = client.delete(f"/scheduler/tasks/{task.id}", headers=admin_headers)
         assert response.status_code == 204
 
-    def test_delete_scheduled_task_not_found(self, client, auth_headers):
+    def test_delete_scheduled_task_forbidden_non_admin(self, client, auth_headers, scheduled_task):
+        """Test deleting a scheduled task with non-admin auth returns 403."""
+        response = client.delete(
+            f"/scheduler/tasks/{scheduled_task.id}", headers=auth_headers
+        )
+        assert response.status_code == 403
+
+    def test_delete_scheduled_task_not_found(self, client, admin_headers):
         """Test deleting a non-existent scheduled task."""
         fake_id = str(uuid.uuid4())
-        response = client.delete(f"/scheduler/tasks/{fake_id}", headers=auth_headers)
+        response = client.delete(f"/scheduler/tasks/{fake_id}", headers=admin_headers)
         assert response.status_code == 404
 
-    def test_refresh_schedule(self, client, auth_headers):
-        """Test refreshing the scheduler."""
-        response = client.post("/scheduler/tasks/refresh", headers=auth_headers)
+    def test_refresh_schedule(self, client, admin_headers):
+        """Test refreshing the scheduler (admin only)."""
+        response = client.post("/scheduler/tasks/refresh", headers=admin_headers)
         # May return 200 or 500 depending on Celery availability
         assert response.status_code in [200, 500]
 
-    def test_enqueue_scheduled_task(self, client, auth_headers, scheduled_task):
-        """Test manually enqueuing a scheduled task."""
+    def test_enqueue_scheduled_task(self, client, admin_headers, scheduled_task):
+        """Test manually enqueuing a scheduled task (admin only)."""
         response = client.post(
-            f"/scheduler/tasks/{scheduled_task.id}/enqueue", headers=auth_headers
+            f"/scheduler/tasks/{scheduled_task.id}/enqueue", headers=admin_headers
         )
         # May return 202 or 500 depending on Celery availability
         assert response.status_code in [202, 500]
@@ -202,8 +228,8 @@ class TestSchedulerAPIV1:
         response = client.get("/api/v1/scheduler/tasks", headers=auth_headers)
         assert response.status_code == 200
 
-    def test_create_scheduled_task_v1(self, client, auth_headers):
-        """Test creating a scheduled task via v1 API."""
+    def test_create_scheduled_task_v1(self, client, admin_headers):
+        """Test creating a scheduled task via v1 API (admin only)."""
         payload = {
             "name": f"v1_task_{uuid.uuid4().hex[:8]}",
             "task_name": "app.tasks.v1_task",
@@ -211,7 +237,7 @@ class TestSchedulerAPIV1:
             "enabled": True,
         }
         response = client.post(
-            "/api/v1/scheduler/tasks", json=payload, headers=auth_headers
+            "/api/v1/scheduler/tasks", json=payload, headers=admin_headers
         )
         assert response.status_code == 201
 
@@ -226,13 +252,13 @@ class TestSchedulerAPIV1:
 class TestScheduledTaskValidation:
     """Tests for scheduled task input validation."""
 
-    def test_create_task_missing_required_fields(self, client, auth_headers):
+    def test_create_task_missing_required_fields(self, client, admin_headers):
         """Test creating a task without required fields."""
         payload = {"name": "incomplete_task"}
-        response = client.post("/scheduler/tasks", json=payload, headers=auth_headers)
+        response = client.post("/scheduler/tasks", json=payload, headers=admin_headers)
         assert response.status_code == 422
 
-    def test_create_task_invalid_cron(self, client, auth_headers):
+    def test_create_task_invalid_cron(self, client, admin_headers):
         """Test creating a task with invalid interval."""
         payload = {
             "name": f"invalid_interval_{uuid.uuid4().hex[:8]}",
@@ -240,5 +266,5 @@ class TestScheduledTaskValidation:
             "interval_seconds": 0,
             "enabled": True,
         }
-        response = client.post("/scheduler/tasks", json=payload, headers=auth_headers)
+        response = client.post("/scheduler/tasks", json=payload, headers=admin_headers)
         assert response.status_code == 400

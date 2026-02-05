@@ -1,7 +1,10 @@
 """
 Instance Management — Web routes for ERP instance CRUD, deployment, and operations.
 """
+import logging
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -97,12 +100,20 @@ def instance_create(
         return RedirectResponse(
             f"/instances/{instance.instance_id}", status_code=302
         )
-    except Exception as e:
+    except ValueError as e:
         db.rollback()
         servers = ServerService(db).list_all()
         return templates.TemplateResponse(
             "instances/form.html",
             ctx(request, auth, "New Instance", active_page="instances", servers=servers, errors=[str(e)]),
+        )
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to create instance")
+        servers = ServerService(db).list_all()
+        return templates.TemplateResponse(
+            "instances/form.html",
+            ctx(request, auth, "New Instance", active_page="instances", servers=servers, errors=["An unexpected error occurred. Please try again."]),
         )
 
 
@@ -113,9 +124,14 @@ def instance_detail(
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
 ):
+    from app.services.backup_service import BackupService
     from app.services.deploy_service import DeployService
+    from app.services.domain_service import DomainService
+    from app.services.feature_flag_service import FeatureFlagService
     from app.services.health_service import HealthService
     from app.services.instance_service import InstanceService
+    from app.services.module_service import ModuleService
+    from app.services.plan_service import PlanService
 
     svc = InstanceService(db)
     instance = svc.get_or_404(instance_id)
@@ -130,6 +146,13 @@ def instance_detail(
     if latest_deploy_id:
         deploy_logs = deploy_svc.get_deployment_logs(instance_id, latest_deploy_id)
 
+    # New feature data
+    modules = ModuleService(db).get_instance_modules(instance_id)
+    flags = FeatureFlagService(db).list_for_instance(instance_id)
+    plans = PlanService(db).list_all()
+    backups = BackupService(db).list_for_instance(instance_id)
+    domains = DomainService(db).list_for_instance(instance_id)
+
     return templates.TemplateResponse(
         "instances/detail.html",
         ctx(
@@ -139,6 +162,11 @@ def instance_detail(
             recent_checks=recent_checks,
             deploy_logs=deploy_logs,
             latest_deploy_id=latest_deploy_id,
+            modules=modules,
+            flags=flags,
+            plans=plans,
+            backups=backups,
+            domains=domains,
         ),
     )
 
@@ -159,11 +187,17 @@ def instance_deploy(
     from app.tasks.deploy import deploy_instance
 
     deploy_svc = DeployService(db)
-    deployment_id = deploy_svc.create_deployment(instance_id, admin_password)
+    deployment_id = deploy_svc.create_deployment(
+        instance_id, admin_password,
+        git_ref=request.query_params.get("git_ref"),
+    )
     db.commit()
 
     # Kick off async deployment via Celery (password stored in DB, not task args)
-    deploy_instance.delay(str(instance_id), deployment_id)
+    deploy_instance.delay(
+        str(instance_id), deployment_id,
+        git_ref=request.query_params.get("git_ref"),
+    )
 
     return RedirectResponse(
         f"/instances/{instance_id}/deploy-log?deployment_id={deployment_id}",
@@ -364,3 +398,249 @@ def instance_health_badge(
         "partials/health_badge.html",
         {"request": request, "health": check},
     )
+
+
+# ──────────────────── Reconfigure (lightweight deploy) ───────────
+
+
+@router.post("/{instance_id}/reconfigure")
+def instance_reconfigure(
+    request: Request,
+    instance_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.services.deploy_service import DeployService
+    from app.tasks.deploy import deploy_instance
+
+    deploy_svc = DeployService(db)
+    deployment_id = deploy_svc.create_deployment(
+        instance_id, deployment_type="reconfigure"
+    )
+    db.commit()
+    deploy_instance.delay(
+        str(instance_id), deployment_id, deployment_type="reconfigure"
+    )
+    return RedirectResponse(
+        f"/instances/{instance_id}/deploy-log?deployment_id={deployment_id}",
+        status_code=302,
+    )
+
+
+# ──────────────────── Module toggle ──────────────────────────────
+
+
+@router.post("/{instance_id}/modules/{module_id}/toggle")
+def toggle_module(
+    request: Request,
+    instance_id: UUID,
+    module_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    enabled: str = Form("off"),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.services.module_service import ModuleService
+    svc = ModuleService(db)
+    try:
+        svc.set_module_enabled(instance_id, module_id, enabled == "on")
+        db.commit()
+    except ValueError as e:
+        logger.warning("Module toggle failed: %s", e)
+    return RedirectResponse(f"/instances/{instance_id}#modules", status_code=302)
+
+
+# ──────────────────── Feature flag toggle ────────────────────────
+
+
+@router.post("/{instance_id}/flags/{flag_key}/toggle")
+def toggle_flag(
+    request: Request,
+    instance_id: UUID,
+    flag_key: str,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    value: str = Form("false"),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.services.feature_flag_service import FeatureFlagService
+    svc = FeatureFlagService(db)
+    svc.set_flag(instance_id, flag_key, value)
+    db.commit()
+    return RedirectResponse(f"/instances/{instance_id}#flags", status_code=302)
+
+
+# ──────────────────── Plan assignment ────────────────────────────
+
+
+@router.post("/{instance_id}/plan")
+def assign_plan(
+    request: Request,
+    instance_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    plan_id: str = Form(""),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.services.instance_service import InstanceService
+    svc = InstanceService(db)
+    instance = svc.get_or_404(instance_id)
+    instance.plan_id = UUID(plan_id) if plan_id else None
+    db.commit()
+    return RedirectResponse(f"/instances/{instance_id}#plan", status_code=302)
+
+
+# ──────────────────── Backups ────────────────────────────────────
+
+
+@router.post("/{instance_id}/backup")
+def create_backup(
+    request: Request,
+    instance_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.services.backup_service import BackupService
+    svc = BackupService(db)
+    svc.create_backup(instance_id)
+    db.commit()
+    return RedirectResponse(f"/instances/{instance_id}#backups", status_code=302)
+
+
+# ──────────────────── Lifecycle actions ──────────────────────────
+
+
+@router.post("/{instance_id}/suspend")
+def suspend_instance(
+    request: Request,
+    instance_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    reason: str = Form(""),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.services.lifecycle_service import LifecycleService
+    svc = LifecycleService(db)
+    svc.suspend_instance(instance_id, reason or None)
+    db.commit()
+    return RedirectResponse(f"/instances/{instance_id}", status_code=302)
+
+
+@router.post("/{instance_id}/reactivate")
+def reactivate_instance(
+    request: Request,
+    instance_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.services.lifecycle_service import LifecycleService
+    svc = LifecycleService(db)
+    svc.reactivate_instance(instance_id)
+    db.commit()
+    return RedirectResponse(f"/instances/{instance_id}", status_code=302)
+
+
+@router.post("/{instance_id}/archive")
+def archive_instance(
+    request: Request,
+    instance_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.services.lifecycle_service import LifecycleService
+    svc = LifecycleService(db)
+    svc.archive_instance(instance_id)
+    db.commit()
+    return RedirectResponse(f"/instances/{instance_id}", status_code=302)
+
+
+# ──────────────────── Domain management ──────────────────────────
+
+
+@router.post("/{instance_id}/domains/add")
+def add_domain(
+    request: Request,
+    instance_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    domain: str = Form(...),
+    is_primary: str = Form("off"),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.services.domain_service import DomainService
+    svc = DomainService(db)
+    try:
+        svc.add_domain(instance_id, domain, is_primary == "on")
+        db.commit()
+    except ValueError as e:
+        logger.warning("Domain add failed: %s", e)
+    return RedirectResponse(f"/instances/{instance_id}#domains", status_code=302)
+
+
+@router.post("/{instance_id}/domains/{domain_id}/verify")
+def verify_domain(
+    request: Request,
+    instance_id: UUID,
+    domain_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.services.domain_service import DomainService
+    svc = DomainService(db)
+    svc.verify_domain(domain_id)
+    db.commit()
+    return RedirectResponse(f"/instances/{instance_id}#domains", status_code=302)
+
+
+@router.post("/{instance_id}/domains/{domain_id}/delete")
+def delete_domain(
+    request: Request,
+    instance_id: UUID,
+    domain_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.services.domain_service import DomainService
+    svc = DomainService(db)
+    svc.remove_domain(domain_id)
+    db.commit()
+    return RedirectResponse(f"/instances/{instance_id}#domains", status_code=302)
