@@ -12,6 +12,7 @@ __pycache__
 tests/
 *.md
 *.lock
+!poetry.lock
 .vscode/
 .idea/
 node_modules/

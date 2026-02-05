@@ -617,6 +617,19 @@ class DeployService:
         )
         slug = _safe_slug(instance.org_code.lower())
         app_container = f"dotmac_{slug}_app"
+        deploy_path = shlex.quote(instance.deploy_path)
+        # Copy bootstrap script into container (it's generated at deploy path, not in the image)
+        cp_result = ssh.exec_command(
+            f"docker cp {deploy_path}/bootstrap_db.py {app_container}:/app/bootstrap_db.py",
+            timeout=15,
+        )
+        if not cp_result.ok:
+            self._update_step(
+                instance.instance_id, deployment_id, step,
+                DeployStepStatus.failed, "Failed to copy bootstrap script",
+                (cp_result.stdout + "\n" + cp_result.stderr)[-2000:]
+            )
+            return False
         result = ssh.exec_command(
             f"docker exec {app_container} python bootstrap_db.py",
             timeout=60,
