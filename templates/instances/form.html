@@ -2,82 +2,99 @@
 
 {% block content %}
 <div class="mx-auto max-w-2xl">
-    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+    <div class="rounded-xl border border-surface-200/80 bg-white p-7 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <div class="mb-6">
+            <h2 class="text-xl font-display text-surface-900 dark:text-white">New Instance</h2>
+            <p class="mt-1 text-[13px] text-surface-400 dark:text-surface-500">Deploy a new ERP tenant on a registered server.</p>
+        </div>
+
         {% if errors %}
-        <div class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+        <div class="mb-5 flex items-center gap-2.5 rounded-lg bg-red-50 px-4 py-3 text-[13px] text-red-700 dark:bg-red-900/20 dark:text-red-400">
+            <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/></svg>
             {% for e in errors %}{{ e }}{% endfor %}
         </div>
         {% endif %}
 
-        <form method="POST" action="/instances/new" class="space-y-5">
+        <form method="POST" action="/instances/new" class="space-y-5" data-testid="instance-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <div>
-                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Server</label>
-                <select name="server_id" required class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none">
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Server</label>
+                <select name="server_id" required data-testid="instance-server"
+                        class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
                     <option value="">Select a server...</option>
                     {% for s in servers %}
                     <option value="{{ s.server_id }}">{{ s.name }} ({{ s.hostname }})</option>
                     {% endfor %}
                 </select>
                 {% if not servers %}
-                <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">No servers registered. <a href="/servers/new" class="underline">Add one first</a>.</p>
+                <p class="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400">No servers registered. <a href="/servers/new" class="underline">Add one first</a>.</p>
                 {% endif %}
             </div>
 
             <div class="grid gap-5 sm:grid-cols-2">
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Organization Code</label>
-                    <input type="text" name="org_code" required placeholder="ACME" pattern="[A-Za-z0-9_-]+" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-mono uppercase dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
-                    <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">Unique identifier. Letters, numbers, hyphens only.</p>
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Organization Code</label>
+                    <input type="text" name="org_code" required placeholder="ACME" pattern="[A-Za-z0-9_-]+" data-testid="instance-org-code"
+                           class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] font-mono uppercase dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+                    <p class="mt-1.5 text-[11px] text-surface-400 dark:text-surface-500">Unique identifier. Letters, numbers, hyphens only.</p>
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Organization Name</label>
-                    <input type="text" name="org_name" required placeholder="ACME Corporation" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Organization Name</label>
+                    <input type="text" name="org_name" required placeholder="ACME Corporation" data-testid="instance-org-name"
+                           class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
                 </div>
             </div>
 
             <div class="grid gap-5 sm:grid-cols-3">
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Sector Type</label>
-                    <select name="sector_type" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none">
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Sector Type</label>
+                    <select name="sector_type" data-testid="instance-sector"
+                            class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
                         <option value="PRIVATE" selected>Private Sector</option>
                         <option value="PUBLIC">Public Sector</option>
                         <option value="NGO">NGO / Non-Profit</option>
                     </select>
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Framework</label>
-                    <select name="framework" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none">
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Framework</label>
+                    <select name="framework" data-testid="instance-framework"
+                            class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
                         <option value="IFRS" selected>IFRS</option>
                         <option value="IPSAS">IPSAS</option>
                         <option value="BOTH">Both</option>
                     </select>
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Currency</label>
-                    <input type="text" name="currency" value="NGN" maxlength="3" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-mono uppercase dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Currency</label>
+                    <input type="text" name="currency" value="NGN" maxlength="3" data-testid="instance-currency"
+                           class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] font-mono uppercase dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
                 </div>
             </div>
 
             <div class="grid gap-5 sm:grid-cols-2">
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Admin Username</label>
-                    <input type="text" name="admin_username" value="admin" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Admin Username</label>
+                    <input type="text" name="admin_username" value="admin" data-testid="instance-admin-username"
+                           class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Admin Email (optional)</label>
-                    <input type="email" name="admin_email" placeholder="admin@acme.com" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Admin Email (optional)</label>
+                    <input type="email" name="admin_email" placeholder="admin@acme.com" data-testid="instance-admin-email"
+                           class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
                 </div>
             </div>
 
             <div>
-                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Domain (optional)</label>
-                <input type="text" name="domain" placeholder="acme.erp.dotmac.io" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
-                <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">Public domain for this instance. Nginx + SSL will be configured automatically during deployment.</p>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Domain (optional)</label>
+                <input type="text" name="domain" placeholder="acme.erp.dotmac.io" data-testid="instance-domain"
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+                <p class="mt-1.5 text-[11px] text-surface-400 dark:text-surface-500">Public domain for this instance. Nginx + SSL will be configured automatically during deployment.</p>
             </div>
 
-            <div class="flex justify-end gap-3 pt-2">
-                <a href="/instances" class="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">Cancel</a>
-                <button type="submit" class="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 transition">Create Instance</button>
+            <div class="flex justify-end gap-3 pt-3 border-t border-surface-100 dark:border-surface-800/60">
+                <a href="/instances" class="rounded-lg border border-surface-200 px-4 py-2.5 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Cancel</a>
+                <button type="submit" data-testid="instance-submit"
+                        class="rounded-lg bg-surface-900 dark:bg-primary-500 px-5 py-2.5 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">Create Instance</button>
             </div>
         </form>
     </div>

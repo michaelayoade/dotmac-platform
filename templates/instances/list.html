@@ -1,93 +1,210 @@
 {% extends "platform_base.html" %}
 
 {% block header_actions %}
-<a href="/instances/new" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 transition">
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+<a href="/instances/new" class="inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 px-3.5 py-1.5 text-[13px] font-medium text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition shadow-sm">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
     New Instance
 </a>
 {% endblock %}
 
 {% block content %}
+<form method="GET" action="/instances" class="mb-6 flex flex-wrap items-end gap-3">
+    <input type="hidden" name="view" value="{{ view }}" />
+    <div class="flex-1 min-w-[220px]">
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Search</label>
+        <input type="text" name="q" value="{{ q }}" placeholder="Search org code or name"
+               class="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] text-surface-700 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200/50 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200 dark:focus:ring-primary-500/20 transition" />
+    </div>
+    <div>
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Status</label>
+        <select name="status" class="mt-1.5 rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] text-surface-700 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200">
+            <option value="">All</option>
+            {% for value in ["running", "deploying", "stopped", "error", "provisioned", "trial", "suspended", "archived"] %}
+            <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ value | title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Health</label>
+        <select name="health" class="mt-1.5 rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] text-surface-700 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200">
+            <option value="">All</option>
+            {% for value in ["healthy", "unhealthy", "unknown", "n/a"] %}
+            <option value="{{ value }}" {% if health_filter == value %}selected{% endif %}>{{ value | title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Page Size</label>
+        <select name="page_size" class="mt-1.5 rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] text-surface-700 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200">
+            {% for size in [10, 25, 50, 100] %}
+            <option value="{{ size }}" {% if page_size == size %}selected{% endif %}>{{ size }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Sort By</label>
+        <select name="sort" class="mt-1.5 rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] text-surface-700 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200">
+            {% for value, label in [("org_code","Org Code"),("status","Status"),("health","Health"),("last_check","Last Check"),("port","Port")] %}
+            <option value="{{ value }}" {% if sort == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Direction</label>
+        <select name="dir" class="mt-1.5 rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] text-surface-700 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200">
+            <option value="asc" {% if sort_dir == "asc" %}selected{% endif %}>Asc</option>
+            <option value="desc" {% if sort_dir == "desc" %}selected{% endif %}>Desc</option>
+        </select>
+    </div>
+    <div class="flex items-center gap-2">
+        <button type="submit" class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">Apply</button>
+        <a href="/instances" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Reset</a>
+    </div>
+</form>
+
+<div class="mb-3 flex flex-wrap items-center justify-between gap-3 text-[12px] text-surface-400 dark:text-surface-500">
+    <span>Showing {{ instances | length }} of {{ total }} instances</span>
+    <div class="flex items-center gap-2">
+        <a href="?q={{ q | urlencode }}&status={{ status_filter }}&health={{ health_filter }}&page=1&page_size={{ page_size }}&sort={{ sort }}&dir={{ sort_dir }}&view=table"
+           class="rounded-lg border px-3 py-1.5 {% if view == 'table' %}border-primary-300 bg-primary-50 text-primary-700 dark:border-primary-700/60 dark:bg-primary-900/20 dark:text-primary-300{% else %}border-surface-200 text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800{% endif %}">
+            Table
+        </a>
+        <a href="?q={{ q | urlencode }}&status={{ status_filter }}&health={{ health_filter }}&page=1&page_size={{ page_size }}&sort={{ sort }}&dir={{ sort_dir }}&view=cards"
+           class="rounded-lg border px-3 py-1.5 {% if view == 'cards' %}border-primary-300 bg-primary-50 text-primary-700 dark:border-primary-700/60 dark:bg-primary-900/20 dark:text-primary-300{% else %}border-surface-200 text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800{% endif %}">
+            Cards
+        </a>
+    </div>
+</div>
+
 {% if instances %}
-<div class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
+{% if view == "cards" %}
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    {% for item in instances %}
+    {% set inst = item.instance %}
+    {% set health = item.health %}
+    {% set health_state = item.health_state %}
+    <a href="/instances/{{ inst.instance_id }}" class="group rounded-xl border border-surface-200/80 bg-white p-5 transition-all duration-200 hover:border-surface-300 dark:border-surface-800/50 dark:bg-surface-900/80 dark:hover:border-surface-700 card-lift">
+        <div class="flex items-start justify-between">
+            <div>
+                <h3 class="text-base font-semibold text-surface-900 dark:text-white">{{ inst.org_code }}</h3>
+                <p class="mt-0.5 text-[13px] text-surface-400 dark:text-surface-500">{{ inst.org_name }}</p>
+            </div>
+            <span class="text-[11px] font-mono text-surface-400 dark:text-surface-500">:{{ inst.app_port }}</span>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2 text-[11px]">
+            <span class="rounded-md bg-surface-100 px-2 py-0.5 text-surface-500 dark:bg-surface-800 dark:text-surface-400">{{ inst.status.value | title }}</span>
+            <span class="rounded-md bg-surface-100 px-2 py-0.5 text-surface-500 dark:bg-surface-800 dark:text-surface-400">{{ inst.framework.value }}</span>
+            <span class="rounded-md bg-surface-100 px-2 py-0.5 text-surface-500 dark:bg-surface-800 dark:text-surface-400">{{ inst.sector_type.value }}</span>
+        </div>
+        <div class="mt-4 text-[12px]">
+            {% if health_state == 'healthy' %}
+                <span class="text-emerald-600 dark:text-emerald-400 font-mono">{{ health.response_ms }}ms</span>
+            {% elif health_state == 'unhealthy' %}
+                <span class="text-red-600 dark:text-red-400">Unhealthy</span>
+            {% elif health_state == 'unknown' %}
+                <span class="text-amber-600 dark:text-amber-400">Unknown</span>
+            {% else %}
+                <span class="text-surface-400 dark:text-surface-500">N/A</span>
+            {% endif %}
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="overflow-hidden rounded-xl border border-surface-200/80 bg-white dark:border-surface-800/50 dark:bg-surface-900/80">
+    <table class="min-w-full divide-y divide-surface-100 dark:divide-surface-800/60">
         <thead>
-            <tr class="bg-slate-50 dark:bg-slate-800/50">
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Instance</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Framework</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Sector</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Port</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
-                <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Health</th>
+            <tr class="bg-surface-50/80 dark:bg-surface-800/30">
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Instance</th>
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Framework</th>
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Sector</th>
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Port</th>
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Status</th>
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Health</th>
                 <th class="px-5 py-3"></th>
             </tr>
         </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+        <tbody class="divide-y divide-surface-100/80 dark:divide-surface-800/40">
             {% for item in instances %}
             {% set inst = item.instance %}
             {% set health = item.health %}
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition">
+            {% set health_state = item.health_state %}
+            <tr class="hover:bg-surface-50/60 dark:hover:bg-surface-800/20 transition-colors">
                 <td class="px-5 py-4">
-                    <a href="/instances/{{ inst.instance_id }}" class="font-medium text-slate-900 hover:text-primary-600 dark:text-white dark:hover:text-primary-400">{{ inst.org_code }}</a>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ inst.org_name }}</p>
+                    <a href="/instances/{{ inst.instance_id }}" class="text-[13px] font-medium text-surface-900 hover:text-primary-600 dark:text-white dark:hover:text-primary-400 transition">{{ inst.org_code }}</a>
+                    <p class="text-[11px] text-surface-400 dark:text-surface-500">{{ inst.org_name }}</p>
                 </td>
                 <td class="px-5 py-4">
-                    <span class="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">{{ inst.framework.value }}</span>
+                    <span class="rounded-md bg-surface-100 px-2 py-0.5 text-[11px] font-medium text-surface-500 dark:bg-surface-800 dark:text-surface-400">{{ inst.framework.value }}</span>
                 </td>
                 <td class="px-5 py-4">
-                    <span class="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">{{ inst.sector_type.value }}</span>
+                    <span class="rounded-md bg-surface-100 px-2 py-0.5 text-[11px] font-medium text-surface-500 dark:bg-surface-800 dark:text-surface-400">{{ inst.sector_type.value }}</span>
                 </td>
-                <td class="px-5 py-4 text-sm text-slate-500 dark:text-slate-400 font-mono">:{{ inst.app_port }}</td>
+                <td class="px-5 py-4 text-[13px] text-surface-500 dark:text-surface-400 font-mono">:{{ inst.app_port }}</td>
                 <td class="px-5 py-4">
                     {% if inst.status.value == 'running' %}
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
-                            <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>Running
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Running
                         </span>
                     {% elif inst.status.value == 'deploying' %}
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
                             <span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>Deploying
                         </span>
                     {% elif inst.status.value == 'error' %}
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">
                             <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Error
                         </span>
                     {% elif inst.status.value == 'stopped' %}
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                            <span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>Stopped
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-surface-100 px-2.5 py-0.5 text-[11px] font-medium text-surface-500 dark:bg-surface-800 dark:text-surface-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-surface-400"></span>Stopped
                         </span>
                     {% else %}
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
                             <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>Provisioned
                         </span>
                     {% endif %}
                 </td>
                 <td class="px-5 py-4">
-                    {% if health %}
-                        {% if health.status.value == 'healthy' %}
-                            <span class="text-xs text-green-600 dark:text-green-400">{{ health.response_ms }}ms</span>
-                        {% elif health.status.value == 'unhealthy' %}
-                            <span class="text-xs text-red-600 dark:text-red-400">Unhealthy</span>
-                        {% else %}
-                            <span class="text-xs text-slate-400">Unreachable</span>
-                        {% endif %}
+                    {% if health_state == 'healthy' %}
+                        <span class="text-[12px] font-mono text-emerald-600 dark:text-emerald-400">{{ health.response_ms }}ms</span>
+                    {% elif health_state == 'unhealthy' %}
+                        <span class="text-[12px] text-red-600 dark:text-red-400">Unhealthy</span>
+                    {% elif health_state == 'unknown' %}
+                        <span class="text-[12px] text-amber-600 dark:text-amber-400">Unknown</span>
                     {% else %}
-                        <span class="text-xs text-slate-400">&mdash;</span>
+                        <span class="text-[12px] text-surface-300 dark:text-surface-600">N/A</span>
                     {% endif %}
                 </td>
                 <td class="px-5 py-4 text-right">
-                    <a href="/instances/{{ inst.instance_id }}" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">View &rarr;</a>
+                    <a href="/instances/{{ inst.instance_id }}" class="text-[13px] text-surface-400 hover:text-surface-600 dark:text-surface-500 dark:hover:text-surface-300 transition">&rarr;</a>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+{% endif %}
+<div class="mt-4 flex items-center justify-between text-[12px] text-surface-400 dark:text-surface-500">
+    <div>
+        Page {{ page }} of {{ [(total // page_size) + (1 if total % page_size else 0), 1] | max }}
+    </div>
+    <div class="flex items-center gap-2">
+        {% if page > 1 %}
+        <a href="?q={{ q | urlencode }}&status={{ status_filter }}&health={{ health_filter }}&page={{ page - 1 }}&page_size={{ page_size }}&sort={{ sort }}&dir={{ sort_dir }}&view={{ view }}"
+           class="rounded-lg border border-surface-200 px-3 py-1.5 text-[12px] text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Prev</a>
+        {% endif %}
+        {% if total > page * page_size %}
+        <a href="?q={{ q | urlencode }}&status={{ status_filter }}&health={{ health_filter }}&page={{ page + 1 }}&page_size={{ page_size }}&sort={{ sort }}&dir={{ sort_dir }}&view={{ view }}"
+           class="rounded-lg border border-surface-200 px-3 py-1.5 text-[12px] text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Next</a>
+        {% endif %}
+    </div>
+</div>
 {% else %}
-<div class="rounded-xl border-2 border-dashed border-slate-200 p-12 text-center dark:border-slate-800">
-    <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-    <h3 class="mt-4 text-sm font-semibold text-slate-900 dark:text-white">No instances yet</h3>
-    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Create your first ERP instance to get started.</p>
-    <a href="/instances/new" class="mt-4 inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">New Instance</a>
+<div class="rounded-xl border border-dashed border-surface-300 bg-white/50 p-16 text-center dark:border-surface-700 dark:bg-surface-900/30">
+    <svg class="mx-auto h-12 w-12 text-surface-300 dark:text-surface-600" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/></svg>
+    <h3 class="mt-5 text-base font-display text-surface-700 dark:text-surface-300">No instances yet</h3>
+    <p class="mt-1.5 text-[13px] text-surface-400 dark:text-surface-500">Create your first ERP instance to get started.</p>
+    <a href="/instances/new" class="mt-6 inline-flex rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2.5 text-[13px] font-medium text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">New Instance</a>
 </div>
 {% endif %}
 {% endblock %}

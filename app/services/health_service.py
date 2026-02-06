@@ -149,7 +149,7 @@ class HealthService:
         try:
             # Docker stats for app container (CPU + memory)
             result = ssh.exec_command(
-                f"docker stats {app_container} --no-stream --format '{{{{.CPUPerc}}}} {{{{.MemUsage}}}}'",
+                f"docker stats {shlex.quote(app_container)} --no-stream --format '{{{{.CPUPerc}}}} {{{{.MemUsage}}}}'",
                 timeout=10,
             )
             if result.ok and result.stdout.strip():
@@ -171,9 +171,10 @@ class HealthService:
 
             # DB size
             db_name = f"dotmac_{slug}"
+            quoted_db = shlex.quote(db_name)
             size_result = ssh.exec_command(
-                f"docker exec {db_container} psql -U postgres -d {shlex.quote(db_name)} "
-                f"-t -c \"SELECT pg_database_size('{db_name}') / 1048576\"",
+                f"docker exec {shlex.quote(db_container)} psql -U postgres -d {quoted_db} "
+                f"-t -c \"SELECT pg_database_size(current_database()) / 1048576\"",
                 timeout=10,
             )
             if size_result.ok and size_result.stdout.strip():
@@ -184,8 +185,8 @@ class HealthService:
 
             # Active DB connections
             conn_result = ssh.exec_command(
-                f"docker exec {db_container} psql -U postgres -d {shlex.quote(db_name)} "
-                f"-t -c \"SELECT count(*) FROM pg_stat_activity WHERE datname = '{db_name}'\"",
+                f"docker exec {shlex.quote(db_container)} psql -U postgres -d {quoted_db} "
+                f"-t -c \"SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()\"",
                 timeout=10,
             )
             if conn_result.ok and conn_result.stdout.strip():
@@ -194,8 +195,8 @@ class HealthService:
                 except ValueError:
                     pass
 
-        except Exception:
-            logger.debug("Resource stats collection failed for %s", instance.org_code)
+        except (OSError, RuntimeError, ValueError) as e:
+            logger.debug("Resource stats collection failed for %s: %s", instance.org_code, e)
 
         return stats
 
@@ -226,7 +227,7 @@ class HealthService:
             else:
                 results["unreachable"] += 1
 
-        self.db.commit()
+        self.db.flush()
         return results
 
     def get_latest_check(self, instance_id: UUID) -> HealthCheck | None:
@@ -302,7 +303,7 @@ class HealthService:
         for iid in instance_ids:
             total += self.prune_old_checks(iid)
         if total:
-            self.db.commit()
+            self.db.flush()
             logger.info("Pruned %d old health checks across %d instances", total, len(instance_ids))
         return total
 
@@ -318,6 +319,7 @@ class HealthService:
             "error": 0,
             "healthy": 0,
             "unhealthy": 0,
+            "unknown": 0,
         }
 
         running_ids = []
@@ -335,18 +337,36 @@ class HealthService:
         # Batch fetch latest health checks for running instances
         if running_ids:
             checks = self.get_latest_checks_batch(running_ids)
+            now = datetime.now(timezone.utc)
             for iid in running_ids:
                 check = checks.get(iid)
-                if check and check.status == HealthStatus.healthy:
+                state = self.classify_health(check, now)
+                if state == "healthy":
                     stats["healthy"] += 1
-                else:
+                elif state == "unhealthy":
                     stats["unhealthy"] += 1
+                else:
+                    stats["unknown"] += 1
 
         stats["total_servers"] = self.db.scalar(
             select(func.count(Server.server_id))
         ) or 0
 
         return stats
+
+    def classify_health(self, check: HealthCheck | None, now: datetime | None = None) -> str:
+        """Classify health as healthy, unhealthy, or unknown (missing/stale/unreachable)."""
+        if not check:
+            return "unknown"
+        now = now or datetime.now(timezone.utc)
+        if not check.checked_at:
+            return "unknown"
+        age = (now - check.checked_at).total_seconds()
+        if age > platform_settings.health_stale_seconds:
+            return "unknown"
+        if check.status == HealthStatus.healthy:
+            return "healthy"
+        return "unhealthy"
 
     def get_top_resource_consumers(self, limit: int = 5) -> list[dict]:
         """Get instances with highest resource usage from latest health checks."""

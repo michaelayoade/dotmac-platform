@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from app.db import SessionLocal
 from app.models.auth import AuthProvider, UserCredential
 from app.models.person import Person
+from app.models.rbac import PersonRole, Role
 from app.services.auth_flow import hash_password
 
 
@@ -43,18 +44,32 @@ def main():
         )
         if credential:
             print("User credential already exists for this person.")
+        else:
+            credential = UserCredential(
+                person_id=person.id,
+                provider=AuthProvider.local,
+                username=args.username,
+                password_hash=hash_password(args.password),
+                must_change_password=args.force_reset,
+            )
+            db.add(credential)
+            db.commit()
+
+        admin_role = db.query(Role).filter(Role.name == "admin").first()
+        if not admin_role:
+            print("Admin role not found. Run scripts/seed_rbac.py to create roles.")
             return
 
-        credential = UserCredential(
-            person_id=person.id,
-            provider=AuthProvider.local,
-            username=args.username,
-            password_hash=hash_password(args.password),
-            must_change_password=args.force_reset,
+        existing = (
+            db.query(PersonRole)
+            .filter(PersonRole.person_id == person.id)
+            .filter(PersonRole.role_id == admin_role.id)
+            .first()
         )
-        db.add(credential)
-        db.commit()
-        print("Admin user created.")
+        if not existing:
+            db.add(PersonRole(person_id=person.id, role_id=admin_role.id))
+            db.commit()
+        print("Admin user created and assigned admin role.")
     finally:
         db.close()
 

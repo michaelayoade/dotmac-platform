@@ -7,8 +7,9 @@ from app.services.scheduler_config import build_beat_schedule
 
 class DbScheduler(Scheduler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        # Initialize before super().__init__ because Celery may call setup_schedule().
         self._last_refresh_at = 0.0
+        super().__init__(*args, **kwargs)
 
     def setup_schedule(self):
         self._refresh_schedule()

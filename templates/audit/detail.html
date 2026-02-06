@@ -1,0 +1,66 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-2xl font-display text-surface-800 dark:text-surface-100">Audit Event</h1>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">Event {{ event.id }}</p>
+    </div>
+    <a href="/audit" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Back to Logs</a>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-2">
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-800 dark:text-white">Summary</h2>
+        <dl class="mt-4 space-y-3 text-[13px] text-surface-500 dark:text-surface-400">
+            <div class="flex justify-between">
+                <dt>Occurred</dt>
+                <dd class="text-surface-800 dark:text-surface-100">{{ event.occurred_at.strftime('%Y-%m-%d %H:%M:%S') }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt>Actor</dt>
+                <dd class="text-surface-800 dark:text-surface-100">{{ event.actor_type.value }} / {{ event.actor_id or "-" }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt>Action</dt>
+                <dd class="text-surface-800 dark:text-surface-100">{{ event.action }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt>Entity</dt>
+                <dd class="text-surface-800 dark:text-surface-100">{{ event.entity_type }} {% if event.entity_id %}#{{ event.entity_id }}{% endif %}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt>Status</dt>
+                <dd>
+                    {% if event.is_success %}
+                        <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">{{ event.status_code }}</span>
+                    {% else %}
+                        <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">{{ event.status_code }}</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between">
+                <dt>Request ID</dt>
+                <dd class="text-surface-800 dark:text-surface-100">{{ event.request_id or "-" }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt>IP Address</dt>
+                <dd class="text-surface-800 dark:text-surface-100">{{ event.ip_address or "-" }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt>User Agent</dt>
+                <dd class="text-surface-800 dark:text-surface-100 break-all">{{ event.user_agent or "-" }}</dd>
+            </div>
+        </dl>
+    </div>
+
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-800 dark:text-white">Metadata</h2>
+        {% if event.metadata_ %}
+        <pre class="mt-4 rounded-lg bg-surface-950 p-4 text-[12px] text-surface-200 overflow-x-auto">{{ event.metadata_ | tojson(indent=2) }}</pre>
+        {% else %}
+        <p class="mt-4 text-[13px] text-surface-400 dark:text-surface-500">No metadata recorded.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

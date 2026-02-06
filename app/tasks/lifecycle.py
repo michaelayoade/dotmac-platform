@@ -10,8 +10,8 @@ from app.db import SessionLocal
 logger = logging.getLogger(__name__)
 
 
-@shared_task
-def check_trial_expiry() -> int:
+@shared_task(bind=True, max_retries=2, default_retry_delay=60)
+def check_trial_expiry(self) -> int:
     """Check for expired trial instances and suspend them."""
     logger.info("Checking for expired trials")
     with SessionLocal() as db:
@@ -26,8 +26,8 @@ def check_trial_expiry() -> int:
         return count
 
 
-@shared_task
-def check_ssl_expiry() -> int:
+@shared_task(bind=True, max_retries=2, default_retry_delay=60)
+def check_ssl_expiry(self) -> int:
     """Check for SSL certificates expiring soon and attempt renewal."""
     logger.info("Checking SSL certificate expiry")
     with SessionLocal() as db:

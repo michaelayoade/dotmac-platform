@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_role
+from app.api.deps import require_role, require_user_auth
 from app.db import SessionLocal
 from app.schemas.common import ListResponse
 from app.schemas.scheduler import (
@@ -22,7 +22,11 @@ def get_db():
         db.close()
 
 
-@router.get("/tasks", response_model=ListResponse[ScheduledTaskRead])
+@router.get(
+    "/tasks",
+    response_model=ListResponse[ScheduledTaskRead],
+    dependencies=[Depends(require_user_auth)],
+)
 def list_scheduled_tasks(
     enabled: bool | None = None,
     order_by: str = Query(default="created_at"),
@@ -48,7 +52,11 @@ def create_scheduled_task(
     return scheduler_service.scheduled_tasks.create(db, payload)
 
 
-@router.get("/tasks/{task_id}", response_model=ScheduledTaskRead)
+@router.get(
+    "/tasks/{task_id}",
+    response_model=ScheduledTaskRead,
+    dependencies=[Depends(require_user_auth)],
+)
 def get_scheduled_task(task_id: str, db: Session = Depends(get_db)):
     return scheduler_service.scheduled_tasks.get(db, task_id)
 

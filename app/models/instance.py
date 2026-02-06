@@ -65,7 +65,7 @@ class Instance(Base):
     notes: Mapped[str | None] = mapped_column(Text)
     # Plan association
     plan_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("plans.plan_id"), nullable=True
+        UUID(as_uuid=True), ForeignKey("plans.plan_id"), nullable=True, index=True
     )
     # Version pinning
     git_branch: Mapped[str | None] = mapped_column(String(120))

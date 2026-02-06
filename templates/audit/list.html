@@ -1,0 +1,126 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-2xl font-display text-surface-800 dark:text-surface-100">Audit Logs</h1>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">System activity and security events.</p>
+    </div>
+</div>
+
+<form method="GET" action="/audit" class="mb-6 grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+    <div>
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Actor ID</label>
+        <input type="text" name="actor_id" value="{{ actor_id }}" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200" />
+    </div>
+    <div>
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Actor Type</label>
+        <select name="actor_type" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200">
+            <option value="">All</option>
+            {% for value in ["system","user","api_key","service"] %}
+            <option value="{{ value }}" {% if actor_type == value %}selected{% endif %}>{{ value }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Action</label>
+        <input type="text" name="action" value="{{ action }}" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200" />
+    </div>
+    <div>
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Entity Type</label>
+        <input type="text" name="entity_type" value="{{ entity_type }}" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200" />
+    </div>
+    <div>
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Request ID</label>
+        <input type="text" name="request_id" value="{{ request_id }}" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200" />
+    </div>
+    <div>
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Success</label>
+        <select name="is_success" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200">
+            <option value="">All</option>
+            <option value="true" {% if is_success == "true" %}selected{% endif %}>Success</option>
+            <option value="false" {% if is_success == "false" %}selected{% endif %}>Failure</option>
+        </select>
+    </div>
+    <div>
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Status Code</label>
+        <input type="number" name="status_code" value="{{ status_code }}" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200" />
+    </div>
+    <div>
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Order By</label>
+        <select name="order_by" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200">
+            {% for value in ["occurred_at","action","entity_type","status_code"] %}
+            <option value="{{ value }}" {% if order_by == value %}selected{% endif %}>{{ value }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Direction</label>
+        <select name="order_dir" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200">
+            <option value="desc" {% if order_dir == "desc" %}selected{% endif %}>Desc</option>
+            <option value="asc" {% if order_dir == "asc" %}selected{% endif %}>Asc</option>
+        </select>
+    </div>
+    <div>
+        <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Page Size</label>
+        <select name="page_size" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200">
+            {% for size in [25, 50, 100, 200] %}
+            <option value="{{ size }}" {% if page_size == size %}selected{% endif %}>{{ size }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="flex items-end gap-2">
+        <button type="submit" class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950">Apply</button>
+        <a href="/audit" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Reset</a>
+    </div>
+</form>
+
+<div class="overflow-hidden rounded-xl border border-surface-200/80 bg-white dark:border-surface-800/50 dark:bg-surface-900/80">
+    <table class="min-w-full divide-y divide-surface-100 dark:divide-surface-800/60">
+        <thead>
+            <tr class="bg-surface-50/80 dark:bg-surface-800/30">
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Time</th>
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Actor</th>
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Action</th>
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Entity</th>
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Status</th>
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Request ID</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-surface-100/80 dark:divide-surface-800/40">
+            {% for event in events %}
+            <tr class="hover:bg-surface-50/60 dark:hover:bg-surface-800/20 transition-colors">
+                <td class="px-5 py-4 text-[12px] text-surface-500 dark:text-surface-400">
+                    <a href="/audit/{{ event.id }}" class="hover:text-primary-600 dark:hover:text-primary-400 transition">{{ event.occurred_at.strftime('%Y-%m-%d %H:%M:%S') }}</a>
+                </td>
+                <td class="px-5 py-4 text-[12px] text-surface-500 dark:text-surface-400">{{ event.actor_type.value }} / {{ event.actor_id or "-" }}</td>
+                <td class="px-5 py-4 text-[12px] text-surface-500 dark:text-surface-400">{{ event.action }}</td>
+                <td class="px-5 py-4 text-[12px] text-surface-500 dark:text-surface-400">{{ event.entity_type }} {% if event.entity_id %}<span class="text-surface-400">#{{ event.entity_id }}</span>{% endif %}</td>
+                <td class="px-5 py-4">
+                    {% if event.is_success %}
+                        <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">{{ event.status_code }}</span>
+                    {% else %}
+                        <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">{{ event.status_code }}</span>
+                    {% endif %}
+                </td>
+                <td class="px-5 py-4 text-[12px] text-surface-400 dark:text-surface-500">{{ event.request_id or "-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="mt-4 flex items-center justify-between text-[12px] text-surface-400 dark:text-surface-500">
+    <div>Page {{ page }}</div>
+    <div class="flex items-center gap-2">
+        {% if page > 1 %}
+        <a href="?page={{ page - 1 }}&page_size={{ page_size }}&actor_id={{ actor_id | urlencode }}&actor_type={{ actor_type }}&action={{ action | urlencode }}&entity_type={{ entity_type | urlencode }}&request_id={{ request_id | urlencode }}&is_success={{ is_success }}&status_code={{ status_code }}&order_by={{ order_by }}&order_dir={{ order_dir }}"
+           class="rounded-lg border border-surface-200 px-3 py-1.5 text-[12px] text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Prev</a>
+        {% endif %}
+        {% if events|length == page_size %}
+        <a href="?page={{ page + 1 }}&page_size={{ page_size }}&actor_id={{ actor_id | urlencode }}&actor_type={{ actor_type }}&action={{ action | urlencode }}&entity_type={{ entity_type | urlencode }}&request_id={{ request_id | urlencode }}&is_success={{ is_success }}&status_code={{ status_code }}&order_by={{ order_by }}&order_dir={{ order_dir }}"
+           class="rounded-lg border border-surface-200 px-3 py-1.5 text-[12px] text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Next</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

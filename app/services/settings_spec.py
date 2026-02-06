@@ -1,6 +1,9 @@
+import logging
 from dataclasses import dataclass
 
 from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
 
 from app.models.domain_settings import SettingDomain, SettingValueType
 from app.services import domain_settings as settings_service

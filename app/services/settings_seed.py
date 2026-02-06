@@ -1,9 +1,13 @@
+import logging
 import os
 
 from sqlalchemy.orm import Session
 
+logger = logging.getLogger(__name__)
+
 from app.models.domain_settings import SettingValueType
 from app.services.domain_settings import auth_settings, audit_settings, scheduler_settings
+from app.models.scheduler import ScheduledTask, ScheduleType
 from app.services.secrets import is_openbao_ref
 
 
@@ -162,12 +166,14 @@ def seed_scheduler_settings(db: Session) -> None:
         key="broker_url",
         value_type=SettingValueType.string,
         value_text=broker,
+        is_secret=True,
     )
     scheduler_settings.ensure_by_key(
         db,
         key="result_backend",
         value_type=SettingValueType.string,
         value_text=backend,
+        is_secret=True,
     )
     scheduler_settings.ensure_by_key(
         db,
@@ -187,3 +193,58 @@ def seed_scheduler_settings(db: Session) -> None:
         value_type=SettingValueType.integer,
         value_text=os.getenv("CELERY_BEAT_REFRESH_SECONDS", "30"),
     )
+
+
+def seed_scheduled_tasks(db: Session) -> None:
+    """Ensure core scheduled tasks exist for health, alerts, usage, drift, cleanup."""
+    defaults = [
+        {
+            "name": "Poll instance health",
+            "task_name": "app.tasks.health.poll_instance_health",
+            "interval_seconds": 60,
+        },
+        {
+            "name": "Evaluate alert rules",
+            "task_name": "app.tasks.monitoring.evaluate_alert_rules",
+            "interval_seconds": 60,
+        },
+        {
+            "name": "Collect usage metrics",
+            "task_name": "app.tasks.monitoring.collect_usage_metrics",
+            "interval_seconds": 3600,
+        },
+        {
+            "name": "Detect config drift",
+            "task_name": "app.tasks.monitoring.detect_config_drift",
+            "interval_seconds": 21600,
+        },
+        {
+            "name": "Cleanup expired sessions",
+            "task_name": "app.tasks.cleanup.cleanup_expired_sessions",
+            "interval_seconds": 86400,
+        },
+        {
+            "name": "Cleanup old health checks",
+            "task_name": "app.tasks.cleanup.cleanup_old_health_checks",
+            "interval_seconds": 3600,
+        },
+    ]
+
+    for item in defaults:
+        existing = (
+            db.query(ScheduledTask)
+            .filter(ScheduledTask.task_name == item["task_name"])
+            .first()
+        )
+        if existing:
+            continue
+        task = ScheduledTask(
+            name=item["name"],
+            task_name=item["task_name"],
+            schedule_type=ScheduleType.interval,
+            interval_seconds=item["interval_seconds"],
+            args_json=[],
+            kwargs_json={},
+            enabled=True,
+        )
+        db.add(task)

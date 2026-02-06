@@ -153,7 +153,6 @@ class DeployService:
             return None
         secret = log.deploy_secret
         log.deploy_secret = None  # Clear after reading
-        self.db.flush()
         self.db.commit()
         return secret
 
@@ -221,7 +220,6 @@ class DeployService:
         elif status in (DeployStepStatus.success, DeployStepStatus.failed):
             log.completed_at = now
 
-        self.db.flush()
         self.db.commit()
 
     def run_deployment(
@@ -243,6 +241,7 @@ class DeployService:
 
         instance.status = InstanceStatus.deploying
         self.db.commit()
+        self._dispatch_webhook("deploy_started", instance, deployment_id)
 
         ssh = get_ssh_for_server(server)
         results = {}
@@ -338,6 +337,7 @@ class DeployService:
                 instance.deployed_git_ref = git_ref
             instance.status = InstanceStatus.running
             self.db.commit()
+            self._dispatch_webhook("deploy_success", instance, deployment_id)
             return {"success": True, "results": results}
 
         except DeployError as e:
@@ -353,6 +353,7 @@ class DeployService:
             self._rollback_containers(instance, ssh, e.step)
             instance.status = InstanceStatus.error
             self.db.commit()
+            self._dispatch_webhook("deploy_failed", instance, deployment_id, error=str(e))
             return {"success": False, "error": str(e), "step": e.step}
 
         except Exception as e:
@@ -363,6 +364,7 @@ class DeployService:
                 logger.exception("Rollback also failed")
             instance.status = InstanceStatus.error
             self.db.commit()
+            self._dispatch_webhook("deploy_failed", instance, deployment_id, error=str(e))
             return {"success": False, "error": str(e)}
 
     def _run_reconfigure(
@@ -464,7 +466,7 @@ class DeployService:
         return False
 
     def _step_generate(
-        self, instance: Instance, deployment_id: str, admin_password: str
+        self, instance: Instance, deployment_id: str, admin_password: str | None
     ) -> bool:
         step = "generate"
         self._update_step(
@@ -937,6 +939,42 @@ class DeployService:
                 )
         except Exception:
             logger.exception("Failed to roll back containers for %s", instance.org_code)
+
+    def _dispatch_webhook(
+        self, event: str, instance: Instance, deployment_id: str, **extra
+    ) -> None:
+        """Best-effort webhook dispatch for deploy events."""
+        try:
+            from app.services.webhook_service import WebhookService
+            wh_svc = WebhookService(self.db)
+            payload = {
+                "instance_id": str(instance.instance_id),
+                "org_code": instance.org_code,
+                "deployment_id": deployment_id,
+                **extra,
+            }
+            wh_svc.dispatch(event, payload, instance_id=instance.instance_id)
+            self.db.flush()
+        except Exception:
+            logger.warning("Webhook dispatch failed for %s event", event, exc_info=True)
+
+    def check_maintenance_window(self, instance_id: UUID) -> bool:
+        """Check if deployment is allowed based on maintenance windows."""
+        try:
+            from app.services.maintenance_service import MaintenanceService
+            maint_svc = MaintenanceService(self.db)
+            return maint_svc.is_deploy_allowed(instance_id)
+        except Exception:
+            return True  # Default to allowing if service unavailable
+
+    def check_approval_required(self, instance_id: UUID) -> bool:
+        """Check if this instance requires deploy approval."""
+        try:
+            from app.services.approval_service import ApprovalService
+            approval_svc = ApprovalService(self.db)
+            return approval_svc.requires_approval(instance_id)
+        except Exception:
+            return False
 
 
 class DeployError(Exception):

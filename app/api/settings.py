@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_role
+from app.api.deps import require_role, require_user_auth
 from app.db import SessionLocal
 from app.schemas.common import ListResponse
 from app.schemas.settings import DomainSettingRead, DomainSettingUpdate
@@ -18,7 +18,12 @@ def get_db():
         db.close()
 
 
-@router.get("/auth", response_model=ListResponse[DomainSettingRead], tags=["settings-auth"])
+@router.get(
+    "/auth",
+    response_model=ListResponse[DomainSettingRead],
+    tags=["settings-auth"],
+    dependencies=[Depends(require_role("admin"))],
+)
 def list_auth_settings(
     is_active: bool | None = None,
     order_by: str = Query(default="created_at"),
@@ -49,6 +54,7 @@ def upsert_auth_setting(
     "/auth/{key}",
     response_model=DomainSettingRead,
     tags=["settings-auth"],
+    dependencies=[Depends(require_role("admin"))],
 )
 def get_auth_setting(key: str, db: Session = Depends(get_db)):
     return settings_service.get_auth_setting(db, key)
@@ -58,6 +64,7 @@ def get_auth_setting(key: str, db: Session = Depends(get_db)):
     "/audit",
     response_model=ListResponse[DomainSettingRead],
     tags=["settings-audit"],
+    dependencies=[Depends(require_user_auth)],
 )
 def list_audit_settings(
     is_active: bool | None = None,
@@ -89,6 +96,7 @@ def upsert_audit_setting(
     "/audit/{key}",
     response_model=DomainSettingRead,
     tags=["settings-audit"],
+    dependencies=[Depends(require_user_auth)],
 )
 def get_audit_setting(key: str, db: Session = Depends(get_db)):
     return settings_service.get_audit_setting(db, key)
@@ -98,6 +106,7 @@ def get_audit_setting(key: str, db: Session = Depends(get_db)):
     "/scheduler",
     response_model=ListResponse[DomainSettingRead],
     tags=["settings-scheduler"],
+    dependencies=[Depends(require_user_auth)],
 )
 def list_scheduler_settings(
     is_active: bool | None = None,
@@ -129,6 +138,7 @@ def upsert_scheduler_setting(
     "/scheduler/{key}",
     response_model=DomainSettingRead,
     tags=["settings-scheduler"],
+    dependencies=[Depends(require_user_auth)],
 )
 def get_scheduler_setting(key: str, db: Session = Depends(get_db)):
     return settings_service.get_scheduler_setting(db, key)

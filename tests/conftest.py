@@ -52,6 +52,9 @@ class MockSettings:
     brand_name = "Starter Template"
     brand_tagline = "FastAPI starter"
     brand_logo_url = None
+    testing = True
+    use_cdn_assets = False
+    health_stale_seconds = 180
 
 
 mock_config_module.settings = MockSettings()

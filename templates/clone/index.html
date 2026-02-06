@@ -1,0 +1,43 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-display text-surface-800 dark:text-surface-100">Clone Instance</h1>
+    <p class="text-[13px] text-surface-400 dark:text-surface-500">Create a staging copy with optional data snapshot.</p>
+</div>
+
+{% if error %}
+<div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-400">
+    {{ error }}
+</div>
+{% endif %}
+
+<div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+    <form method="POST" action="/clone" class="grid gap-4 sm:grid-cols-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <div class="sm:col-span-2">
+            <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Source Instance</label>
+            <select name="source_instance_id" required class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                {% for inst in instances %}
+                <option value="{{ inst.instance_id }}">{{ inst.org_code }} — {{ inst.org_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">New Org Code</label>
+            <input type="text" name="new_org_code" required placeholder="acme-staging" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+        </div>
+        <div>
+            <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">New Org Name (optional)</label>
+            <input type="text" name="new_org_name" placeholder="Acme Staging" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+        </div>
+        <label class="flex items-center gap-2 text-[12px] text-surface-600 dark:text-surface-400 sm:col-span-2">
+            <input type="checkbox" name="include_data" class="h-4 w-4 rounded border-surface-300 text-primary-600 focus:ring-primary-500 dark:border-surface-600 dark:bg-surface-800" checked />
+            Include data snapshot (creates a backup of the source instance)
+        </label>
+        <div class="sm:col-span-2">
+            <button type="submit" class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950">Create Clone</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

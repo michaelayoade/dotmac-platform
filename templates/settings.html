@@ -2,61 +2,66 @@
 
 {% block content %}
 {% if saved %}
-<div class="mb-6 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300">
-    <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+<div class="mb-6 flex items-center gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-950/30 dark:text-emerald-400">
+    <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
     Settings saved successfully.
 </div>
 {% endif %}
 
-<form method="POST" action="/settings" class="max-w-2xl space-y-8">
+<form method="POST" action="/settings" class="max-w-2xl space-y-8" data-testid="settings-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
     <!-- Deployment Source -->
-    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <h2 class="mb-1 text-base font-semibold text-slate-900 dark:text-white font-display">Deployment Source</h2>
-        <p class="mb-5 text-sm text-slate-500 dark:text-slate-400">Configure the Git repository used to deploy ERP instances to servers.</p>
+    <div class="rounded-xl border border-surface-200/80 bg-white p-7 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-xl font-display text-surface-900 dark:text-white">Deployment Source</h2>
+        <p class="mt-1 mb-6 text-[13px] text-surface-400 dark:text-surface-500">Configure the Git repository used to deploy ERP instances to servers.</p>
 
-        <div class="space-y-4">
+        <div class="space-y-5">
             <div>
-                <label for="dotmac_git_repo_url" class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Git Repository URL</label>
+                <label for="dotmac_git_repo_url" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Git Repository URL</label>
                 <input type="text" id="dotmac_git_repo_url" name="dotmac_git_repo_url"
                        value="{{ platform_settings.dotmac_git_repo_url }}"
-                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 dark:focus:border-primary-500"
+                       data-testid="settings-git-repo"
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] text-surface-900 placeholder-surface-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200/50 dark:border-surface-700 dark:bg-surface-800 dark:text-white dark:placeholder-surface-500 dark:focus:ring-primary-500/20 transition"
                        placeholder="https://github.com/org/repo.git" />
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">HTTPS or SSH URL for the DotMac ERP repository. Used during deployment to clone source code onto target servers.</p>
+                <p class="mt-1.5 text-[11px] text-surface-400 dark:text-surface-500">HTTPS or SSH URL for the DotMac ERP repository.</p>
             </div>
 
             <div>
-                <label for="dotmac_git_branch" class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Git Branch</label>
+                <label for="dotmac_git_branch" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Git Branch</label>
                 <input type="text" id="dotmac_git_branch" name="dotmac_git_branch"
                        value="{{ platform_settings.dotmac_git_branch }}"
-                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 dark:focus:border-primary-500"
+                       data-testid="settings-git-branch"
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] text-surface-900 placeholder-surface-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200/50 dark:border-surface-700 dark:bg-surface-800 dark:text-white dark:placeholder-surface-500 dark:focus:ring-primary-500/20 transition"
                        placeholder="main" />
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Branch to check out when cloning. Defaults to <code class="rounded bg-slate-100 px-1 dark:bg-slate-800">main</code>.</p>
+                <p class="mt-1.5 text-[11px] text-surface-400 dark:text-surface-500">Branch to check out when cloning. Defaults to <code class="rounded bg-surface-100 px-1 text-surface-500 dark:bg-surface-800 dark:text-surface-400">main</code>.</p>
             </div>
         </div>
     </div>
 
     <!-- Server Paths -->
-    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <h2 class="mb-1 text-base font-semibold text-slate-900 dark:text-white font-display">Server Paths</h2>
-        <p class="mb-5 text-sm text-slate-500 dark:text-slate-400">Default filesystem paths used on target servers during deployment.</p>
+    <div class="rounded-xl border border-surface-200/80 bg-white p-7 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-xl font-display text-surface-900 dark:text-white">Server Paths</h2>
+        <p class="mt-1 mb-6 text-[13px] text-surface-400 dark:text-surface-500">Default filesystem paths used on target servers during deployment.</p>
 
-        <div class="space-y-4">
+        <div class="space-y-5">
             <div>
-                <label for="dotmac_source_path" class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Source Path</label>
+                <label for="dotmac_source_path" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Source Path</label>
                 <input type="text" id="dotmac_source_path" name="dotmac_source_path"
                        value="{{ platform_settings.dotmac_source_path }}"
-                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 dark:focus:border-primary-500"
+                       data-testid="settings-source-path"
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] font-mono text-surface-900 placeholder-surface-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200/50 dark:border-surface-700 dark:bg-surface-800 dark:text-white dark:placeholder-surface-500 dark:focus:ring-primary-500/20 transition"
                        placeholder="/opt/dotmac" />
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Where the DotMac ERP source code is cloned on target servers. The Docker build context points here.</p>
+                <p class="mt-1.5 text-[11px] text-surface-400 dark:text-surface-500">Where the DotMac ERP source code is cloned on target servers.</p>
             </div>
 
             <div>
-                <label for="default_deploy_path" class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Instances Path</label>
+                <label for="default_deploy_path" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Instances Path</label>
                 <input type="text" id="default_deploy_path" name="default_deploy_path"
                        value="{{ platform_settings.default_deploy_path }}"
-                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 dark:focus:border-primary-500"
+                       data-testid="settings-deploy-path"
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] font-mono text-surface-900 placeholder-surface-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200/50 dark:border-surface-700 dark:bg-surface-800 dark:text-white dark:placeholder-surface-500 dark:focus:ring-primary-500/20 transition"
                        placeholder="/opt/dotmac/instances" />
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Base directory for instance configs. Each instance gets a subdirectory (e.g., <code class="rounded bg-slate-100 px-1 dark:bg-slate-800">/opt/dotmac/instances/acme/</code>).</p>
+                <p class="mt-1.5 text-[11px] text-surface-400 dark:text-surface-500">Base directory for instance configs. Each instance gets a subdirectory.</p>
             </div>
         </div>
     </div>
@@ -64,7 +69,8 @@
     <!-- Save -->
     <div class="flex justify-end">
         <button type="submit"
-                class="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition">
+                data-testid="settings-submit"
+                class="rounded-lg bg-surface-900 dark:bg-primary-500 px-5 py-2.5 text-[13px] font-semibold text-white dark:text-surface-950 shadow-sm hover:bg-surface-800 dark:hover:bg-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-surface-900 transition">
             Save Settings
         </button>
     </div>

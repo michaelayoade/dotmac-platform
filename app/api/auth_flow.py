@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
@@ -317,14 +318,14 @@ def list_sessions(
     db: Session = Depends(get_db),
 ):
     person_id = coerce_uuid(auth["person_id"])
-    sessions = (
-        db.query(AuthSession)
-        .filter(AuthSession.person_id == person_id)
-        .filter(AuthSession.status == SessionStatus.active)
-        .filter(AuthSession.revoked_at.is_(None))
+    stmt = (
+        select(AuthSession)
+        .where(AuthSession.person_id == person_id)
+        .where(AuthSession.status == SessionStatus.active)
+        .where(AuthSession.revoked_at.is_(None))
         .order_by(AuthSession.created_at.desc())
-        .all()
     )
+    sessions = list(db.scalars(stmt).all())
 
     current_session_id = auth.get("session_id")
 
@@ -360,12 +361,12 @@ def revoke_session(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    session = (
-        db.query(AuthSession)
-        .filter(AuthSession.id == coerce_uuid(session_id))
-        .filter(AuthSession.person_id == coerce_uuid(auth["person_id"]))
-        .first()
+    stmt = (
+        select(AuthSession)
+        .where(AuthSession.id == coerce_uuid(session_id))
+        .where(AuthSession.person_id == coerce_uuid(auth["person_id"]))
     )
+    session = db.scalar(stmt)
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -397,14 +398,14 @@ def revoke_all_other_sessions(
     if current_session_id:
         current_session_id = coerce_uuid(current_session_id)
 
-    sessions = (
-        db.query(AuthSession)
-        .filter(AuthSession.person_id == coerce_uuid(auth["person_id"]))
-        .filter(AuthSession.status == SessionStatus.active)
-        .filter(AuthSession.revoked_at.is_(None))
-        .filter(AuthSession.id != current_session_id)
-        .all()
+    stmt = (
+        select(AuthSession)
+        .where(AuthSession.person_id == coerce_uuid(auth["person_id"]))
+        .where(AuthSession.status == SessionStatus.active)
+        .where(AuthSession.revoked_at.is_(None))
+        .where(AuthSession.id != current_session_id)
     )
+    sessions = list(db.scalars(stmt).all())
 
     now = datetime.now(timezone.utc)
     for session in sessions:
@@ -431,12 +432,12 @@ def change_password(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    credential = (
-        db.query(UserCredential)
-        .filter(UserCredential.person_id == coerce_uuid(auth["person_id"]))
-        .filter(UserCredential.is_active.is_(True))
-        .first()
+    stmt = (
+        select(UserCredential)
+        .where(UserCredential.person_id == coerce_uuid(auth["person_id"]))
+        .where(UserCredential.is_active.is_(True))
     )
+    credential = db.scalar(stmt)
 
     if not credential:
         raise HTTPException(status_code=404, detail="No credentials found")

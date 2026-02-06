@@ -20,15 +20,30 @@ from app.web.dashboard import router as dashboard_router
 from app.web.servers import router as servers_router
 from app.web.instances import router as instances_router
 from app.web.platform_settings import router as platform_settings_router
+from app.web.people import router as people_web_router
+from app.web.rbac_web import router as rbac_web_router
+from app.web.audit_web import router as audit_web_router
+from app.web.approvals_web import router as approvals_web_router
+from app.web.alerts_web import router as alerts_web_router
+from app.web.scheduler_web import router as scheduler_web_router
+from app.web.maintenance_web import router as maintenance_web_router
+from app.web.usage_web import router as usage_web_router
+from app.web.webhooks_web import router as webhooks_web_router
+from app.web.secrets_web import router as secrets_web_router
+from app.web.domains_web import router as domains_web_router
+from app.web.drift_web import router as drift_web_router
+from app.web.clone_web import router as clone_web_router
 from app.db import SessionLocal
 from app.services import audit as audit_service
 from app.api.deps import require_role, require_user_auth
 from app.models.domain_settings import DomainSetting, SettingDomain
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.services.settings_seed import (
     seed_audit_settings,
     seed_auth_settings,
     seed_scheduler_settings,
+    seed_scheduled_tasks,
 )
 from app.logging import configure_logging
 from app.observability import ObservabilityMiddleware
@@ -43,6 +58,7 @@ async def lifespan(app: FastAPI):
         seed_auth_settings(db)
         seed_audit_settings(db)
         seed_scheduler_settings(db)
+        seed_scheduled_tasks(db)
         # Seed modules and plans
         from app.services.module_service import ModuleService
         from app.services.plan_service import PlanService
@@ -117,12 +133,12 @@ def _load_audit_settings(db: Session):
             "read_trigger_header": "x-audit-read",
             "read_trigger_query": "audit",
         }
-        rows = (
-            db.query(DomainSetting)
-            .filter(DomainSetting.domain == SettingDomain.audit)
-            .filter(DomainSetting.is_active.is_(True))
-            .all()
+        stmt = (
+            select(DomainSetting)
+            .where(DomainSetting.domain == SettingDomain.audit)
+            .where(DomainSetting.is_active.is_(True))
         )
+        rows = list(db.scalars(stmt).all())
         values = {row.key: row for row in rows}
         if "enabled" in values:
             defaults["enabled"] = _to_bool(values["enabled"])
@@ -194,6 +210,19 @@ app.include_router(dashboard_router)
 app.include_router(servers_router)
 app.include_router(instances_router)
 app.include_router(platform_settings_router)
+app.include_router(people_web_router)
+app.include_router(rbac_web_router)
+app.include_router(audit_web_router)
+app.include_router(approvals_web_router)
+app.include_router(alerts_web_router)
+app.include_router(scheduler_web_router)
+app.include_router(maintenance_web_router)
+app.include_router(usage_web_router)
+app.include_router(webhooks_web_router)
+app.include_router(secrets_web_router)
+app.include_router(domains_web_router)
+app.include_router(drift_web_router)
+app.include_router(clone_web_router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -237,4 +266,3 @@ def health_check():
 def metrics():
     data = generate_latest()
     return Response(content=data, media_type=CONTENT_TYPE_LATEST)
-

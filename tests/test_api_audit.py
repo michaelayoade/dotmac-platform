@@ -124,34 +124,10 @@ class TestAuditEventsAPI:
         response = client.get("/audit-events")
         assert response.status_code == 401
 
-    def test_delete_audit_event(self, client, admin_headers, db_session, person):
-        """Test deleting an audit event."""
-        event = AuditEvent(
-            actor_id=str(person.id),
-            actor_type=AuditActorType.user,
-            action="to_delete",
-            entity_type="test_entity",
-            entity_id=str(uuid.uuid4()),
-            is_success=True,
-            status_code=200,
-        )
-        db_session.add(event)
-        db_session.commit()
-        db_session.refresh(event)
-
-        response = client.delete(f"/audit-events/{event.id}", headers=admin_headers)
-        assert response.status_code == 204
-
-    def test_delete_audit_event_not_found(self, client, admin_headers):
-        """Test deleting a non-existent audit event."""
-        fake_id = str(uuid.uuid4())
-        response = client.delete(f"/audit-events/{fake_id}", headers=admin_headers)
-        assert response.status_code == 404
-
-    def test_delete_audit_event_unauthorized(self, client, audit_event):
-        """Test deleting an audit event without auth."""
-        response = client.delete(f"/audit-events/{audit_event.id}")
-        assert response.status_code == 401
+    def test_delete_audit_event_not_allowed(self, client, admin_headers, audit_event):
+        """Audit logs are append-only — DELETE should return 405."""
+        response = client.delete(f"/audit-events/{audit_event.id}", headers=admin_headers)
+        assert response.status_code == 405
 
 
 class TestAuditEventsAPIV1:

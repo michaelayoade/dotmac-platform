@@ -18,8 +18,8 @@ class Plan(Base):
     description: Mapped[str | None] = mapped_column(Text)
     max_users: Mapped[int] = mapped_column(Integer, default=0)
     max_storage_gb: Mapped[int] = mapped_column(Integer, default=0)
-    allowed_modules: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
-    allowed_flags: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    allowed_modules: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    allowed_flags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

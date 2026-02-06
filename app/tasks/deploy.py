@@ -105,8 +105,8 @@ def run_batch_deploy(batch_id: str) -> dict:
     return {"success": True, "batch_id": batch_id}
 
 
-@shared_task
-def check_scheduled_batches() -> int:
+@shared_task(bind=True, max_retries=2, default_retry_delay=60)
+def check_scheduled_batches(self) -> int:
     """Check for scheduled batches that are due and trigger them."""
     with SessionLocal() as db:
         from app.services.batch_deploy_service import BatchDeployService

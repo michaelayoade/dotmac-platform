@@ -1,11 +1,16 @@
 import hashlib
+import logging
 import os
 import secrets
 import time
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import HTTPException, Request
+
+logger = logging.getLogger(__name__)
 import redis
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -36,7 +41,7 @@ from app.schemas.auth import (
 )
 
 
-def _apply_ordering(query, order_by, order_dir, allowed_columns):
+def _apply_ordering(stmt: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]) -> Any:
     if order_by not in allowed_columns:
         raise HTTPException(
             status_code=400,
@@ -44,12 +49,12 @@ def _apply_ordering(query, order_by, order_dir, allowed_columns):
         )
     column = allowed_columns[order_by]
     if order_dir == "desc":
-        return query.order_by(column.desc())
-    return query.order_by(column.asc())
+        return stmt.order_by(column.desc())
+    return stmt.order_by(column.asc())
 
 
-def _apply_pagination(query, limit, offset):
-    return query.limit(limit).offset(offset)
+def _apply_pagination(stmt: Any, limit: int, offset: int) -> Any:
+    return stmt.limit(limit).offset(offset)
 
 
 def hash_api_key(value: str) -> str:
@@ -62,13 +67,13 @@ _REDIS_CLIENT: redis.Redis | None = None
 
 
 def _auth_setting(db: Session, key: str) -> str | None:
-    setting = (
-        db.query(DomainSetting)
-        .filter(DomainSetting.domain == SettingDomain.auth)
-        .filter(DomainSetting.key == key)
-        .filter(DomainSetting.is_active.is_(True))
-        .first()
+    stmt = (
+        select(DomainSetting)
+        .where(DomainSetting.domain == SettingDomain.auth)
+        .where(DomainSetting.key == key)
+        .where(DomainSetting.is_active.is_(True))
     )
+    setting = db.scalar(stmt)
     if not setting:
         return None
     if setting.value_text is not None:
@@ -104,7 +109,7 @@ def _get_redis_client() -> redis.Redis | None:
         return None
 
 
-def _validate_enum(value, enum_cls, label):
+def _validate_enum(value: str | None, enum_cls: type, label: str) -> Any:
     if value is None:
         return None
     try:
@@ -113,7 +118,7 @@ def _validate_enum(value, enum_cls, label):
         raise HTTPException(status_code=400, detail=f"Invalid {label}") from exc
 
 
-def _ensure_person(db: Session, person_id: str):
+def _ensure_person(db: Session, person_id: str) -> None:
     person = db.get(Person, coerce_uuid(person_id))
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
@@ -157,20 +162,20 @@ class UserCredentials(ListResponseMixin):
         limit: int,
         offset: int,
     ):
-        query = db.query(UserCredential)
+        stmt = select(UserCredential)
         if person_id:
-            query = query.filter(UserCredential.person_id == coerce_uuid(person_id))
+            stmt = stmt.where(UserCredential.person_id == coerce_uuid(person_id))
         if provider:
-            query = query.filter(
+            stmt = stmt.where(
                 UserCredential.provider
                 == _validate_enum(provider, AuthProvider, "provider")
             )
         if is_active is None:
-            query = query.filter(UserCredential.is_active.is_(True))
+            stmt = stmt.where(UserCredential.is_active.is_(True))
         else:
-            query = query.filter(UserCredential.is_active == is_active)
-        query = _apply_ordering(
-            query,
+            stmt = stmt.where(UserCredential.is_active == is_active)
+        stmt = _apply_ordering(
+            stmt,
             order_by,
             order_dir,
             {
@@ -179,7 +184,8 @@ class UserCredentials(ListResponseMixin):
                 "last_login_at": UserCredential.last_login_at,
             },
         )
-        return _apply_pagination(query, limit, offset).all()
+        stmt = _apply_pagination(stmt, limit, offset)
+        return list(db.scalars(stmt).all())
 
     @staticmethod
     def update(db: Session, credential_id: str, payload: UserCredentialUpdate):
@@ -209,10 +215,12 @@ class MFAMethods(ListResponseMixin):
     def create(db: Session, payload: MFAMethodCreate):
         _ensure_person(db, str(payload.person_id))
         if payload.is_primary:
-            db.query(MFAMethod).filter(
-                MFAMethod.person_id == payload.person_id,
-                MFAMethod.is_primary.is_(True),
-            ).update({"is_primary": False})
+            db.execute(
+                update(MFAMethod)
+                .where(MFAMethod.person_id == payload.person_id)
+                .where(MFAMethod.is_primary.is_(True))
+                .values(is_primary=False)
+            )
         method = MFAMethod(**payload.model_dump())
         db.add(method)
         try:
@@ -246,24 +254,24 @@ class MFAMethods(ListResponseMixin):
         limit: int,
         offset: int,
     ):
-        query = db.query(MFAMethod)
+        stmt = select(MFAMethod)
         if person_id:
-            query = query.filter(MFAMethod.person_id == coerce_uuid(person_id))
+            stmt = stmt.where(MFAMethod.person_id == coerce_uuid(person_id))
         if method_type:
-            query = query.filter(
+            stmt = stmt.where(
                 MFAMethod.method_type
                 == _validate_enum(method_type, MFAMethodType, "method_type")
             )
         if is_primary is not None:
-            query = query.filter(MFAMethod.is_primary == is_primary)
+            stmt = stmt.where(MFAMethod.is_primary == is_primary)
         if enabled is not None:
-            query = query.filter(MFAMethod.enabled == enabled)
+            stmt = stmt.where(MFAMethod.enabled == enabled)
         if is_active is None:
-            query = query.filter(MFAMethod.is_active.is_(True))
+            stmt = stmt.where(MFAMethod.is_active.is_(True))
         else:
-            query = query.filter(MFAMethod.is_active == is_active)
-        query = _apply_ordering(
-            query,
+            stmt = stmt.where(MFAMethod.is_active == is_active)
+        stmt = _apply_ordering(
+            stmt,
             order_by,
             order_dir,
             {
@@ -272,7 +280,8 @@ class MFAMethods(ListResponseMixin):
                 "is_primary": MFAMethod.is_primary,
             },
         )
-        return _apply_pagination(query, limit, offset).all()
+        stmt = _apply_pagination(stmt, limit, offset)
+        return list(db.scalars(stmt).all())
 
     @staticmethod
     def update(db: Session, method_id: str, payload: MFAMethodUpdate):
@@ -284,11 +293,13 @@ class MFAMethods(ListResponseMixin):
             _ensure_person(db, str(data["person_id"]))
         if data.get("is_primary"):
             person_id = data.get("person_id", method.person_id)
-            db.query(MFAMethod).filter(
-                MFAMethod.person_id == person_id,
-                MFAMethod.id != method.id,
-                MFAMethod.is_primary.is_(True),
-            ).update({"is_primary": False})
+            db.execute(
+                update(MFAMethod)
+                .where(MFAMethod.person_id == person_id)
+                .where(MFAMethod.id != method.id)
+                .where(MFAMethod.is_primary.is_(True))
+                .values(is_primary=False)
+            )
         for key, value in data.items():
             setattr(method, key, value)
         try:
@@ -341,16 +352,16 @@ class Sessions(ListResponseMixin):
         limit: int,
         offset: int,
     ):
-        query = db.query(AuthSession)
+        stmt = select(AuthSession)
         if person_id:
-            query = query.filter(AuthSession.person_id == coerce_uuid(person_id))
+            stmt = stmt.where(AuthSession.person_id == coerce_uuid(person_id))
         if status:
-            query = query.filter(
+            stmt = stmt.where(
                 AuthSession.status
                 == _validate_enum(status, SessionStatus, "status")
             )
-        query = _apply_ordering(
-            query,
+        stmt = _apply_ordering(
+            stmt,
             order_by,
             order_dir,
             {
@@ -359,7 +370,8 @@ class Sessions(ListResponseMixin):
                 "status": AuthSession.status,
             },
         )
-        return _apply_pagination(query, limit, offset).all()
+        stmt = _apply_pagination(stmt, limit, offset)
+        return list(db.scalars(stmt).all())
 
     @staticmethod
     def update(db: Session, session_id: str, payload: SessionUpdate):
@@ -462,20 +474,21 @@ class ApiKeys(ListResponseMixin):
         limit: int,
         offset: int,
     ):
-        query = db.query(ApiKey)
+        stmt = select(ApiKey)
         if person_id:
-            query = query.filter(ApiKey.person_id == coerce_uuid(person_id))
+            stmt = stmt.where(ApiKey.person_id == coerce_uuid(person_id))
         if is_active is None:
-            query = query.filter(ApiKey.is_active.is_(True))
+            stmt = stmt.where(ApiKey.is_active.is_(True))
         else:
-            query = query.filter(ApiKey.is_active == is_active)
-        query = _apply_ordering(
-            query,
+            stmt = stmt.where(ApiKey.is_active == is_active)
+        stmt = _apply_ordering(
+            stmt,
             order_by,
             order_dir,
             {"created_at": ApiKey.created_at, "label": ApiKey.label},
         )
-        return _apply_pagination(query, limit, offset).all()
+        stmt = _apply_pagination(stmt, limit, offset)
+        return list(db.scalars(stmt).all())
 
     @staticmethod
     def update(db: Session, key_id: str, payload: ApiKeyUpdate):

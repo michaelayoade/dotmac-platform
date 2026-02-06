@@ -1,0 +1,79 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-2xl font-display text-surface-800 dark:text-surface-100">Deployment Approvals</h1>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">Review and approve deployment requests.</p>
+    </div>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-[1fr_1fr]">
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-800 dark:text-white">Pending</h2>
+        {% if pending %}
+        <div class="mt-4 space-y-3">
+            {% for approval in pending %}
+            {% set inst = inst_map.get(approval.instance_id) %}
+            <div class="rounded-lg border border-surface-200/80 bg-surface-50 p-4 dark:border-surface-800/50 dark:bg-surface-800/40">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-[13px] font-semibold text-surface-800 dark:text-surface-100">
+                            {{ inst.org_code if inst else approval.instance_id }}
+                        </p>
+                        <p class="text-[12px] text-surface-400 dark:text-surface-500">
+                            {{ approval.deployment_type }} {% if approval.git_ref %}• {{ approval.git_ref }}{% endif %}
+                        </p>
+                        <p class="text-[12px] text-surface-400 dark:text-surface-500">
+                            Requested by {{ approval.requested_by_name or approval.requested_by }}
+                        </p>
+                        {% if approval.reason %}
+                        <p class="mt-2 text-[12px] text-surface-500 dark:text-surface-400">{{ approval.reason }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="text-right text-[11px] text-surface-400 dark:text-surface-500">
+                        {{ approval.created_at.strftime('%Y-%m-%d %H:%M') }}
+                    </div>
+                </div>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <form method="POST" action="/approvals/{{ approval.approval_id }}/approve">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <button type="submit" class="rounded-lg bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white hover:bg-emerald-700">Approve</button>
+                    </form>
+                    <form method="POST" action="/approvals/{{ approval.approval_id }}/reject" class="flex items-center gap-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <input type="text" name="reason" placeholder="Reason (optional)" class="rounded-lg border border-surface-200 bg-white px-3 py-2 text-[12px] dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200" />
+                        <button type="submit" class="rounded-lg border border-red-200 px-3 py-2 text-[12px] font-semibold text-red-600 hover:bg-red-50 dark:border-red-800/60 dark:text-red-400">Reject</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="mt-4 text-[13px] text-surface-400 dark:text-surface-500">No pending approvals.</p>
+        {% endif %}
+    </div>
+
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-800 dark:text-white">Recent History</h2>
+        <div class="mt-4 space-y-2">
+            {% for approval in history %}
+            {% set inst = inst_map.get(approval.instance_id) %}
+            <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-3 py-2 text-[12px] dark:border-surface-800/50 dark:bg-surface-800/40">
+                <div>
+                    <p class="font-medium text-surface-800 dark:text-surface-100">
+                        {{ inst.org_code if inst else approval.instance_id }}
+                    </p>
+                    <p class="text-surface-400 dark:text-surface-500">
+                        {{ approval.status.value | title }} • {{ approval.deployment_type }}
+                    </p>
+                </div>
+                <div class="text-surface-400 dark:text-surface-500">
+                    {{ approval.created_at.strftime('%Y-%m-%d') }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -6,21 +6,21 @@ import pytest
 class TestPersonsAPI:
     """Tests for the /people API endpoints."""
 
-    def test_create_person(self, client, auth_headers):
-        """Test creating a new person."""
+    def test_create_person(self, client, admin_headers):
+        """Test creating a new person (admin only)."""
         payload = {
             "first_name": "John",
             "last_name": "Doe",
             "email": f"john.doe.{uuid.uuid4().hex[:8]}@example.com",
         }
-        response = client.post("/people", json=payload, headers=auth_headers)
+        response = client.post("/people", json=payload, headers=admin_headers)
         assert response.status_code == 201
         data = response.json()
         assert data["first_name"] == "John"
         assert data["last_name"] == "Doe"
         assert "id" in data
 
-    def test_create_person_with_all_fields(self, client, auth_headers):
+    def test_create_person_with_all_fields(self, client, admin_headers):
         """Test creating a person with all optional fields."""
         payload = {
             "first_name": "Jane",
@@ -31,7 +31,7 @@ class TestPersonsAPI:
             "locale": "en-US",
             "timezone": "America/New_York",
         }
-        response = client.post("/people", json=payload, headers=auth_headers)
+        response = client.post("/people", json=payload, headers=admin_headers)
         assert response.status_code == 201
         data = response.json()
         assert data["first_name"] == "Jane"
@@ -106,17 +106,17 @@ class TestPersonsAPI:
         )
         assert response.status_code == 200
 
-    def test_update_person(self, client, auth_headers, person):
-        """Test updating a person."""
+    def test_update_person(self, client, admin_headers, person):
+        """Test updating a person (admin only)."""
         payload = {"first_name": "Updated"}
         response = client.patch(
-            f"/people/{person.id}", json=payload, headers=auth_headers
+            f"/people/{person.id}", json=payload, headers=admin_headers
         )
         assert response.status_code == 200
         data = response.json()
         assert data["first_name"] == "Updated"
 
-    def test_update_person_multiple_fields(self, client, auth_headers, person):
+    def test_update_person_multiple_fields(self, client, admin_headers, person):
         """Test updating multiple fields of a person."""
         payload = {
             "first_name": "UpdatedFirst",
@@ -124,7 +124,7 @@ class TestPersonsAPI:
             "phone": "+9876543210",
         }
         response = client.patch(
-            f"/people/{person.id}", json=payload, headers=auth_headers
+            f"/people/{person.id}", json=payload, headers=admin_headers
         )
         assert response.status_code == 200
         data = response.json()
@@ -132,17 +132,17 @@ class TestPersonsAPI:
         assert data["last_name"] == "UpdatedLast"
         assert data["phone"] == "+9876543210"
 
-    def test_update_person_not_found(self, client, auth_headers):
+    def test_update_person_not_found(self, client, admin_headers):
         """Test updating a non-existent person."""
         fake_id = str(uuid.uuid4())
         payload = {"first_name": "Updated"}
         response = client.patch(
-            f"/people/{fake_id}", json=payload, headers=auth_headers
+            f"/people/{fake_id}", json=payload, headers=admin_headers
         )
         assert response.status_code == 404
 
-    def test_delete_person(self, client, auth_headers, db_session):
-        """Test deleting a person."""
+    def test_delete_person(self, client, admin_headers, db_session):
+        """Test deleting a person (admin only)."""
         from app.models.person import Person
 
         # Create a person to delete
@@ -155,27 +155,50 @@ class TestPersonsAPI:
         db_session.commit()
         db_session.refresh(person)
 
-        response = client.delete(f"/people/{person.id}", headers=auth_headers)
+        response = client.delete(f"/people/{person.id}", headers=admin_headers)
         assert response.status_code == 204
 
-    def test_delete_person_not_found(self, client, auth_headers):
+    def test_delete_person_not_found(self, client, admin_headers):
         """Test deleting a non-existent person."""
         fake_id = str(uuid.uuid4())
-        response = client.delete(f"/people/{fake_id}", headers=auth_headers)
+        response = client.delete(f"/people/{fake_id}", headers=admin_headers)
         assert response.status_code == 404
+
+    def test_create_person_forbidden_non_admin(self, client, auth_headers):
+        """Test that non-admin cannot create a person."""
+        payload = {
+            "first_name": "Forbidden",
+            "last_name": "User",
+            "email": f"forbidden_{uuid.uuid4().hex[:8]}@example.com",
+        }
+        response = client.post("/people", json=payload, headers=auth_headers)
+        assert response.status_code == 403
+
+    def test_update_person_forbidden_non_admin(self, client, auth_headers, person):
+        """Test that non-admin cannot update a person."""
+        payload = {"first_name": "Forbidden"}
+        response = client.patch(
+            f"/people/{person.id}", json=payload, headers=auth_headers
+        )
+        assert response.status_code == 403
+
+    def test_delete_person_forbidden_non_admin(self, client, auth_headers, person):
+        """Test that non-admin cannot delete a person."""
+        response = client.delete(f"/people/{person.id}", headers=auth_headers)
+        assert response.status_code == 403
 
 
 class TestPersonsAPIV1:
     """Tests for the /api/v1/people endpoints."""
 
-    def test_create_person_v1(self, client, auth_headers):
-        """Test creating a person via v1 API."""
+    def test_create_person_v1(self, client, admin_headers):
+        """Test creating a person via v1 API (admin only)."""
         payload = {
             "first_name": "V1",
             "last_name": "User",
             "email": f"v1_{uuid.uuid4().hex[:8]}@example.com",
         }
-        response = client.post("/api/v1/people", json=payload, headers=auth_headers)
+        response = client.post("/api/v1/people", json=payload, headers=admin_headers)
         assert response.status_code == 201
 
     def test_get_person_v1(self, client, auth_headers, person):

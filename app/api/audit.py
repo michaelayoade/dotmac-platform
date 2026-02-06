@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.schemas.common import ListResponse
 
@@ -61,9 +61,3 @@ def list_audit_events(
     )
 
 
-@router.delete(
-    "/{event_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-def delete_audit_event(event_id: str, db: Session = Depends(get_db)):
-    audit_service.audit_events.delete(db, event_id)

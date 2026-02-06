@@ -28,12 +28,17 @@ class Settings:
     brand_tagline: str = os.getenv("BRAND_TAGLINE", "Deployment Control Plane")
     brand_logo_url: str | None = os.getenv("BRAND_LOGO_URL") or None
 
+    # Runtime flags
+    testing: bool = os.getenv("TESTING", "").lower() in {"1", "true", "yes", "on"}
+    use_cdn_assets: bool = os.getenv("USE_CDN_ASSETS", "true").lower() in {"1", "true", "yes", "on"}
+
     # Platform-specific
     dotmac_source_path: str = os.getenv("DOTMAC_SOURCE_PATH", "/opt/dotmac")
     platform_ssh_keys_dir: str = os.getenv("PLATFORM_SSH_KEYS_DIR", "/root/.ssh")
     default_deploy_path: str = os.getenv("DEFAULT_DEPLOY_PATH", "/opt/dotmac/instances")
     health_poll_interval_seconds: int = int(os.getenv("HEALTH_POLL_INTERVAL", "60"))
     health_checks_to_keep: int = int(os.getenv("HEALTH_CHECKS_TO_KEEP", "100"))
+    health_stale_seconds: int = int(os.getenv("HEALTH_STALE_SECONDS", "180"))
 
 
 settings = Settings()

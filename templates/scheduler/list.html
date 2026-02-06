@@ -1,0 +1,77 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-2xl font-display text-surface-800 dark:text-surface-100">Scheduler</h1>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">Manage scheduled tasks and intervals.</p>
+    </div>
+</div>
+
+{% if error %}
+<div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-400">
+    {{ error }}
+</div>
+{% endif %}
+
+<div class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-800 dark:text-white">Tasks</h2>
+        <div class="mt-4 space-y-2">
+            {% for task in tasks %}
+            <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-3 py-2 text-[12px] dark:border-surface-800/50 dark:bg-surface-800/40">
+                <div>
+                    <p class="font-medium text-surface-800 dark:text-surface-100">{{ task.name }}</p>
+                    <p class="text-surface-400 dark:text-surface-500">{{ task.task_name }} • every {{ task.interval_seconds }}s</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <form method="POST" action="/scheduler/{{ task.id }}/toggle">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <input type="hidden" name="enabled" value="{{ 'false' if task.enabled else 'true' }}" />
+                        <button type="submit" class="rounded-lg border px-2 py-1 text-[11px] {% if task.enabled %}border-emerald-200 text-emerald-700 dark:border-emerald-800/50 dark:text-emerald-400{% else %}border-surface-200 text-surface-500 dark:border-surface-700 dark:text-surface-400{% endif %}">
+                            {{ "Enabled" if task.enabled else "Disabled" }}
+                        </button>
+                    </form>
+                    <form method="POST" action="/scheduler/{{ task.id }}/delete">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <button type="submit" class="text-[11px] text-red-600 hover:text-red-700 dark:text-red-400">Delete</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-800 dark:text-white">Create Task</h2>
+        <form method="POST" action="/scheduler/new" class="mt-4 space-y-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Name</label>
+                <input type="text" name="name" required class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Task Name</label>
+                <input type="text" name="task_name" required placeholder="app.tasks.some_task" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Interval (seconds)</label>
+                <input type="number" name="interval_seconds" value="3600" min="1" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Args (JSON)</label>
+                <textarea name="args_json" rows="2" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[12px] font-mono dark:border-surface-700 dark:bg-surface-800 dark:text-white">[]</textarea>
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Kwargs (JSON)</label>
+                <textarea name="kwargs_json" rows="2" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[12px] font-mono dark:border-surface-700 dark:bg-surface-800 dark:text-white">{}</textarea>
+            </div>
+            <div class="flex items-center gap-2">
+                <input type="checkbox" name="enabled" value="true" checked class="h-4 w-4 rounded border-surface-300 text-primary-600 focus:ring-primary-500 dark:border-surface-600 dark:bg-surface-800" />
+                <label class="text-[13px] text-surface-600 dark:text-surface-400">Enabled</label>
+            </div>
+            <button type="submit" class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950">Create</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

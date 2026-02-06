@@ -522,3 +522,575 @@ def get_resource_stats(
         }
         for c in consumers
     ]
+
+
+# ──────────────────────────── Webhooks ───────────────────────────
+
+
+@router.get("/webhooks")
+def list_webhooks(
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    from app.services.webhook_service import WebhookService
+    svc = WebhookService(db)
+    endpoints = svc.list_endpoints()
+    return [
+        {
+            "endpoint_id": str(e.endpoint_id),
+            "url": e.url,
+            "events": e.events,
+            "description": e.description,
+            "instance_id": str(e.instance_id) if e.instance_id else None,
+            "is_active": e.is_active,
+        }
+        for e in endpoints
+    ]
+
+
+@router.post("/webhooks")
+def create_webhook(
+    url: str,
+    events: list[str] = Query(default=[]),
+    secret: str | None = None,
+    description: str | None = None,
+    instance_id: UUID | None = None,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.webhook_service import WebhookService
+    svc = WebhookService(db)
+    ep = svc.create_endpoint(url, events, secret, description, instance_id)
+    db.commit()
+    return {"endpoint_id": str(ep.endpoint_id), "url": ep.url}
+
+
+@router.delete("/webhooks/{endpoint_id}")
+def delete_webhook(
+    endpoint_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.webhook_service import WebhookService
+    svc = WebhookService(db)
+    svc.delete_endpoint(endpoint_id)
+    db.commit()
+    return {"deleted": str(endpoint_id)}
+
+
+@router.get("/webhooks/{endpoint_id}/deliveries")
+def list_webhook_deliveries(
+    endpoint_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    from app.services.webhook_service import WebhookService
+    svc = WebhookService(db)
+    deliveries = svc.get_deliveries(endpoint_id)
+    return [
+        {
+            "delivery_id": str(d.delivery_id),
+            "event": d.event,
+            "status": d.status.value,
+            "response_code": d.response_code,
+            "attempts": d.attempts,
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+        }
+        for d in deliveries
+    ]
+
+
+# ──────────────────────────── Tenant Audit ───────────────────────
+
+
+@router.get("/{instance_id}/audit-log")
+def get_tenant_audit_log(
+    instance_id: UUID,
+    action: str | None = None,
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    from app.services.tenant_audit_service import TenantAuditService
+    svc = TenantAuditService(db)
+    logs = svc.get_logs(instance_id, action=action, limit=limit, offset=offset)
+    return [
+        {
+            "id": l.id,
+            "action": l.action,
+            "user_name": l.user_name,
+            "details": l.details,
+            "created_at": l.created_at.isoformat() if l.created_at else None,
+        }
+        for l in logs
+    ]
+
+
+# ──────────────────────────── Instance Cloning ───────────────────
+
+
+@router.post("/{instance_id}/clone")
+def clone_instance(
+    instance_id: UUID,
+    new_org_code: str,
+    new_org_name: str | None = None,
+    include_data: bool = True,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.clone_service import CloneService
+    svc = CloneService(db)
+    try:
+        clone = svc.clone_instance(
+            instance_id, new_org_code, new_org_name, include_data=include_data
+        )
+        db.commit()
+        return {
+            "instance_id": str(clone.instance_id),
+            "org_code": clone.org_code,
+            "status": clone.status.value,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ──────────────────────────── Maintenance Windows ────────────────
+
+
+@router.get("/{instance_id}/maintenance-windows")
+def list_maintenance_windows(
+    instance_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    from app.services.maintenance_service import MaintenanceService
+    svc = MaintenanceService(db)
+    windows = svc.get_windows(instance_id)
+    return [
+        {
+            "window_id": str(w.window_id),
+            "day_of_week": w.day_of_week,
+            "start_time": w.start_time.isoformat(),
+            "end_time": w.end_time.isoformat(),
+            "timezone": w.timezone,
+        }
+        for w in windows
+    ]
+
+
+@router.post("/{instance_id}/maintenance-windows")
+def set_maintenance_window(
+    instance_id: UUID,
+    day_of_week: int,
+    start_hour: int,
+    start_minute: int = 0,
+    end_hour: int = 6,
+    end_minute: int = 0,
+    tz: str = "UTC",
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from datetime import time
+    from app.services.maintenance_service import MaintenanceService
+    svc = MaintenanceService(db)
+    try:
+        window = svc.set_window(
+            instance_id,
+            day_of_week,
+            time(start_hour, start_minute),
+            time(end_hour, end_minute),
+            tz,
+        )
+        db.commit()
+        return {"window_id": str(window.window_id), "day_of_week": window.day_of_week}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{instance_id}/maintenance-windows/{window_id}")
+def delete_maintenance_window(
+    instance_id: UUID,
+    window_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.maintenance_service import MaintenanceService
+    svc = MaintenanceService(db)
+    svc.delete_window(window_id)
+    db.commit()
+    return {"deleted": str(window_id)}
+
+
+# ──────────────────────────── Usage Metering ─────────────────────
+
+
+@router.get("/{instance_id}/usage")
+def get_instance_usage(
+    instance_id: UUID,
+    metric: str | None = None,
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    from app.services.usage_service import UsageService
+    from app.models.usage_record import UsageMetric
+    svc = UsageService(db)
+    m = UsageMetric(metric) if metric else None
+    records = svc.get_usage(instance_id, metric=m)
+    return [
+        {
+            "metric": r.metric.value,
+            "value": r.value,
+            "period_start": r.period_start.isoformat(),
+            "period_end": r.period_end.isoformat(),
+        }
+        for r in records
+    ]
+
+
+@router.get("/{instance_id}/billing-summary")
+def get_billing_summary(
+    instance_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    from datetime import datetime, timezone
+    from app.services.usage_service import UsageService
+    svc = UsageService(db)
+    now = datetime.now(timezone.utc)
+    period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return svc.get_billing_summary(instance_id, period_start, now)
+
+
+# ──────────────────────────── Tags ───────────────────────────────
+
+
+@router.get("/{instance_id}/tags")
+def list_tags(
+    instance_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    from app.services.tag_service import TagService
+    svc = TagService(db)
+    tags = svc.get_tags(instance_id)
+    return [{
+        "key": t.key,
+        "value": t.value,
+    } for t in tags]
+
+
+@router.put("/{instance_id}/tags/{key}")
+def set_tag(
+    instance_id: UUID,
+    key: str,
+    value: str,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.tag_service import TagService
+    svc = TagService(db)
+    try:
+        tag = svc.set_tag(instance_id, key, value)
+        db.commit()
+        return {"key": tag.key, "value": tag.value}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{instance_id}/tags/{key}")
+def delete_tag(
+    instance_id: UUID,
+    key: str,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.tag_service import TagService
+    svc = TagService(db)
+    svc.delete_tag(instance_id, key)
+    db.commit()
+    return {"deleted": key}
+
+
+# ──────────────────────────── Deploy Approvals ───────────────────
+
+
+@router.get("/approvals")
+def list_pending_approvals(
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    from app.services.approval_service import ApprovalService
+    svc = ApprovalService(db)
+    approvals = svc.get_pending()
+    return [
+        {
+            "approval_id": str(a.approval_id),
+            "instance_id": str(a.instance_id),
+            "requested_by_name": a.requested_by_name,
+            "deployment_type": a.deployment_type,
+            "git_ref": a.git_ref,
+            "reason": a.reason,
+            "status": a.status.value,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in approvals
+    ]
+
+
+@router.post("/{instance_id}/approvals")
+def request_deploy_approval(
+    instance_id: UUID,
+    deployment_type: str = "full",
+    git_ref: str | None = None,
+    reason: str | None = None,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.approval_service import ApprovalService
+    svc = ApprovalService(db)
+    try:
+        approval = svc.request_approval(
+            instance_id,
+            requested_by=str(auth.get("sub", "")) if isinstance(auth, dict) else "unknown",
+            deployment_type=deployment_type,
+            git_ref=git_ref,
+            reason=reason,
+        )
+        db.commit()
+        return {"approval_id": str(approval.approval_id), "status": approval.status.value}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/approvals/{approval_id}/approve")
+def approve_deploy(
+    approval_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.approval_service import ApprovalService
+    svc = ApprovalService(db)
+    try:
+        approval = svc.approve(
+            approval_id,
+            approved_by=str(auth.get("sub", "")) if isinstance(auth, dict) else "unknown",
+        )
+        db.commit()
+        return {"approval_id": str(approval.approval_id), "status": approval.status.value}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/approvals/{approval_id}/reject")
+def reject_deploy(
+    approval_id: UUID,
+    reason: str | None = None,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.approval_service import ApprovalService
+    svc = ApprovalService(db)
+    try:
+        approval = svc.reject(
+            approval_id,
+            rejected_by=str(auth.get("sub", "")) if isinstance(auth, dict) else "unknown",
+            reason=reason,
+        )
+        db.commit()
+        return {"approval_id": str(approval.approval_id), "status": approval.status.value}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ──────────────────────────── Config Drift ───────────────────────
+
+
+@router.get("/{instance_id}/drift")
+def get_drift_report(
+    instance_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    from app.services.drift_service import DriftService
+    svc = DriftService(db)
+    report = svc.get_latest_report(instance_id)
+    if not report:
+        return {"has_drift": None, "message": "No drift report yet"}
+    return {
+        "has_drift": report.has_drift,
+        "diffs": report.diffs,
+        "detected_at": report.detected_at.isoformat() if report.detected_at else None,
+    }
+
+
+@router.post("/{instance_id}/drift/detect")
+def detect_drift(
+    instance_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.drift_service import DriftService
+    svc = DriftService(db)
+    try:
+        report = svc.detect_drift(instance_id)
+        db.commit()
+        return {
+            "has_drift": report.has_drift,
+            "diffs": report.diffs,
+            "detected_at": report.detected_at.isoformat() if report.detected_at else None,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ──────────────────────────── Alerts ─────────────────────────────
+
+
+@router.get("/alerts/rules")
+def list_alert_rules(
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    from app.services.alert_service import AlertService
+    svc = AlertService(db)
+    rules = svc.list_rules()
+    return [
+        {
+            "rule_id": str(r.rule_id),
+            "name": r.name,
+            "metric": r.metric.value,
+            "operator": r.operator.value,
+            "threshold": r.threshold,
+            "channel": r.channel.value,
+            "instance_id": str(r.instance_id) if r.instance_id else None,
+            "is_active": r.is_active,
+            "cooldown_minutes": r.cooldown_minutes,
+        }
+        for r in rules
+    ]
+
+
+@router.post("/alerts/rules")
+def create_alert_rule(
+    name: str,
+    metric: str,
+    operator: str,
+    threshold: float,
+    channel: str = "webhook",
+    instance_id: UUID | None = None,
+    cooldown_minutes: int = 15,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.alert_service import AlertService
+    from app.models.alert_rule import AlertMetric, AlertOperator, AlertChannel
+    svc = AlertService(db)
+    rule = svc.create_rule(
+        name,
+        AlertMetric(metric),
+        AlertOperator(operator),
+        threshold,
+        AlertChannel(channel),
+        instance_id=instance_id,
+        cooldown_minutes=cooldown_minutes,
+    )
+    db.commit()
+    return {"rule_id": str(rule.rule_id), "name": rule.name}
+
+
+@router.delete("/alerts/rules/{rule_id}")
+def delete_alert_rule(
+    rule_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.alert_service import AlertService
+    svc = AlertService(db)
+    svc.delete_rule(rule_id)
+    db.commit()
+    return {"deleted": str(rule_id)}
+
+
+@router.get("/alerts/events")
+def list_alert_events(
+    instance_id: UUID | None = None,
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    from app.services.alert_service import AlertService
+    svc = AlertService(db)
+    events = svc.get_events(instance_id=instance_id, limit=limit)
+    return [
+        {
+            "event_id": str(e.event_id),
+            "rule_id": str(e.rule_id),
+            "instance_id": str(e.instance_id) if e.instance_id else None,
+            "metric_value": e.metric_value,
+            "threshold": e.threshold,
+            "triggered_at": e.triggered_at.isoformat() if e.triggered_at else None,
+            "resolved_at": e.resolved_at.isoformat() if e.resolved_at else None,
+            "notified": e.notified,
+        }
+        for e in events
+    ]
+
+
+# ──────────────────────────── Tenant Self-Service ────────────────
+
+
+@router.get("/{instance_id}/self-service/health")
+def tenant_health(
+    instance_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    """Tenant self-service: view instance health (read-only)."""
+    from app.services.health_service import HealthService
+    svc = HealthService(db)
+    checks = svc.get_recent_checks(instance_id, limit=10)
+    return [
+        {
+            "status": c.status.value,
+            "response_ms": c.response_ms,
+            "db_healthy": c.db_healthy,
+            "redis_healthy": c.redis_healthy,
+            "checked_at": c.checked_at.isoformat() if c.checked_at else None,
+        }
+        for c in checks
+    ]
+
+
+@router.get("/{instance_id}/self-service/flags")
+def tenant_flags(
+    instance_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    """Tenant self-service: view feature flags (read-only)."""
+    from app.services.feature_flag_service import FeatureFlagService
+    svc = FeatureFlagService(db)
+    return svc.list_for_instance(instance_id)
+
+
+@router.get("/{instance_id}/self-service/backups")
+def tenant_backups(
+    instance_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    """Tenant self-service: view backups (read-only)."""
+    from app.services.backup_service import BackupService
+    svc = BackupService(db)
+    backups = svc.list_for_instance(instance_id)
+    return [
+        {
+            "backup_id": str(b.backup_id),
+            "backup_type": b.backup_type.value,
+            "status": b.status.value,
+            "size_bytes": b.size_bytes,
+            "created_at": b.created_at.isoformat() if b.created_at else None,
+        }
+        for b in backups
+    ]

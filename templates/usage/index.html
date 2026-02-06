@@ -1,0 +1,86 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <div>
+        <h1 class="text-2xl font-display text-surface-800 dark:text-surface-100">Usage & Billing</h1>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">Track per-instance usage metrics and billing totals.</p>
+    </div>
+    <form method="GET" action="/usage" class="flex flex-wrap items-end gap-3">
+        <div>
+            <label class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-surface-400 dark:text-surface-500">Instance</label>
+            <select name="instance_id" class="mt-1 w-44 rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                {% for inst in instances %}
+                <option value="{{ inst.instance_id }}" {% if inst.instance_id == instance_id %}selected{% endif %}>{{ inst.org_code }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-surface-400 dark:text-surface-500">Range (days)</label>
+            <input type="number" min="1" max="365" name="days" value="{{ days }}" class="mt-1 w-28 rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+        </div>
+        <button type="submit" class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[12px] font-semibold text-white dark:text-surface-950">Apply</button>
+    </form>
+</div>
+
+{% if not instances %}
+<div class="rounded-xl border border-surface-200/80 bg-white p-6 text-[13px] text-surface-500 dark:border-surface-800/50 dark:bg-surface-900/80 dark:text-surface-300">
+    No instances available yet. Create an instance to start tracking usage.
+</div>
+{% else %}
+<div class="grid gap-4 md:grid-cols-3">
+    {% for metric in metrics %}
+    <div class="rounded-xl border border-surface-200/80 bg-white p-5 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-surface-400 dark:text-surface-500">{{ metric.replace('_', ' ') }}</p>
+        <div class="mt-2 flex items-end justify-between">
+            <p class="text-2xl font-display text-surface-800 dark:text-surface-100">{{ summary.get(metric, 0) | round(3) }}</p>
+            <span class="text-[11px] text-surface-400">{{ period_start.strftime('%b %d') }} - {{ period_end.strftime('%b %d') }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="mt-6 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-lg font-display text-surface-800 dark:text-white">Usage Records</h2>
+            <p class="text-[12px] text-surface-400 dark:text-surface-500">Latest {{ records|length }} records for the selected range.</p>
+        </div>
+        <div class="text-[11px] text-surface-400 dark:text-surface-500">
+            {{ period_start.strftime('%Y-%m-%d') }} to {{ period_end.strftime('%Y-%m-%d') }}
+        </div>
+    </div>
+
+    <div class="mt-4 overflow-x-auto">
+        <table class="min-w-full text-[12px]">
+            <thead>
+                <tr class="border-b border-surface-200/80 text-left text-surface-400 dark:border-surface-800/50 dark:text-surface-500">
+                    <th class="pb-2 pr-4 font-medium">Metric</th>
+                    <th class="pb-2 pr-4 font-medium">Value</th>
+                    <th class="pb-2 pr-4 font-medium">Period Start</th>
+                    <th class="pb-2 pr-4 font-medium">Period End</th>
+                    <th class="pb-2 font-medium">Recorded</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rec in records %}
+                <tr class="border-b border-surface-100/60 text-surface-700 dark:border-surface-800/40 dark:text-surface-200">
+                    <td class="py-2 pr-4">{{ rec.metric.value }}</td>
+                    <td class="py-2 pr-4 font-medium">{{ rec.value }}</td>
+                    <td class="py-2 pr-4">{{ rec.period_start.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td class="py-2 pr-4">{{ rec.period_end.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td class="py-2">{{ rec.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if records|length == 0 %}
+        <div class="mt-4 rounded-lg border border-dashed border-surface-200/80 bg-surface-50 px-4 py-3 text-[12px] text-surface-500 dark:border-surface-800/50 dark:bg-surface-900/60 dark:text-surface-400">
+            No usage records found for this period.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

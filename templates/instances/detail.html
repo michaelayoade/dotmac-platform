@@ -1,37 +1,41 @@
 {% extends "platform_base.html" %}
 
 {% block content %}
+{% set testing = testing if testing is defined else false %}
 {# ===== HEADER: Breadcrumb + Org Name + Action Buttons ===== #}
 <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
     <div>
-        <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-            <a href="/instances" class="hover:text-primary-600 dark:hover:text-primary-400">Instances</a>
-            <span>/</span>
-            <span>{{ instance.org_code }}</span>
+        <div class="flex items-center gap-2 text-[13px] text-surface-400 dark:text-surface-500">
+            <a href="/instances" class="hover:text-surface-700 dark:hover:text-surface-300 transition">Instances</a>
+            <span class="text-surface-300 dark:text-surface-600">/</span>
+            <span class="text-surface-600 dark:text-surface-300">{{ instance.org_code }}</span>
         </div>
-        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ instance.org_name }}</p>
+        <p class="mt-1 text-[13px] text-surface-400 dark:text-surface-500">{{ instance.org_name }}</p>
     </div>
     <div class="flex flex-wrap gap-2">
         {# Deploy button (provisioned/error only) #}
         {% if instance.status.value in ('provisioned', 'error') %}
         <form method="POST" action="/instances/{{ instance.instance_id }}/deploy" class="inline" x-data="{ open: false }">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="button" @click="open = true" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 transition">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <button type="button" @click="open = true" data-testid="instance-deploy-open"
+                    class="inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 px-3 py-2 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182"/></svg>
                 Deploy
             </button>
             <!-- Deploy modal -->
-            <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="open = false">
-                <div class="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl dark:bg-slate-800" @click.stop>
-                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Deploy {{ instance.org_code }}</h3>
-                    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">This will run the full 10-step deployment pipeline.</p>
+            <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" @click.self="open = false">
+                <div class="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl dark:bg-surface-800" @click.stop>
+                    <h3 class="text-lg font-display text-surface-900 dark:text-white">Deploy {{ instance.org_code }}</h3>
+                    <p class="mt-2 text-[13px] text-surface-400 dark:text-surface-500">This will run the full 10-step deployment pipeline.</p>
                     <div class="mt-4">
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Admin Password</label>
-                        <input type="password" name="admin_password" placeholder="Enter admin password" required class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
+                        <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Admin Password</label>
+                        <input type="password" name="admin_password" placeholder="Enter admin password" required data-testid="instance-deploy-admin-password"
+                               class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
                     </div>
                     <div class="mt-6 flex justify-end gap-3">
-                        <button type="button" @click="open = false" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 dark:border-slate-700 dark:text-slate-400">Cancel</button>
-                        <button type="submit" class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 transition">Start Deploy</button>
+                        <button type="button" @click="open = false" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-500 dark:border-surface-700 dark:text-surface-400">Cancel</button>
+                        <button type="submit" data-testid="instance-deploy-submit"
+                                class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">Start Deploy</button>
                     </div>
                 </div>
             </div>
@@ -42,8 +46,9 @@
         {% if instance.status.value == 'running' %}
         <form method="POST" action="/instances/{{ instance.instance_id }}/reconfigure" onsubmit="return confirm('Reconfigure this instance? This will regenerate config files and restart services.')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 transition">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <button type="submit" data-testid="instance-reconfigure"
+                    class="inline-flex items-center gap-2 rounded-lg border border-surface-200 px-3 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
                 Reconfigure
             </button>
         </form>
@@ -53,16 +58,19 @@
         {% if instance.status.value == 'running' %}
         <form method="POST" action="/instances/{{ instance.instance_id }}/restart">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 transition">Restart</button>
+            <button type="submit" data-testid="instance-restart"
+                    class="inline-flex items-center gap-2 rounded-lg border border-surface-200 px-3 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Restart</button>
         </form>
         <form method="POST" action="/instances/{{ instance.instance_id }}/stop" onsubmit="return confirm('Stop this instance?')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" class="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20 transition">Stop</button>
+            <button type="submit" data-testid="instance-stop"
+                    class="rounded-lg border border-red-200 px-3 py-2 text-[13px] font-medium text-red-600 hover:bg-red-50 dark:border-red-800/60 dark:text-red-400 dark:hover:bg-red-900/20 transition">Stop</button>
         </form>
         {% elif instance.status.value == 'stopped' %}
         <form method="POST" action="/instances/{{ instance.instance_id }}/start">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 transition">Start</button>
+            <button type="submit" data-testid="instance-start"
+                    class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-[13px] font-semibold text-white hover:bg-emerald-700 transition">Start</button>
         </form>
         {% endif %}
 
@@ -70,8 +78,9 @@
         {% if instance.status.value == 'running' %}
         <form method="POST" action="/instances/{{ instance.instance_id }}/migrate">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 transition">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
+            <button type="submit" data-testid="instance-migrate"
+                    class="inline-flex items-center gap-2 rounded-lg border border-surface-200 px-3 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>
                 Migrate
             </button>
         </form>
@@ -81,19 +90,22 @@
         {% if instance.status.value in ('running', 'stopped') and not instance.suspended_at %}
         <form method="POST" action="/instances/{{ instance.instance_id }}/suspend" onsubmit="return confirm('Suspend this instance? Users will lose access.')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" class="rounded-lg border border-amber-200 px-3 py-2 text-sm font-medium text-amber-600 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-900/20 transition">Suspend</button>
+            <button type="submit" data-testid="instance-suspend"
+                    class="rounded-lg border border-amber-200 px-3 py-2 text-[13px] font-medium text-amber-600 hover:bg-amber-50 dark:border-amber-800/60 dark:text-amber-400 dark:hover:bg-amber-900/20 transition">Suspend</button>
         </form>
         {% endif %}
         {% if instance.status.value == 'suspended' or instance.suspended_at %}
         <form method="POST" action="/instances/{{ instance.instance_id }}/reactivate">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 transition">Reactivate</button>
+            <button type="submit" data-testid="instance-reactivate"
+                    class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-[13px] font-semibold text-white hover:bg-emerald-700 transition">Reactivate</button>
         </form>
         {% endif %}
         {% if instance.status.value in ('stopped', 'suspended', 'error') %}
         <form method="POST" action="/instances/{{ instance.instance_id }}/archive" onsubmit="return confirm('Archive instance {{ instance.org_code }}? This will preserve data but make the instance inaccessible.')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 transition">Archive</button>
+            <button type="submit" data-testid="instance-archive"
+                    class="rounded-lg border border-surface-200 px-3 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Archive</button>
         </form>
         {% endif %}
 
@@ -101,7 +113,8 @@
         {% if instance.status.value in ('stopped', 'error', 'provisioned', 'suspended') %}
         <form method="POST" action="/instances/{{ instance.instance_id }}/delete" onsubmit="return confirm('Delete instance {{ instance.org_code }}? This cannot be undone.')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" class="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20 transition">Delete</button>
+            <button type="submit" data-testid="instance-delete"
+                    class="rounded-lg border border-red-200 px-3 py-2 text-[13px] font-medium text-red-600 hover:bg-red-50 dark:border-red-800/60 dark:text-red-400 dark:hover:bg-red-900/20 transition">Delete</button>
         </form>
         {% endif %}
     </div>
@@ -110,38 +123,38 @@
 {# ===== TOP GRID: Instance Details + Health ===== #}
 <div class="grid gap-6 lg:grid-cols-2">
     <!-- Instance Info -->
-    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Instance Details</h2>
-        <dl class="space-y-3">
-            <div class="flex justify-between">
-                <dt class="text-sm text-slate-500 dark:text-slate-400">Org Code</dt>
-                <dd class="text-sm font-medium text-slate-900 dark:text-white font-mono">{{ instance.org_code }}</dd>
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-5">Instance Details</h2>
+        <dl class="space-y-3.5">
+            <div class="flex justify-between items-baseline">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">Org Code</dt>
+                <dd class="text-[13px] font-medium text-surface-900 dark:text-white font-mono">{{ instance.org_code }}</dd>
             </div>
-            <div class="flex justify-between">
-                <dt class="text-sm text-slate-500 dark:text-slate-400">Framework</dt>
-                <dd><span class="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">{{ instance.framework.value }}</span></dd>
+            <div class="flex justify-between items-center">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">Framework</dt>
+                <dd><span class="rounded-md bg-surface-100 px-2 py-0.5 text-[11px] font-medium text-surface-600 dark:bg-surface-800 dark:text-surface-400">{{ instance.framework.value }}</span></dd>
             </div>
-            <div class="flex justify-between">
-                <dt class="text-sm text-slate-500 dark:text-slate-400">Sector</dt>
-                <dd><span class="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">{{ instance.sector_type.value }}</span></dd>
+            <div class="flex justify-between items-center">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">Sector</dt>
+                <dd><span class="rounded-md bg-surface-100 px-2 py-0.5 text-[11px] font-medium text-surface-600 dark:bg-surface-800 dark:text-surface-400">{{ instance.sector_type.value }}</span></dd>
             </div>
-            <div class="flex justify-between">
-                <dt class="text-sm text-slate-500 dark:text-slate-400">Currency</dt>
-                <dd class="text-sm text-slate-900 dark:text-white">{{ instance.currency }}</dd>
+            <div class="flex justify-between items-baseline">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">Currency</dt>
+                <dd class="text-[13px] text-surface-900 dark:text-white">{{ instance.currency }}</dd>
             </div>
-            <div class="flex justify-between">
-                <dt class="text-sm text-slate-500 dark:text-slate-400">Plan</dt>
+            <div class="flex justify-between items-center">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">Plan</dt>
                 <dd>
                     {% if instance.plan %}
-                        <span class="rounded-md bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-400">{{ instance.plan.name }}</span>
+                        <span class="rounded-md bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-400">{{ instance.plan.name }}</span>
                     {% else %}
-                        <span class="text-sm text-slate-400">No plan</span>
+                        <span class="text-[13px] text-surface-400">No plan</span>
                     {% endif %}
                 </dd>
             </div>
-            <div class="flex justify-between">
-                <dt class="text-sm text-slate-500 dark:text-slate-400">Version</dt>
-                <dd class="text-sm font-mono text-slate-900 dark:text-white">
+            <div class="flex justify-between items-baseline">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">Version</dt>
+                <dd class="text-[13px] font-mono text-surface-900 dark:text-white">
                     {% if instance.deployed_git_ref %}
                         {{ instance.deployed_git_ref[:12] }}
                     {% elif instance.git_tag %}
@@ -149,110 +162,110 @@
                     {% elif instance.git_branch %}
                         {{ instance.git_branch }}
                     {% else %}
-                        <span class="text-slate-400">--</span>
+                        <span class="text-surface-400">--</span>
                     {% endif %}
                 </dd>
             </div>
-            <div class="flex justify-between">
-                <dt class="text-sm text-slate-500 dark:text-slate-400">Ports</dt>
-                <dd class="text-sm text-slate-900 dark:text-white font-mono">App :{{ instance.app_port }} &middot; DB :{{ instance.db_port }} &middot; Redis :{{ instance.redis_port }}</dd>
+            <div class="flex justify-between items-baseline">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">Ports</dt>
+                <dd class="text-[12px] text-surface-900 dark:text-white font-mono">App :{{ instance.app_port }} &middot; DB :{{ instance.db_port }} &middot; Redis :{{ instance.redis_port }}</dd>
             </div>
             {% if instance.domain %}
-            <div class="flex justify-between">
-                <dt class="text-sm text-slate-500 dark:text-slate-400">Domain</dt>
-                <dd class="text-sm text-primary-600 dark:text-primary-400">{{ instance.domain }}</dd>
+            <div class="flex justify-between items-baseline">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">Domain</dt>
+                <dd class="text-[13px] text-primary-600 dark:text-primary-400">{{ instance.domain }}</dd>
             </div>
             {% endif %}
             {% if instance.app_url %}
-            <div class="flex justify-between">
-                <dt class="text-sm text-slate-500 dark:text-slate-400">URL</dt>
-                <dd><a href="{{ instance.app_url }}" target="_blank" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400">{{ instance.app_url }} &nearr;</a></dd>
+            <div class="flex justify-between items-baseline">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">URL</dt>
+                <dd><a href="{{ instance.app_url }}" target="_blank" class="text-[13px] text-primary-600 hover:text-primary-700 dark:text-primary-400 transition">{{ instance.app_url }} &nearr;</a></dd>
             </div>
             {% endif %}
-            <div class="flex justify-between">
-                <dt class="text-sm text-slate-500 dark:text-slate-400">Deploy Path</dt>
-                <dd class="text-sm text-slate-600 dark:text-slate-400 font-mono text-xs">{{ instance.deploy_path or '(not set)' }}</dd>
+            <div class="flex justify-between items-baseline">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">Deploy Path</dt>
+                <dd class="text-[12px] text-surface-500 dark:text-surface-400 font-mono">{{ instance.deploy_path or '(not set)' }}</dd>
             </div>
-            <div class="flex justify-between">
-                <dt class="text-sm text-slate-500 dark:text-slate-400">Status</dt>
+            <div class="flex justify-between items-center">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">Status</dt>
                 <dd>
                     {% if instance.status.value == 'running' %}
-                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>Running</span>
+                        <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-600 dark:text-emerald-400"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Running</span>
                     {% elif instance.status.value == 'deploying' %}
-                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400"><span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>Deploying</span>
+                        <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-blue-600 dark:text-blue-400"><span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>Deploying</span>
                     {% elif instance.status.value == 'error' %}
-                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Error</span>
+                        <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Error</span>
                     {% elif instance.status.value == 'stopped' %}
-                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>Stopped</span>
+                        <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-surface-500"><span class="h-1.5 w-1.5 rounded-full bg-surface-400"></span>Stopped</span>
                     {% elif instance.status.value == 'suspended' %}
-                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Suspended</span>
+                        <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Suspended</span>
                     {% elif instance.status.value == 'archived' %}
-                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400"><span class="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>Archived</span>
+                        <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-surface-400"><span class="h-1.5 w-1.5 rounded-full bg-surface-300 dark:bg-surface-600"></span>Archived</span>
                     {% else %}
-                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>Provisioned</span>
+                        <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>Provisioned</span>
                     {% endif %}
                 </dd>
             </div>
             {% if instance.trial_expires_at %}
-            <div class="flex justify-between">
-                <dt class="text-sm text-slate-500 dark:text-slate-400">Trial Expires</dt>
-                <dd class="text-sm text-slate-600 dark:text-slate-400">{{ instance.trial_expires_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
+            <div class="flex justify-between items-baseline">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">Trial Expires</dt>
+                <dd class="text-[13px] text-surface-500 dark:text-surface-400">{{ instance.trial_expires_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
             </div>
             {% endif %}
             {% if instance.suspended_at %}
-            <div class="flex justify-between">
-                <dt class="text-sm text-slate-500 dark:text-slate-400">Suspended At</dt>
-                <dd class="text-sm text-amber-600 dark:text-amber-400">{{ instance.suspended_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
+            <div class="flex justify-between items-baseline">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">Suspended At</dt>
+                <dd class="text-[13px] text-amber-600 dark:text-amber-400">{{ instance.suspended_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
             </div>
             {% endif %}
-            <div class="flex justify-between">
-                <dt class="text-sm text-slate-500 dark:text-slate-400">Created</dt>
-                <dd class="text-sm text-slate-600 dark:text-slate-400">{{ instance.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
+            <div class="flex justify-between items-baseline">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">Created</dt>
+                <dd class="text-[13px] text-surface-500 dark:text-surface-400">{{ instance.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
             </div>
         </dl>
     </div>
 
     <!-- Health -->
-    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Health</h2>
-            <div hx-get="/instances/{{ instance.instance_id }}/health" hx-trigger="every 30s" hx-swap="innerHTML">
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <div class="flex items-center justify-between mb-5">
+            <h2 class="text-lg font-display text-surface-700 dark:text-surface-300">Health</h2>
+            <div {% if not testing %}hx-get="/instances/{{ instance.instance_id }}/health" hx-trigger="every 30s" hx-swap="innerHTML"{% endif %}>
                 {% if latest_health %}
                     {% if latest_health.status.value == 'healthy' %}
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
-                            <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>Healthy &middot; {{ latest_health.response_ms }}ms
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Healthy &middot; {{ latest_health.response_ms }}ms
                         </span>
                     {% elif latest_health.status.value == 'unhealthy' %}
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">
                             <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Unhealthy
                         </span>
                     {% else %}
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">Unreachable</span>
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-surface-100 px-2.5 py-0.5 text-[11px] font-medium text-surface-500 dark:bg-surface-800 dark:text-surface-400">Unreachable</span>
                     {% endif %}
                 {% else %}
-                    <span class="text-xs text-slate-400">No data</span>
+                    <span class="text-[11px] text-surface-400">No data</span>
                 {% endif %}
             </div>
         </div>
 
         {# CPU / Memory / DB Size from latest health check #}
         {% if latest_health %}
-        <div class="mb-4 grid grid-cols-3 gap-3">
-            <div class="rounded-lg border border-slate-100 px-3 py-2 text-center dark:border-slate-800">
-                <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">CPU</p>
-                <p class="mt-0.5 text-lg font-semibold text-slate-900 dark:text-white">
+        <div class="mb-5 grid grid-cols-3 gap-3">
+            <div class="rounded-lg border border-surface-100 dark:border-surface-800/60 px-3 py-3 text-center">
+                <p class="text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">CPU</p>
+                <p class="mt-1 text-xl font-display text-surface-900 dark:text-white">
                     {% if latest_health.cpu_percent is not none %}{{ latest_health.cpu_percent }}%{% else %}--{% endif %}
                 </p>
             </div>
-            <div class="rounded-lg border border-slate-100 px-3 py-2 text-center dark:border-slate-800">
-                <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Memory</p>
-                <p class="mt-0.5 text-lg font-semibold text-slate-900 dark:text-white">
+            <div class="rounded-lg border border-surface-100 dark:border-surface-800/60 px-3 py-3 text-center">
+                <p class="text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Memory</p>
+                <p class="mt-1 text-xl font-display text-surface-900 dark:text-white">
                     {% if latest_health.memory_mb is not none %}{{ latest_health.memory_mb }} MB{% else %}--{% endif %}
                 </p>
             </div>
-            <div class="rounded-lg border border-slate-100 px-3 py-2 text-center dark:border-slate-800">
-                <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">DB Size</p>
-                <p class="mt-0.5 text-lg font-semibold text-slate-900 dark:text-white">
+            <div class="rounded-lg border border-surface-100 dark:border-surface-800/60 px-3 py-3 text-center">
+                <p class="text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">DB Size</p>
+                <p class="mt-1 text-xl font-display text-surface-900 dark:text-white">
                     {% if latest_health.db_size_mb is not none %}{{ latest_health.db_size_mb }} MB{% else %}--{% endif %}
                 </p>
             </div>
@@ -262,63 +275,63 @@
         {% if recent_checks %}
         <div class="space-y-2">
             {% for check in recent_checks %}
-            <div class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 dark:border-slate-800">
+            <div class="flex items-center justify-between rounded-lg border border-surface-100 dark:border-surface-800/60 px-3 py-2.5">
                 <div class="flex items-center gap-2">
                     {% if check.status.value == 'healthy' %}
-                        <span class="h-2 w-2 rounded-full bg-green-500"></span>
+                        <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
                     {% elif check.status.value == 'unhealthy' %}
                         <span class="h-2 w-2 rounded-full bg-red-500"></span>
                     {% else %}
-                        <span class="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                        <span class="h-2 w-2 rounded-full bg-surface-300 dark:bg-surface-600"></span>
                     {% endif %}
-                    <span class="text-xs text-slate-500 dark:text-slate-400">{{ check.checked_at.strftime('%H:%M:%S') if check.checked_at else '' }}</span>
+                    <span class="text-[11px] font-mono text-surface-400 dark:text-surface-500">{{ check.checked_at.strftime('%H:%M:%S') if check.checked_at else '' }}</span>
                 </div>
-                <div class="flex items-center gap-3 text-xs text-slate-400">
-                    {% if check.response_ms %}<span>{{ check.response_ms }}ms</span>{% endif %}
+                <div class="flex items-center gap-3 text-[11px] text-surface-400 dark:text-surface-500">
+                    {% if check.response_ms %}<span class="font-mono">{{ check.response_ms }}ms</span>{% endif %}
                     {% if check.db_healthy is not none %}
-                        <span>DB: {% if check.db_healthy %}OK{% else %}FAIL{% endif %}</span>
+                        <span>DB: {% if check.db_healthy %}<span class="text-emerald-500">OK</span>{% else %}<span class="text-red-500">FAIL</span>{% endif %}</span>
                     {% endif %}
                     {% if check.redis_healthy is not none %}
-                        <span>Redis: {% if check.redis_healthy %}OK{% else %}FAIL{% endif %}</span>
+                        <span>Redis: {% if check.redis_healthy %}<span class="text-emerald-500">OK</span>{% else %}<span class="text-red-500">FAIL</span>{% endif %}</span>
                     {% endif %}
                 </div>
             </div>
             {% endfor %}
         </div>
         {% else %}
-        <p class="text-sm text-slate-500 dark:text-slate-400">No health checks recorded yet.</p>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">No health checks recorded yet.</p>
         {% endif %}
     </div>
 </div>
 
 {# ===== DEPLOYMENT LOGS ===== #}
 {% if deploy_logs %}
-<div class="mt-6 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-    <div class="flex items-center justify-between mb-4">
-        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Latest Deployment</h2>
+<div class="mt-6 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+    <div class="flex items-center justify-between mb-5">
+        <h2 class="text-lg font-display text-surface-700 dark:text-surface-300">Latest Deployment</h2>
         {% if latest_deploy_id %}
-        <a href="/instances/{{ instance.instance_id }}/deploy-log?deployment_id={{ latest_deploy_id }}" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400">View Full Log &rarr;</a>
+        <a href="/instances/{{ instance.instance_id }}/deploy-log?deployment_id={{ latest_deploy_id }}" class="text-[13px] text-primary-600 hover:text-primary-700 dark:text-primary-400 transition">View Full Log &rarr;</a>
         {% endif %}
     </div>
     <div class="space-y-2">
         {% for log in deploy_logs %}
-        <div class="flex items-center gap-3 rounded-lg border border-slate-100 px-3 py-2 dark:border-slate-800">
+        <div class="flex items-center gap-3 rounded-lg border border-surface-100 dark:border-surface-800/60 px-3 py-2.5">
             {% if log.status.value == 'success' %}
-                <svg class="h-5 w-5 flex-shrink-0 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <svg class="h-5 w-5 flex-shrink-0 text-emerald-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
             {% elif log.status.value == 'failed' %}
-                <svg class="h-5 w-5 flex-shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <svg class="h-5 w-5 flex-shrink-0 text-red-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
             {% elif log.status.value == 'running' %}
                 <svg class="h-5 w-5 flex-shrink-0 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
             {% elif log.status.value == 'skipped' %}
-                <svg class="h-5 w-5 flex-shrink-0 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+                <svg class="h-5 w-5 flex-shrink-0 text-surface-300 dark:text-surface-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14"/></svg>
             {% else %}
-                <span class="h-5 w-5 flex-shrink-0 rounded-full border-2 border-slate-200 dark:border-slate-700"></span>
+                <span class="h-5 w-5 flex-shrink-0 rounded-full border-2 border-surface-200 dark:border-surface-700"></span>
             {% endif %}
             <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ log.message }}</p>
+                <p class="text-[13px] font-medium text-surface-900 dark:text-white">{{ log.message }}</p>
             </div>
             {% if log.completed_at and log.started_at %}
-            <span class="text-xs text-slate-400">{{ (log.completed_at - log.started_at).total_seconds() | round(1) }}s</span>
+            <span class="text-[11px] text-surface-400 font-mono">{{ (log.completed_at - log.started_at).total_seconds() | round(1) }}s</span>
             {% endif %}
         </div>
         {% endfor %}
@@ -329,29 +342,29 @@
 {# ===== TABBED SECTIONS ===== #}
 <div class="mt-6" x-data="{ activeTab: 'modules' }">
     {# Tab Navigation #}
-    <div class="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
-        <button @click="activeTab = 'modules'" :class="activeTab === 'modules' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'" class="rounded-lg px-4 py-2 text-sm font-medium transition">Modules</button>
-        <button @click="activeTab = 'flags'" :class="activeTab === 'flags' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'" class="rounded-lg px-4 py-2 text-sm font-medium transition">Feature Flags</button>
-        <button @click="activeTab = 'plan'" :class="activeTab === 'plan' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'" class="rounded-lg px-4 py-2 text-sm font-medium transition">Plan</button>
-        <button @click="activeTab = 'backups'" :class="activeTab === 'backups' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'" class="rounded-lg px-4 py-2 text-sm font-medium transition">Backups</button>
-        <button @click="activeTab = 'domains'" :class="activeTab === 'domains' ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'" class="rounded-lg px-4 py-2 text-sm font-medium transition">Domains</button>
+    <div class="flex gap-1 rounded-xl border border-surface-200/80 bg-white p-1 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <button @click="activeTab = 'modules'" :class="activeTab === 'modules' ? 'bg-surface-900 text-white dark:bg-primary-500 dark:text-surface-950' : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'" class="rounded-lg px-4 py-2 text-[13px] font-medium transition">Modules</button>
+        <button @click="activeTab = 'flags'" :class="activeTab === 'flags' ? 'bg-surface-900 text-white dark:bg-primary-500 dark:text-surface-950' : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'" class="rounded-lg px-4 py-2 text-[13px] font-medium transition">Feature Flags</button>
+        <button @click="activeTab = 'plan'" :class="activeTab === 'plan' ? 'bg-surface-900 text-white dark:bg-primary-500 dark:text-surface-950' : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'" class="rounded-lg px-4 py-2 text-[13px] font-medium transition">Plan</button>
+        <button @click="activeTab = 'backups'" :class="activeTab === 'backups' ? 'bg-surface-900 text-white dark:bg-primary-500 dark:text-surface-950' : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'" class="rounded-lg px-4 py-2 text-[13px] font-medium transition">Backups</button>
+        <button @click="activeTab = 'domains'" :class="activeTab === 'domains' ? 'bg-surface-900 text-white dark:bg-primary-500 dark:text-surface-950' : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'" class="rounded-lg px-4 py-2 text-[13px] font-medium transition">Domains</button>
+        <button @click="activeTab = 'audit'" :class="activeTab === 'audit' ? 'bg-surface-900 text-white dark:bg-primary-500 dark:text-surface-950' : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'" class="rounded-lg px-4 py-2 text-[13px] font-medium transition">Audit Log</button>
     </div>
 
     {# ---- MODULES TAB ---- #}
-    <div x-show="activeTab === 'modules'" x-cloak class="mt-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Modules</h2>
+    <div x-show="activeTab === 'modules'" x-cloak class="mt-4 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-5">Modules</h2>
         {% if modules %}
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {% for mod in modules %}
-            <div class="flex items-center justify-between rounded-lg border border-slate-100 px-4 py-3 dark:border-slate-800">
+            <div class="flex items-center justify-between rounded-lg border border-surface-100 dark:border-surface-800/60 px-4 py-3">
                 <div class="min-w-0">
-                    <p class="text-sm font-medium text-slate-900 dark:text-white">{{ mod.module }}</p>
+                    <p class="text-[13px] font-medium text-surface-900 dark:text-white">{{ mod.module }}</p>
                     {% if mod.is_core %}
-                    <p class="text-[10px] font-medium uppercase tracking-wider text-slate-400">Core</p>
+                    <p class="text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Core</p>
                     {% endif %}
                 </div>
                 {% if mod.is_core %}
-                {# Core modules: locked toggle #}
                 <div class="relative">
                     <div class="h-6 w-11 rounded-full bg-primary-500 opacity-60 cursor-not-allowed">
                         <span class="absolute left-[22px] top-0.5 h-5 w-5 rounded-full bg-white shadow transition"></span>
@@ -360,7 +373,8 @@
                 {% else %}
                 <form method="POST" action="/instances/{{ instance.instance_id }}/modules/{{ mod.module_id }}/toggle">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                    <button type="submit" class="relative h-6 w-11 rounded-full transition {{ 'bg-primary-500' if mod.enabled else 'bg-slate-200 dark:bg-slate-700' }}">
+                    <input type="hidden" name="enabled" value="{{ 'off' if mod.enabled else 'on' }}" />
+                    <button type="submit" class="relative h-6 w-11 rounded-full transition {{ 'bg-primary-500' if mod.enabled else 'bg-surface-200 dark:bg-surface-700' }}">
                         <span class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition {{ 'left-[22px]' if mod.enabled else 'left-0.5' }}"></span>
                     </button>
                 </form>
@@ -369,113 +383,121 @@
             {% endfor %}
         </div>
         {% else %}
-        <p class="text-sm text-slate-500 dark:text-slate-400">No modules configured for this instance.</p>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">No modules configured for this instance.</p>
         {% endif %}
     </div>
 
     {# ---- FEATURE FLAGS TAB ---- #}
-    <div x-show="activeTab === 'flags'" x-cloak class="mt-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Feature Flags</h2>
+    <div x-show="activeTab === 'flags'" x-cloak class="mt-4 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-5">Feature Flags</h2>
         {% if flags %}
         <div class="space-y-3">
             {% for flag in flags %}
-            <div class="flex items-center justify-between rounded-lg border border-slate-100 px-4 py-3 dark:border-slate-800">
+            <div class="flex items-center justify-between rounded-lg border border-surface-100 dark:border-surface-800/60 px-4 py-3">
                 <div class="min-w-0 flex-1 mr-4">
                     <div class="flex items-center gap-2">
-                        <p class="text-sm font-medium text-slate-900 dark:text-white font-mono">{{ flag.key }}</p>
+                        <p class="text-[13px] font-medium text-surface-900 dark:text-white font-mono">{{ flag.key }}</p>
                         {% if flag.is_custom %}
-                        <span class="rounded bg-accent-100 px-1.5 py-0.5 text-[10px] font-medium text-accent-700 dark:bg-accent-900/30 dark:text-accent-400">Custom</span>
+                        <span class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Custom</span>
                         {% endif %}
                     </div>
                     {% if flag.description %}
-                    <p class="mt-0.5 text-xs text-slate-400">{{ flag.description }}</p>
+                    <p class="mt-0.5 text-[11px] text-surface-400 dark:text-surface-500">{{ flag.description }}</p>
                     {% endif %}
                 </div>
                 <form method="POST" action="/instances/{{ instance.instance_id }}/flags/{{ flag.key }}/toggle">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                    <input type="hidden" name="value" value="{{ 'false' if flag.value else 'true' }}" />
-                    <button type="submit" class="relative h-6 w-11 rounded-full transition {{ 'bg-primary-500' if flag.value else 'bg-slate-200 dark:bg-slate-700' }}">
-                        <span class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition {{ 'left-[22px]' if flag.value else 'left-0.5' }}"></span>
+                    <input type="hidden" name="value" value="{{ 'false' if flag.value == 'true' else 'true' }}" />
+                    <button type="submit" class="relative h-6 w-11 rounded-full transition {{ 'bg-primary-500' if flag.value == 'true' else 'bg-surface-200 dark:bg-surface-700' }}">
+                        <span class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition {{ 'left-[22px]' if flag.value == 'true' else 'left-0.5' }}"></span>
                     </button>
                 </form>
             </div>
             {% endfor %}
         </div>
         {% else %}
-        <p class="text-sm text-slate-500 dark:text-slate-400">No feature flags configured for this instance.</p>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">No feature flags configured for this instance.</p>
         {% endif %}
     </div>
 
     {# ---- PLAN TAB ---- #}
-    <div x-show="activeTab === 'plan'" x-cloak class="mt-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Subscription Plan</h2>
+    <div x-show="activeTab === 'plan'" x-cloak class="mt-4 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-5">Subscription Plan</h2>
         {% if plans %}
         <form method="POST" action="/instances/{{ instance.instance_id }}/plan">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <div class="space-y-3">
-                {% for plan in plans %}
-                <label class="flex cursor-pointer items-start gap-4 rounded-lg border px-4 py-3 transition {{ 'border-primary-300 bg-primary-50/50 dark:border-primary-700 dark:bg-primary-950/30' if instance.plan_id == plan.plan_id else 'border-slate-100 hover:border-slate-200 dark:border-slate-800 dark:hover:border-slate-700' }}">
-                    <input type="radio" name="plan_id" value="{{ plan.plan_id }}" {{ 'checked' if instance.plan_id == plan.plan_id else '' }} class="mt-1 h-4 w-4 border-slate-300 text-primary-600 focus:ring-primary-500" />
+                <label class="flex cursor-pointer items-start gap-4 rounded-lg border px-4 py-3.5 transition {{ 'border-primary-300 bg-primary-50/50 dark:border-primary-700/50 dark:bg-primary-950/20' if not instance.plan_id else 'border-surface-100 hover:border-surface-200 dark:border-surface-800/60 dark:hover:border-surface-700' }}">
+                    <input type="radio" name="plan_id" value="" {{ 'checked' if not instance.plan_id else '' }} class="mt-1 h-4 w-4 border-surface-300 text-primary-600 focus:ring-primary-500" />
                     <div class="min-w-0 flex-1">
-                        <p class="text-sm font-semibold text-slate-900 dark:text-white">{{ plan.name }}</p>
+                        <p class="text-[13px] font-semibold text-surface-900 dark:text-white">No plan</p>
+                        <p class="mt-0.5 text-[11px] text-surface-400 dark:text-surface-500">Remove the current plan assignment</p>
+                    </div>
+                </label>
+                {% for plan in plans %}
+                <label class="flex cursor-pointer items-start gap-4 rounded-lg border px-4 py-3.5 transition {{ 'border-primary-300 bg-primary-50/50 dark:border-primary-700/50 dark:bg-primary-950/20' if instance.plan_id == plan.plan_id else 'border-surface-100 hover:border-surface-200 dark:border-surface-800/60 dark:hover:border-surface-700' }}">
+                    <input type="radio" name="plan_id" value="{{ plan.plan_id }}" {{ 'checked' if instance.plan_id == plan.plan_id else '' }} class="mt-1 h-4 w-4 border-surface-300 text-primary-600 focus:ring-primary-500" />
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[13px] font-semibold text-surface-900 dark:text-white">{{ plan.name }}</p>
                         {% if plan.description %}
-                        <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{{ plan.description }}</p>
+                        <p class="mt-0.5 text-[11px] text-surface-400 dark:text-surface-500">{{ plan.description }}</p>
                         {% endif %}
                     </div>
                 </label>
                 {% endfor %}
             </div>
-            <div class="mt-4 flex justify-end">
-                <button type="submit" class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 transition">Update Plan</button>
+            <div class="mt-5 flex justify-end">
+                <button type="submit" data-testid="instance-update-plan"
+                        class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">Update Plan</button>
             </div>
         </form>
         {% else %}
-        <p class="text-sm text-slate-500 dark:text-slate-400">No plans available.</p>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">No plans available.</p>
         {% endif %}
     </div>
 
     {# ---- BACKUPS TAB ---- #}
-    <div x-show="activeTab === 'backups'" x-cloak class="mt-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Backups</h2>
+    <div x-show="activeTab === 'backups'" x-cloak class="mt-4 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <div class="flex items-center justify-between mb-5">
+            <h2 class="text-lg font-display text-surface-700 dark:text-surface-300">Backups</h2>
             <form method="POST" action="/instances/{{ instance.instance_id }}/backup">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 transition">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 px-3 py-2 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
                     Create Backup
                 </button>
             </form>
         </div>
         {% if backups %}
         <div class="overflow-x-auto">
-            <table class="w-full text-sm">
+            <table class="w-full">
                 <thead>
-                    <tr class="border-b border-slate-100 dark:border-slate-800">
-                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Type</th>
-                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
-                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Size</th>
-                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">File</th>
-                        <th class="pb-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Created</th>
+                    <tr class="border-b border-surface-100 dark:border-surface-800/60">
+                        <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Type</th>
+                        <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Status</th>
+                        <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Size</th>
+                        <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">File</th>
+                        <th class="pb-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Created</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody class="divide-y divide-surface-100 dark:divide-surface-800/60">
                     {% for backup in backups %}
-                    <tr>
-                        <td class="py-2.5 pr-4">
-                            <span class="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">{{ backup.backup_type.value }}</span>
+                    <tr class="hover:bg-surface-50/60 dark:hover:bg-surface-800/30 transition-colors">
+                        <td class="py-3 pr-4">
+                            <span class="rounded-md bg-surface-100 px-2 py-0.5 text-[11px] font-medium text-surface-600 dark:bg-surface-800 dark:text-surface-400">{{ backup.backup_type.value }}</span>
                         </td>
-                        <td class="py-2.5 pr-4">
+                        <td class="py-3 pr-4">
                             {% if backup.status.value == 'completed' %}
-                                <span class="inline-flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>Completed</span>
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Completed</span>
                             {% elif backup.status.value == 'running' %}
-                                <span class="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400"><span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>Running</span>
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-blue-600 dark:text-blue-400"><span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>Running</span>
                             {% elif backup.status.value == 'failed' %}
-                                <span class="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Failed</span>
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Failed</span>
                             {% else %}
-                                <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>{{ backup.status.value|title }}</span>
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-surface-500"><span class="h-1.5 w-1.5 rounded-full bg-surface-400"></span>{{ backup.status.value|title }}</span>
                             {% endif %}
                         </td>
-                        <td class="py-2.5 pr-4 text-slate-600 dark:text-slate-400">
+                        <td class="py-3 pr-4 text-[13px] text-surface-500 dark:text-surface-400">
                             {% if backup.size_bytes %}
                                 {% if backup.size_bytes > 1073741824 %}
                                     {{ (backup.size_bytes / 1073741824) | round(1) }} GB
@@ -490,84 +512,88 @@
                                 --
                             {% endif %}
                         </td>
-                        <td class="py-2.5 pr-4 font-mono text-xs text-slate-500 dark:text-slate-400 max-w-[200px] truncate">{{ backup.file_path or '--' }}</td>
-                        <td class="py-2.5 text-slate-600 dark:text-slate-400">{{ backup.created_at.strftime('%Y-%m-%d %H:%M') if backup.created_at else '--' }}</td>
+                        <td class="py-3 pr-4 font-mono text-[11px] text-surface-400 dark:text-surface-500 max-w-[200px] truncate">{{ backup.file_path or '--' }}</td>
+                        <td class="py-3 text-[13px] text-surface-500 dark:text-surface-400">{{ backup.created_at.strftime('%Y-%m-%d %H:%M') if backup.created_at else '--' }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
         {% else %}
-        <p class="text-sm text-slate-500 dark:text-slate-400">No backups yet. Create one to get started.</p>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">No backups yet. Create one to get started.</p>
         {% endif %}
     </div>
 
     {# ---- DOMAINS TAB ---- #}
-    <div x-show="activeTab === 'domains'" x-cloak class="mt-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">Custom Domains</h2>
+    <div x-show="activeTab === 'domains'" x-cloak class="mt-4 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-5">Custom Domains</h2>
 
         {# Add Domain Form #}
-        <form method="POST" action="/instances/{{ instance.instance_id }}/domains/add" class="mb-6 flex gap-3">
+        <form method="POST" action="/instances/{{ instance.instance_id }}/domains/add" class="mb-6 flex flex-wrap items-end gap-3">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <input type="text" name="domain" placeholder="e.g. erp.example.com" required class="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
-            <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 transition">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            <input type="text" name="domain" placeholder="e.g. erp.example.com" required class="flex-1 min-w-[200px] rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+            <label class="inline-flex items-center gap-2 text-[13px] text-surface-600 dark:text-surface-400">
+                <input type="checkbox" name="is_primary" value="true" class="h-4 w-4 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
+                Primary
+            </label>
+            <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2.5 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
                 Add Domain
             </button>
         </form>
 
         {% if domains %}
         <div class="overflow-x-auto">
-            <table class="w-full text-sm">
+            <table class="w-full">
                 <thead>
-                    <tr class="border-b border-slate-100 dark:border-slate-800">
-                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Domain</th>
-                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Primary</th>
-                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
-                        <th class="pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Verification Token</th>
-                        <th class="pb-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Actions</th>
+                    <tr class="border-b border-surface-100 dark:border-surface-800/60">
+                        <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Domain</th>
+                        <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Primary</th>
+                        <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Status</th>
+                        <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Verification Token</th>
+                        <th class="pb-3 text-right text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody class="divide-y divide-surface-100 dark:divide-surface-800/60">
                     {% for d in domains %}
-                    <tr>
-                        <td class="py-2.5 pr-4 font-medium text-slate-900 dark:text-white">{{ d.domain }}</td>
-                        <td class="py-2.5 pr-4">
+                    <tr class="hover:bg-surface-50/60 dark:hover:bg-surface-800/30 transition-colors">
+                        <td class="py-3 pr-4 text-[13px] font-medium text-surface-900 dark:text-white">{{ d.domain }}</td>
+                        <td class="py-3 pr-4">
                             {% if d.is_primary %}
                                 <span class="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700 dark:bg-primary-900/30 dark:text-primary-400">Primary</span>
                             {% else %}
-                                <span class="text-xs text-slate-400">--</span>
+                                <span class="text-[11px] text-surface-400">--</span>
                             {% endif %}
                         </td>
-                        <td class="py-2.5 pr-4">
+                        <td class="py-3 pr-4">
                             {% if d.status.value == 'verified' %}
-                                <span class="inline-flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>Verified</span>
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Verified</span>
                             {% elif d.status.value == 'pending' %}
-                                <span class="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>Pending</span>
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>Pending</span>
                             {% elif d.status.value == 'failed' %}
-                                <span class="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Failed</span>
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Failed</span>
                             {% else %}
-                                <span class="text-xs text-slate-500">{{ d.status.value|title }}</span>
+                                <span class="text-[11px] text-surface-500">{{ d.status.value|title }}</span>
                             {% endif %}
                         </td>
-                        <td class="py-2.5 pr-4">
+                        <td class="py-3 pr-4">
                             {% if d.verification_token %}
-                            <code class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono text-slate-600 dark:bg-slate-800 dark:text-slate-400 select-all">{{ d.verification_token }}</code>
+                            <code class="rounded bg-surface-100 px-1.5 py-0.5 text-[11px] font-mono text-surface-600 dark:bg-surface-800 dark:text-surface-400 select-all">{{ d.verification_token }}</code>
                             {% else %}
-                            <span class="text-xs text-slate-400">--</span>
+                            <span class="text-[11px] text-surface-400">--</span>
                             {% endif %}
                         </td>
-                        <td class="py-2.5 text-right">
+                        <td class="py-3 text-right">
                             <div class="flex items-center justify-end gap-2">
                                 {% if d.status.value != 'verified' %}
                                 <form method="POST" action="/instances/{{ instance.instance_id }}/domains/{{ d.domain_id }}/verify" class="inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                                    <button type="submit" class="rounded-md px-2 py-1 text-xs font-medium text-primary-600 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-900/20 transition">Verify</button>
+                                    <button type="submit" class="rounded-md px-2 py-1 text-[11px] font-medium text-primary-600 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-900/20 transition">Verify</button>
                                 </form>
                                 {% endif %}
                                 <form method="POST" action="/instances/{{ instance.instance_id }}/domains/{{ d.domain_id }}/delete" onsubmit="return confirm('Remove domain {{ d.domain }}?')" class="inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                                    <button type="submit" class="rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 transition">Remove</button>
+                                    <button type="submit" class="rounded-md px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 transition">Remove</button>
                                 </form>
                             </div>
                         </td>
@@ -577,16 +603,49 @@
             </table>
         </div>
         {% else %}
-        <p class="text-sm text-slate-500 dark:text-slate-400">No custom domains configured. Add one above.</p>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">No custom domains configured. Add one above.</p>
+        {% endif %}
+    </div>
+
+    {# ---- AUDIT LOG TAB ---- #}
+    <div x-show="activeTab === 'audit'" x-cloak class="mt-4 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-5">Audit Log</h2>
+        {% if audit_logs %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-surface-100 dark:border-surface-800/60">
+                        <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Action</th>
+                        <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">User</th>
+                        <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Details</th>
+                        <th class="pb-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Time</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-surface-100 dark:divide-surface-800/60">
+                    {% for log in audit_logs %}
+                    <tr class="hover:bg-surface-50/60 dark:hover:bg-surface-800/30 transition-colors">
+                        <td class="py-3 pr-4">
+                            <span class="rounded-md bg-surface-100 px-2 py-0.5 text-[11px] font-medium text-surface-600 dark:bg-surface-800 dark:text-surface-400">{{ log.action }}</span>
+                        </td>
+                        <td class="py-3 pr-4 text-[13px] text-surface-500 dark:text-surface-400">{{ log.user_name or log.user_id or 'system' }}</td>
+                        <td class="py-3 pr-4 text-[11px] text-surface-400 dark:text-surface-500 max-w-[300px] truncate">{{ log.details|tojson if log.details else '--' }}</td>
+                        <td class="py-3 text-[13px] text-surface-500 dark:text-surface-400">{{ log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else '--' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">No audit log entries yet.</p>
         {% endif %}
     </div>
 </div>
 
 {# ===== NOTES ===== #}
 {% if instance.notes %}
-<div class="mt-6 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-    <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Notes</h2>
-    <p class="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ instance.notes }}</p>
+<div class="mt-6 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+    <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-3">Notes</h2>
+    <p class="text-[13px] text-surface-500 dark:text-surface-400 whitespace-pre-wrap leading-relaxed">{{ instance.notes }}</p>
 </div>
 {% endif %}
 {% endblock %}

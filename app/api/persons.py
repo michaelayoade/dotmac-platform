@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 from app.schemas.common import ListResponse
 
+from app.api.deps import require_role
 from app.db import SessionLocal
 from app.schemas.person import PersonCreate, PersonRead, PersonUpdate
 from app.services import person as person_service
@@ -17,7 +18,12 @@ def get_db():
         db.close()
 
 
-@router.post("", response_model=PersonRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=PersonRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role("admin"))],
+)
 def create_person(payload: PersonCreate, db: Session = Depends(get_db)):
     return person_service.people.create(db, payload)
 
@@ -43,11 +49,19 @@ def list_people(
     )
 
 
-@router.patch("/{person_id}", response_model=PersonRead)
+@router.patch(
+    "/{person_id}",
+    response_model=PersonRead,
+    dependencies=[Depends(require_role("admin"))],
+)
 def update_person(person_id: str, payload: PersonUpdate, db: Session = Depends(get_db)):
     return person_service.people.update(db, person_id, payload)
 
 
-@router.delete("/{person_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{person_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_role("admin"))],
+)
 def delete_person(person_id: str, db: Session = Depends(get_db)):
     person_service.people.delete(db, person_id)

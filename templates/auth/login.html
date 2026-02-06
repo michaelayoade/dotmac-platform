@@ -4,40 +4,85 @@
 {% set brand_name = brand.name | default("DotMac Platform") %}
 {% set brand_mark = brand.mark | default("DP") %}
 
-<div class="flex min-h-screen items-center justify-center px-4 bg-noise bg-mesh">
-    <div class="w-full max-w-md">
-        <div class="mb-8 text-center">
-            <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 via-primary-600 to-primary-700 text-lg font-bold text-white shadow-xl shadow-primary-500/30">
+<div class="flex min-h-screen items-center justify-center px-4 relative overflow-hidden">
+    <!-- Background atmosphere -->
+    <div class="absolute inset-0 bg-gradient-to-br from-surface-100 via-surface-50 to-surface-100 dark:from-surface-950 dark:via-surface-900 dark:to-surface-950"></div>
+    <div class="absolute top-0 right-0 w-[600px] h-[600px] bg-primary-400/5 dark:bg-primary-400/3 rounded-full blur-3xl -translate-y-1/3 translate-x-1/4"></div>
+    <div class="absolute bottom-0 left-0 w-[400px] h-[400px] bg-surface-400/5 dark:bg-primary-400/2 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4"></div>
+
+    <div class="relative w-full max-w-[400px] z-10">
+        <!-- Brand -->
+        <div class="mb-10 text-center">
+            <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-surface-900 dark:bg-primary-500 text-sm font-bold tracking-wider text-white dark:text-surface-950 shadow-lg">
                 {{ brand_mark }}
             </div>
-            <h1 class="mt-4 text-2xl font-bold text-slate-900 dark:text-white font-display">{{ brand_name }}</h1>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Sign in to your account</p>
+            <h1 class="mt-5 text-3xl font-display text-surface-900 dark:text-white">{{ brand_name }}</h1>
+            <p class="mt-2 text-[13px] text-surface-400 dark:text-surface-500">Sign in to control plane</p>
         </div>
 
-        <div class="rounded-2xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/50 dark:border-slate-700 dark:bg-slate-800 dark:shadow-slate-900/50">
+        <!-- Login Card -->
+        <div class="rounded-2xl border border-surface-200/80 bg-white p-8 shadow-xl shadow-surface-900/5 dark:border-surface-800/60 dark:bg-surface-900 dark:shadow-black/20">
             {% if error %}
-            <div class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+            <div class="mb-5 flex items-center gap-2.5 rounded-lg bg-red-50 px-4 py-3 text-[13px] text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9.303 3.376c-.866 1.5-3.032 1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/></svg>
                 {{ error }}
             </div>
             {% endif %}
 
-            <form method="POST" action="/login" class="space-y-5">
+            <form method="POST" action="/login" class="space-y-5" data-testid="login-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                 <div>
-                    <label for="username" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Username</label>
-                    <input type="text" id="username" name="username" required autofocus
-                           class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:ring-primary-500/30" />
+                    <label for="username" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Username</label>
+                    <input type="text" id="username" name="username" required autofocus data-testid="login-username"
+                           class="mt-2 w-full rounded-xl border border-surface-200 bg-surface-50 px-4 py-3 text-[14px] text-surface-900 placeholder-surface-400 shadow-sm transition focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200/50 dark:border-surface-700 dark:bg-surface-800 dark:text-white dark:placeholder-surface-500 dark:focus:border-primary-500 dark:focus:bg-surface-800 dark:focus:ring-primary-500/20" />
                 </div>
                 <div>
-                    <label for="password" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Password</label>
-                    <input type="password" id="password" name="password" required
-                           class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:ring-primary-500/30" />
+                    <label for="password" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Password</label>
+                    <div class="relative">
+                        <input type="password" id="password" name="password" required data-testid="login-password"
+                               class="mt-2 w-full rounded-xl border border-surface-200 bg-surface-50 px-4 py-3 pr-12 text-[14px] text-surface-900 placeholder-surface-400 shadow-sm transition focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200/50 dark:border-surface-700 dark:bg-surface-800 dark:text-white dark:placeholder-surface-500 dark:focus:border-primary-500 dark:focus:bg-surface-800 dark:focus:ring-primary-500/20" />
+                        <button type="button" data-toggle-password
+                                class="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-surface-400 hover:text-surface-600 dark:text-surface-500 dark:hover:text-surface-300 transition"
+                                aria-label="Toggle password visibility">
+                            <svg data-eye-open class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.576 3.01 9.964 7.183.07.207.07.431 0 .639C20.576 16.49 16.638 19.5 12 19.5c-4.64 0-8.577-3.01-9.964-7.178Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+                            <svg data-eye-closed class="hidden h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18M10.477 10.48a3 3 0 0 0 4.243 4.243M9.88 5.6A9.964 9.964 0 0 1 12 5.25c4.638 0 8.576 3.01 9.964 7.183.147.44.147.944 0 1.384a9.967 9.967 0 0 1-3.217 4.76M6.228 6.23A9.965 9.965 0 0 0 2.036 11.683c-.147.44-.147.944 0 1.384C3.423 16.49 7.36 19.5 12 19.5c1.437 0 2.82-.29 4.089-.82"/></svg>
+                        </button>
+                    </div>
                 </div>
-                <button type="submit"
-                        class="w-full rounded-xl bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-primary-500/25 transition hover:shadow-primary-500/40 hover:-translate-y-0.5 active:translate-y-0">
+                <button type="submit" data-testid="login-submit"
+                        class="w-full rounded-xl bg-surface-900 dark:bg-primary-500 px-4 py-3.5 text-[14px] font-semibold text-white dark:text-surface-950 shadow-lg shadow-surface-900/10 dark:shadow-primary-500/20 transition hover:bg-surface-800 dark:hover:bg-primary-400 hover:-translate-y-0.5 active:translate-y-0">
                     Sign In
                 </button>
+                <div class="flex items-center justify-between text-[11px] text-surface-400 dark:text-surface-500">
+                    <a href="/auth/password-reset-request" class="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 transition">
+                        Forgot password?
+                    </a>
+                    <span>MFA supported via API only</span>
+                </div>
             </form>
         </div>
+
+        <!-- Footer -->
+        <p class="mt-8 text-center text-[11px] text-surface-400 dark:text-surface-600">Deployment Control Plane</p>
     </div>
 </div>
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const toggle = document.querySelector("[data-toggle-password]");
+        const input = document.getElementById("password");
+        if (!toggle || !input) {
+            return;
+        }
+        const eyeOpen = toggle.querySelector("[data-eye-open]");
+        const eyeClosed = toggle.querySelector("[data-eye-closed]");
+        toggle.addEventListener("click", () => {
+            const isPassword = input.type === "password";
+            input.type = isPassword ? "text" : "password";
+            if (eyeOpen && eyeClosed) {
+                eyeOpen.classList.toggle("hidden", isPassword);
+                eyeClosed.classList.toggle("hidden", !isPassword);
+            }
+        });
+    });
+</script>
 {% endblock %}

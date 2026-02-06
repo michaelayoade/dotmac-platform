@@ -1,0 +1,82 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-2xl font-display text-surface-800 dark:text-surface-100">{{ person.first_name }} {{ person.last_name }}</h1>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">{{ person.email }}</p>
+    </div>
+    <a href="/people" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Back to People</a>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-[1fr_1fr]">
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-800 dark:text-white">Profile</h2>
+        <form method="POST" action="/people/{{ person.id }}/update" class="mt-4 space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Display name</label>
+                <input type="text" name="display_name" value="{{ person.display_name or '' }}"
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2">
+                <div>
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Status</label>
+                    <select name="status" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
+                        {% for value in ["active", "inactive", "archived"] %}
+                        <option value="{{ value }}" {% if person.status and person.status.value == value %}selected{% endif %}>{{ value | title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="flex items-center gap-2 pt-6">
+                    <input type="checkbox" name="is_active" value="true" {% if person.is_active %}checked{% endif %}
+                           class="h-4 w-4 rounded border-surface-300 text-primary-600 focus:ring-primary-500 dark:border-surface-600 dark:bg-surface-800" />
+                    <label class="text-[13px] text-surface-600 dark:text-surface-400">Active</label>
+                </div>
+            </div>
+            <button type="submit" class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">Save</button>
+        </form>
+    </div>
+
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-800 dark:text-white">Roles</h2>
+        <form method="POST" action="/people/{{ person.id }}/roles" class="mt-4 flex items-end gap-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <div class="flex-1">
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Assign role</label>
+                <select name="role_id" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
+                    {% for role in roles %}
+                        {% if role.id not in assigned_role_ids %}
+                        <option value="{{ role.id }}">{{ role.name }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition"
+                    {% if roles|length == assigned_role_ids|length %}disabled{% endif %}>
+                Add
+            </button>
+        </form>
+
+        <div class="mt-5 space-y-2">
+            {% if assigned %}
+                {% for link in assigned %}
+                {% set role = roles_map.get(link.role_id) %}
+                <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-800/50 dark:bg-surface-800/40">
+                    <div>
+                        <p class="font-medium text-surface-800 dark:text-surface-100">{{ role.name if role else link.role_id }}</p>
+                        <p class="text-[11px] text-surface-400 dark:text-surface-500">Assigned {{ link.assigned_at.strftime('%Y-%m-%d') }}</p>
+                    </div>
+                    <form method="POST" action="/people/{{ person.id }}/roles/{{ link.id }}/delete">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <button type="submit" class="text-[12px] text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300">Remove</button>
+                    </form>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-[12px] text-surface-400 dark:text-surface-500">No roles assigned yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

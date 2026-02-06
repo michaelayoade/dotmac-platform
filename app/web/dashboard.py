@@ -39,10 +39,18 @@ def dashboard(
     # Batch-fetch latest health checks to avoid N+1
     instance_ids = [inst.instance_id for inst in instances]
     health_map = health_svc.get_latest_checks_batch(instance_ids)
-    instance_data = [
-        {"instance": inst, "health": health_map.get(inst.instance_id)}
-        for inst in instances
-    ]
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    instance_data = []
+    for inst in instances:
+        check = health_map.get(inst.instance_id)
+        instance_data.append(
+            {
+                "instance": inst,
+                "health": check,
+                "health_state": health_svc.classify_health(check, now),
+            }
+        )
 
     return templates.TemplateResponse(
         "dashboard.html",

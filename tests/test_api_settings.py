@@ -4,18 +4,18 @@ from app.models.domain_settings import DomainSetting, SettingDomain
 class TestAuthSettingsAPI:
     """Tests for the /settings/auth endpoints."""
 
-    def test_list_auth_settings(self, client, auth_headers):
-        """Test listing auth settings."""
-        response = client.get("/settings/auth", headers=auth_headers)
+    def test_list_auth_settings(self, client, admin_headers):
+        """Test listing auth settings (admin only)."""
+        response = client.get("/settings/auth", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert "items" in data
         assert "count" in data
 
-    def test_list_auth_settings_with_pagination(self, client, auth_headers):
+    def test_list_auth_settings_with_pagination(self, client, admin_headers):
         """Test listing auth settings with pagination."""
         response = client.get(
-            "/settings/auth?limit=10&offset=0", headers=auth_headers
+            "/settings/auth?limit=10&offset=0", headers=admin_headers
         )
         assert response.status_code == 200
         data = response.json()
@@ -26,18 +26,52 @@ class TestAuthSettingsAPI:
         response = client.get("/settings/auth")
         assert response.status_code == 401
 
-    def test_get_auth_setting(self, client, auth_headers, db_session):
-        """Test getting a specific auth setting."""
-        response = client.get("/settings/auth/jwt_algorithm", headers=auth_headers)
+    def test_list_auth_settings_forbidden_non_admin(self, client, auth_headers):
+        """Test listing auth settings with non-admin auth returns 403."""
+        response = client.get("/settings/auth", headers=auth_headers)
+        assert response.status_code == 403
+
+    def test_get_auth_setting(self, client, admin_headers, db_session):
+        """Test getting a specific auth setting (admin only)."""
+        response = client.get("/settings/auth/jwt_algorithm", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == "jwt_algorithm"
         assert data["value_text"] == "HS256"
 
-    def test_get_auth_setting_not_found(self, client, auth_headers):
+    def test_get_auth_setting_not_found(self, client, admin_headers):
         """Test getting a non-existent auth setting."""
-        response = client.get("/settings/auth/nonexistent_key", headers=auth_headers)
+        response = client.get("/settings/auth/nonexistent_key", headers=admin_headers)
         assert response.status_code == 400
+
+    def test_secret_setting_returns_masked_value(self, client, admin_headers, db_session):
+        """Test that secret settings return masked values."""
+        # Use jwt_secret which is in the settings spec
+        setting = (
+            db_session.query(DomainSetting)
+            .filter(
+                DomainSetting.domain == SettingDomain.auth,
+                DomainSetting.key == "jwt_secret",
+            )
+            .first()
+        )
+        if not setting:
+            setting = DomainSetting(
+                domain=SettingDomain.auth,
+                key="jwt_secret",
+                value_text="super-secret-value",
+                is_secret=True,
+            )
+            db_session.add(setting)
+        else:
+            setting.value_text = "super-secret-value"
+            setting.is_secret = True
+        db_session.commit()
+
+        response = client.get("/settings/auth/jwt_secret", headers=admin_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["value_text"] == "********"
 
     def test_upsert_auth_setting_create(self, client, admin_headers):
         """Test creating an auth setting via upsert (admin only)."""
@@ -164,9 +198,9 @@ class TestSchedulerSettingsAPI:
 class TestSettingsAPIV1:
     """Tests for the /api/v1/settings endpoints."""
 
-    def test_list_auth_settings_v1(self, client, auth_headers):
+    def test_list_auth_settings_v1(self, client, admin_headers):
         """Test listing auth settings via v1 API."""
-        response = client.get("/api/v1/settings/auth", headers=auth_headers)
+        response = client.get("/api/v1/settings/auth", headers=admin_headers)
         assert response.status_code == 200
 
     def test_list_audit_settings_v1(self, client, auth_headers):
@@ -192,7 +226,7 @@ class TestSettingsAPIV1:
 class TestSettingsFilters:
     """Tests for settings filters and ordering."""
 
-    def test_list_settings_filter_by_active(self, client, auth_headers, db_session):
+    def test_list_settings_filter_by_active(self, client, admin_headers, db_session):
         """Test filtering settings by is_active."""
         setting = (
             db_session.query(DomainSetting)
@@ -203,20 +237,20 @@ class TestSettingsFilters:
         setting.is_active = False
         db_session.commit()
 
-        response = client.get("/settings/auth?is_active=true", headers=auth_headers)
+        response = client.get("/settings/auth?is_active=true", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         for item in data["items"]:
             assert item["is_active"] is True
 
-        response = client.get("/settings/auth?is_active=false", headers=auth_headers)
+        response = client.get("/settings/auth?is_active=false", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert any(item["is_active"] is False for item in data["items"])
 
-    def test_list_settings_with_ordering(self, client, auth_headers):
+    def test_list_settings_with_ordering(self, client, admin_headers):
         """Test listing settings with custom ordering."""
         response = client.get(
-            "/settings/auth?order_by=key&order_dir=asc", headers=auth_headers
+            "/settings/auth?order_by=key&order_dir=asc", headers=admin_headers
         )
         assert response.status_code == 200

@@ -1,17 +1,26 @@
+import logging
 import uuid
+from typing import Any
 
 from fastapi import HTTPException
 
+logger = logging.getLogger(__name__)
 
-def coerce_uuid(value):
+
+def coerce_uuid(value: str | uuid.UUID | None) -> uuid.UUID | None:
     if value is None:
         return None
     if isinstance(value, uuid.UUID):
         return value
-    return uuid.UUID(str(value))
+    try:
+        return uuid.UUID(str(value))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid UUID: {value!r}") from exc
 
 
-def apply_ordering(query, order_by, order_dir, allowed_columns):
+def apply_ordering(
+    stmt: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]
+) -> Any:
     if order_by not in allowed_columns:
         raise HTTPException(
             status_code=400,
@@ -19,9 +28,9 @@ def apply_ordering(query, order_by, order_dir, allowed_columns):
         )
     column = allowed_columns[order_by]
     if order_dir == "desc":
-        return query.order_by(column.desc())
-    return query.order_by(column.asc())
+        return stmt.order_by(column.desc())
+    return stmt.order_by(column.asc())
 
 
-def apply_pagination(query, limit, offset):
-    return query.limit(limit).offset(offset)
+def apply_pagination(stmt: Any, limit: int, offset: int) -> Any:
+    return stmt.limit(limit).offset(offset)

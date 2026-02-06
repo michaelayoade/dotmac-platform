@@ -2,59 +2,75 @@
 
 {% block content %}
 <div class="mx-auto max-w-2xl">
-    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+    <div class="rounded-xl border border-surface-200/80 bg-white p-7 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <div class="mb-6">
+            <h2 class="text-xl font-display text-surface-900 dark:text-white">Add Server</h2>
+            <p class="mt-1 text-[13px] text-surface-400 dark:text-surface-500">Register a VPS to host ERP instances.</p>
+        </div>
+
         {% if errors %}
-        <div class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+        <div class="mb-5 flex items-center gap-2.5 rounded-lg bg-red-50 px-4 py-3 text-[13px] text-red-700 dark:bg-red-900/20 dark:text-red-400">
+            <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/></svg>
             {% for e in errors %}{{ e }}{% endfor %}
         </div>
         {% endif %}
 
-        <form method="POST" action="/servers/new" class="space-y-5">
+        <form method="POST" action="/servers/new" class="space-y-5" data-testid="server-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <div class="grid gap-5 sm:grid-cols-2">
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Server Name</label>
-                    <input type="text" name="name" required placeholder="Production VPS 1" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Server Name</label>
+                    <input type="text" name="name" required placeholder="Production VPS 1" data-testid="server-name"
+                           class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Hostname / IP</label>
-                    <input type="text" name="hostname" required placeholder="192.168.1.100" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Hostname / IP</label>
+                    <input type="text" name="hostname" required placeholder="192.168.1.100" data-testid="server-hostname"
+                           class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
                 </div>
             </div>
 
             <div class="grid gap-5 sm:grid-cols-3">
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">SSH Port</label>
-                    <input type="number" name="ssh_port" value="22" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">SSH Port</label>
+                    <input type="number" name="ssh_port" value="22" data-testid="server-ssh-port"
+                           class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">SSH User</label>
-                    <input type="text" name="ssh_user" value="root" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">SSH User</label>
+                    <input type="text" name="ssh_user" value="root" data-testid="server-ssh-user"
+                           class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">SSH Key Path</label>
-                    <input type="text" name="ssh_key_path" value="/root/.ssh/id_rsa" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-mono text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">SSH Key Path</label>
+                    <input type="text" name="ssh_key_path" value="/root/.ssh/id_rsa" data-testid="server-ssh-key-path"
+                           class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] font-mono dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
                 </div>
             </div>
 
             <div>
-                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Base Domain (optional)</label>
-                <input type="text" name="base_domain" placeholder="erp.dotmac.io" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none" />
-                <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">Instances will be created as subdomains (e.g., acme.erp.dotmac.io)</p>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Base Domain (optional)</label>
+                <input type="text" name="base_domain" placeholder="erp.dotmac.io" data-testid="server-base-domain"
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+                <p class="mt-1.5 text-[11px] text-surface-400 dark:text-surface-500">Instances will be created as subdomains (e.g., acme.erp.dotmac.io)</p>
             </div>
 
             <div class="flex items-center gap-3">
-                <input type="checkbox" id="is_local" name="is_local" value="true" class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600" />
-                <label for="is_local" class="text-sm text-slate-700 dark:text-slate-300">This is the local server (same host as the platform)</label>
+                <input type="checkbox" id="is_local" name="is_local" value="true" data-testid="server-is-local"
+                       class="h-4 w-4 rounded border-surface-300 text-primary-600 focus:ring-primary-500 dark:border-surface-600 dark:bg-surface-800" />
+                <label for="is_local" class="text-[13px] text-surface-600 dark:text-surface-400">This is the local server (same host as the platform)</label>
             </div>
 
             <div>
-                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Notes (optional)</label>
-                <textarea name="notes" rows="3" class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-500/30 focus:outline-none"></textarea>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Notes (optional)</label>
+                <textarea name="notes" rows="3" data-testid="server-notes"
+                          class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition"></textarea>
             </div>
 
-            <div class="flex justify-end gap-3 pt-2">
-                <a href="/servers" class="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">Cancel</a>
-                <button type="submit" class="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 transition">Add Server</button>
+            <div class="flex justify-end gap-3 pt-3 border-t border-surface-100 dark:border-surface-800/60">
+                <a href="/servers" class="rounded-lg border border-surface-200 px-4 py-2.5 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Cancel</a>
+                <button type="submit" data-testid="server-submit"
+                        class="rounded-lg bg-surface-900 dark:bg-primary-500 px-5 py-2.5 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">Add Server</button>
             </div>
         </form>
     </div>

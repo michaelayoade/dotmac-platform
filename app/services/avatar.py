@@ -1,8 +1,11 @@
+import logging
 import os
 import uuid
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
+
+logger = logging.getLogger(__name__)
 
 from app.config import settings
 

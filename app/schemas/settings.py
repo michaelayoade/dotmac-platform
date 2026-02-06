@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.models.domain_settings import SettingDomain
 from app.models.domain_settings import SettingValueType
@@ -37,3 +37,10 @@ class DomainSettingRead(DomainSettingBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _mask_secret_values(self) -> "DomainSettingRead":
+        if self.is_secret:
+            self.value_text = "********" if self.value_text else self.value_text
+            self.value_json = "********" if self.value_json else self.value_json
+        return self

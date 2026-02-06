@@ -61,10 +61,10 @@ class RolePermission(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     role_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("roles.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("roles.id"), nullable=False, index=True
     )
     permission_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("permissions.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("permissions.id"), nullable=False, index=True
     )
 
     role = relationship("Role", back_populates="permissions")
@@ -81,10 +81,10 @@ class PersonRole(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     person_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("people.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("people.id"), nullable=False, index=True
     )
     role_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("roles.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("roles.id"), nullable=False, index=True
     )
     assigned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

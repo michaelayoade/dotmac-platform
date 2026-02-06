@@ -35,3 +35,22 @@ from app.models.deployment_batch import (  # noqa: F401
     DeploymentBatch,
 )
 from app.models.instance_domain import DomainStatus, InstanceDomain  # noqa: F401
+from app.models.webhook import (  # noqa: F401
+    DeliveryStatus,
+    WebhookDelivery,
+    WebhookEndpoint,
+    WebhookEvent,
+)
+from app.models.tenant_audit import TenantAuditLog  # noqa: F401
+from app.models.maintenance_window import MaintenanceWindow  # noqa: F401
+from app.models.usage_record import UsageMetric, UsageRecord  # noqa: F401
+from app.models.instance_tag import InstanceTag  # noqa: F401
+from app.models.deploy_approval import ApprovalStatus, DeployApproval  # noqa: F401
+from app.models.drift_report import DriftReport  # noqa: F401
+from app.models.alert_rule import (  # noqa: F401
+    AlertChannel,
+    AlertEvent,
+    AlertMetric,
+    AlertOperator,
+    AlertRule,
+)

@@ -1,26 +1,15 @@
+import logging
+
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.models.scheduler import ScheduledTask, ScheduleType
 from app.schemas.scheduler import ScheduledTaskCreate, ScheduledTaskUpdate
-from app.services.common import coerce_uuid
+from app.services.common import apply_ordering, apply_pagination, coerce_uuid
 from app.services.response import ListResponseMixin
-
-
-def _apply_ordering(query, order_by, order_dir, allowed_columns):
-    if order_by not in allowed_columns:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid order_by. Allowed: {', '.join(sorted(allowed_columns))}",
-        )
-    column = allowed_columns[order_by]
-    if order_dir == "desc":
-        return query.order_by(column.desc())
-    return query.order_by(column.asc())
-
-
-def _apply_pagination(query, limit, offset):
-    return query.limit(limit).offset(offset)
 
 
 def _validate_schedule_type(value):
@@ -41,7 +30,7 @@ class ScheduledTasks(ListResponseMixin):
             raise HTTPException(status_code=400, detail="interval_seconds must be >= 1")
         task = ScheduledTask(**payload.model_dump())
         db.add(task)
-        db.commit()
+        db.flush()
         db.refresh(task)
         return task
 
@@ -61,16 +50,17 @@ class ScheduledTasks(ListResponseMixin):
         limit: int,
         offset: int,
     ):
-        query = db.query(ScheduledTask)
+        stmt = select(ScheduledTask)
         if enabled is not None:
-            query = query.filter(ScheduledTask.enabled == enabled)
-        query = _apply_ordering(
-            query,
+            stmt = stmt.where(ScheduledTask.enabled == enabled)
+        stmt = apply_ordering(
+            stmt,
             order_by,
             order_dir,
             {"created_at": ScheduledTask.created_at, "name": ScheduledTask.name},
         )
-        return _apply_pagination(query, limit, offset).all()
+        stmt = apply_pagination(stmt, limit, offset)
+        return list(db.scalars(stmt).all())
 
     @staticmethod
     def update(db: Session, task_id: str, payload: ScheduledTaskUpdate):
@@ -87,7 +77,7 @@ class ScheduledTasks(ListResponseMixin):
                 )
         for key, value in data.items():
             setattr(task, key, value)
-        db.commit()
+        db.flush()
         db.refresh(task)
         return task
 
@@ -97,7 +87,7 @@ class ScheduledTasks(ListResponseMixin):
         if not task:
             raise HTTPException(status_code=404, detail="Scheduled task not found")
         db.delete(task)
-        db.commit()
+        db.flush()
 
 
 scheduled_tasks = ScheduledTasks()
@@ -107,7 +97,15 @@ def refresh_schedule() -> dict:
     return {"detail": "Celery beat refreshes schedules automatically."}
 
 
+ALLOWED_TASK_PREFIXES = ("app.tasks.",)
+
+
 def enqueue_task(task_name: str, args: list | None, kwargs: dict | None) -> dict:
+    if not any(task_name.startswith(prefix) for prefix in ALLOWED_TASK_PREFIXES):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Task name must start with one of: {', '.join(ALLOWED_TASK_PREFIXES)}",
+        )
     from app.celery_app import celery_app
 
     async_result = celery_app.send_task(task_name, args=args or [], kwargs=kwargs or {})

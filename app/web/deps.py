@@ -84,13 +84,17 @@ def require_web_auth(
         session = db.get(AuthSession, coerce_uuid(session_id))
         if not session or session.status != SessionStatus.active:
             raise HTTPException(status_code=302, headers={"Location": "/login"})
+        if session.expires_at and session.expires_at <= now:
+            raise HTTPException(status_code=302, headers={"Location": "/login"})
 
         person = db.get(Person, coerce_uuid(person_id))
         if not person:
             raise HTTPException(status_code=302, headers={"Location": "/login"})
 
         name = person.display_name or f"{person.first_name} {person.last_name}"
-        initials = (person.first_name[0] + person.last_name[0]).upper()
+        first_initial = person.first_name[0] if person.first_name else ""
+        last_initial = person.last_name[0] if person.last_name else ""
+        initials = (first_initial + last_initial).upper() or "?"
 
         roles = payload.get("roles", [])
 
@@ -134,7 +138,9 @@ def optional_web_auth(
             return WebAuthContext()
 
         name = person.display_name or f"{person.first_name} {person.last_name}"
-        initials = (person.first_name[0] + person.last_name[0]).upper()
+        first_initial = person.first_name[0] if person.first_name else ""
+        last_initial = person.last_name[0] if person.last_name else ""
+        initials = (first_initial + last_initial).upper() or "?"
 
         return WebAuthContext(
             is_authenticated=True,

@@ -1,0 +1,128 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-2xl font-display text-surface-800 dark:text-surface-100">Domains</h1>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">Manage custom domains and SSL lifecycle.</p>
+    </div>
+    <form method="GET" action="/domains" class="flex items-end gap-3">
+        <div>
+            <label class="block text-[10px] font-semibold uppercase tracking-[0.2em] text-surface-400 dark:text-surface-500">Instance</label>
+            <select name="instance_id" class="mt-1 w-48 rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                {% for inst in instances %}
+                <option value="{{ inst.instance_id }}" {% if inst.instance_id == instance_id %}selected{% endif %}>{{ inst.org_code }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[12px] font-semibold text-white dark:text-surface-950">Apply</button>
+    </form>
+</div>
+
+{% if message %}
+<div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-[12px] text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-400">
+    {{ message }}
+</div>
+{% endif %}
+{% if error %}
+<div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-400">
+    {{ error }}
+</div>
+{% endif %}
+
+<div class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-800 dark:text-white">Domains</h2>
+        <div class="mt-4 space-y-3">
+            {% for d in domains %}
+            <div class="rounded-lg border border-surface-200/80 bg-surface-50 px-4 py-3 text-[12px] dark:border-surface-800/50 dark:bg-surface-800/40">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <p class="font-medium text-surface-800 dark:text-surface-100">{{ d.domain }}</p>
+                        <p class="text-surface-400 dark:text-surface-500">
+                            Status: {{ d.status.value }}
+                            {% if d.is_primary %}• Primary{% endif %}
+                        </p>
+                        {% if d.status.value == 'pending_verification' %}
+                        <p class="mt-1 text-[11px] text-surface-400">TXT: _dotmac-verification.{{ d.domain }} = {{ d.verification_token }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <form method="POST" action="/domains/{{ d.domain_id }}/verify">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <input type="hidden" name="instance_id" value="{{ instance_id }}" />
+                            <button type="submit" class="text-[11px] text-surface-500 hover:text-surface-700 dark:text-surface-300">Verify</button>
+                        </form>
+                        <form method="POST" action="/domains/{{ d.domain_id }}/provision-ssl">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <input type="hidden" name="instance_id" value="{{ instance_id }}" />
+                            <button type="submit" class="text-[11px] text-surface-500 hover:text-surface-700 dark:text-surface-300">Provision SSL</button>
+                        </form>
+                        <form method="POST" action="/domains/{{ d.domain_id }}/activate">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <input type="hidden" name="instance_id" value="{{ instance_id }}" />
+                            <button type="submit" class="text-[11px] text-surface-500 hover:text-surface-700 dark:text-surface-300">Activate</button>
+                        </form>
+                        <form method="POST" action="/domains/{{ d.domain_id }}/primary">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <input type="hidden" name="instance_id" value="{{ instance_id }}" />
+                            <button type="submit" class="text-[11px] text-surface-500 hover:text-surface-700 dark:text-surface-300">Set Primary</button>
+                        </form>
+                        <form method="POST" action="/domains/{{ d.domain_id }}/delete">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <input type="hidden" name="instance_id" value="{{ instance_id }}" />
+                            <button type="submit" class="text-[11px] text-red-600 hover:text-red-700 dark:text-red-400">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            {% if domains|length == 0 %}
+            <div class="rounded-lg border border-dashed border-surface-200/80 bg-surface-50 px-4 py-3 text-[12px] text-surface-500 dark:border-surface-800/50 dark:bg-surface-900/60 dark:text-surface-400">
+                No domains for this instance yet.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="space-y-6">
+        <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+            <h2 class="text-lg font-display text-surface-800 dark:text-white">Add Domain</h2>
+            <form method="POST" action="/domains/add" class="mt-4 space-y-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <input type="hidden" name="instance_id" value="{{ instance_id }}" />
+                <div>
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Domain</label>
+                    <input type="text" name="domain" required placeholder="customer.example.com" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+                </div>
+                <label class="flex items-center gap-2 text-[12px] text-surface-600 dark:text-surface-400">
+                    <input type="checkbox" name="is_primary" class="h-4 w-4 rounded border-surface-300 text-primary-600 focus:ring-primary-500 dark:border-surface-600 dark:bg-surface-800" />
+                    Set as primary
+                </label>
+                <button type="submit" class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950">Add Domain</button>
+            </form>
+        </div>
+
+        <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+            <h2 class="text-lg font-display text-surface-800 dark:text-white">Expiring Certificates</h2>
+            <div class="mt-4 space-y-2">
+                {% for d in expiring %}
+                <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-3 py-2 text-[12px] dark:border-surface-800/50 dark:bg-surface-800/40">
+                    <div>
+                        <p class="font-medium text-surface-800 dark:text-surface-100">{{ d.domain }}</p>
+                        <p class="text-surface-400 dark:text-surface-500">Expires {{ d.ssl_expires_at.strftime('%Y-%m-%d') if d.ssl_expires_at else 'unknown' }}</p>
+                    </div>
+                    <span class="text-[11px] text-surface-400">{{ d.status.value }}</span>
+                </div>
+                {% endfor %}
+                {% if expiring|length == 0 %}
+                <div class="rounded-lg border border-dashed border-surface-200/80 bg-surface-50 px-4 py-3 text-[12px] text-surface-500 dark:border-surface-800/50 dark:bg-surface-900/60 dark:text-surface-400">
+                    No certificates expiring in the next 14 days.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

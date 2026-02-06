@@ -1,0 +1,105 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-2xl font-display text-surface-800 dark:text-surface-100">Alerts</h1>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">Configure threshold-based alert rules.</p>
+    </div>
+    <a href="/approvals" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Approvals</a>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-[1fr_1fr]">
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-800 dark:text-white">Create Rule</h2>
+        <form method="POST" action="/alerts/rules" class="mt-4 grid gap-3 sm:grid-cols-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <div class="sm:col-span-2">
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Name</label>
+                <input type="text" name="name" required class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Metric</label>
+                <select name="metric" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                    {% for value in metrics %}
+                    <option value="{{ value }}">{{ value }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Operator</label>
+                <select name="operator" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                    {% for value in operators %}
+                    <option value="{{ value }}">{{ value }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Threshold</label>
+                <input type="number" step="0.01" name="threshold" required class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Channel</label>
+                <select name="channel" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                    {% for value in channels %}
+                    <option value="{{ value }}">{{ value }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="sm:col-span-2">
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Instance (optional)</label>
+                <select name="instance_id" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                    <option value="">All instances</option>
+                    {% for inst in instances %}
+                    <option value="{{ inst.instance_id }}">{{ inst.org_code }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Cooldown (min)</label>
+                <input type="number" name="cooldown_minutes" value="15" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            </div>
+            <div class="sm:col-span-2">
+                <button type="submit" class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950">Create Rule</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-800 dark:text-white">Rules</h2>
+        <div class="mt-4 space-y-2">
+            {% for rule in rules %}
+            <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-3 py-2 text-[12px] dark:border-surface-800/50 dark:bg-surface-800/40">
+                <div>
+                    <p class="font-medium text-surface-800 dark:text-surface-100">{{ rule.name }}</p>
+                    <p class="text-surface-400 dark:text-surface-500">{{ rule.metric.value }} {{ rule.operator.value }} {{ rule.threshold }} • {{ rule.channel.value }}</p>
+                </div>
+                {% if rule.is_active %}
+                <form method="POST" action="/alerts/rules/{{ rule.rule_id }}/deactivate">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <button type="submit" class="text-[12px] text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300">Deactivate</button>
+                </form>
+                {% else %}
+                <span class="text-[11px] text-surface-400">Inactive</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="mt-6 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+    <h2 class="text-lg font-display text-surface-800 dark:text-white">Recent Events</h2>
+    <div class="mt-4 space-y-2">
+        {% for event in events %}
+        <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-3 py-2 text-[12px] dark:border-surface-800/50 dark:bg-surface-800/40">
+            <div>
+                <p class="font-medium text-surface-800 dark:text-surface-100">{{ event.rule_id }}</p>
+                <p class="text-surface-400 dark:text-surface-500">Instance {{ event.instance_id or "all" }} • {{ event.metric_value }} / {{ event.threshold }}</p>
+            </div>
+            <span class="text-surface-400 dark:text-surface-500">{{ event.triggered_at.strftime('%Y-%m-%d %H:%M') }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
 import secrets
 import time
@@ -12,6 +13,22 @@ import time
 from fastapi import HTTPException, Request
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+def _csrf_session_id(request: Request) -> str:
+    """Return a per-client binding for CSRF tokens.
+
+    Uses the access_token cookie when present (authenticated users).
+    For anonymous visitors, derives a binding from client IP + User-Agent.
+    """
+    token = request.cookies.get("access_token")
+    if token:
+        return token
+    client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "")
+    return hashlib.sha256(f"{client_ip}:{user_agent}".encode()).hexdigest()
 
 
 def brand() -> dict:
@@ -41,6 +58,8 @@ def ctx(request, auth, title: str, active_page: str = "", **extra) -> dict:
         "auth": auth,
         "active_page": active_page,
         "csrf_token": generate_csrf_token(request),
+        "testing": settings.testing,
+        "use_cdn_assets": settings.use_cdn_assets,
         **extra,
     }
 
@@ -50,13 +69,15 @@ def ctx(request, auth, title: str, active_page: str = "", **extra) -> dict:
 # ---------------------------------------------------------------------------
 
 _csrf_env = os.getenv("CSRF_SECRET_KEY")
+if not _csrf_env:
+    logger.warning("CSRF_SECRET_KEY not set — using random key (tokens won't survive restarts)")
 _CSRF_SECRET_KEY = bytes.fromhex(_csrf_env) if _csrf_env else secrets.token_bytes(32)
 _CSRF_TOKEN_TTL = 3600 * 4  # 4 hours
 
 
 def generate_csrf_token(request: Request) -> str:
     """Generate a CSRF token tied to the session cookie."""
-    session_id = request.cookies.get("access_token", "anonymous")
+    session_id = _csrf_session_id(request)
     timestamp = str(int(time.time()))
     payload = f"{session_id}:{timestamp}"
     sig = hmac.new(_CSRF_SECRET_KEY, payload.encode(), hashlib.sha256).hexdigest()
@@ -81,7 +102,7 @@ def validate_csrf_token(request: Request, token: str | None) -> None:
     if time.time() - timestamp > _CSRF_TOKEN_TTL:
         raise HTTPException(status_code=403, detail="CSRF token expired")
 
-    session_id = request.cookies.get("access_token", "anonymous")
+    session_id = _csrf_session_id(request)
     payload = f"{session_id}:{timestamp_str}"
     expected_sig = hmac.new(_CSRF_SECRET_KEY, payload.encode(), hashlib.sha256).hexdigest()
 

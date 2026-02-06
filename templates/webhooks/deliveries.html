@@ -1,0 +1,51 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-2xl font-display text-surface-800 dark:text-surface-100">Webhook Deliveries</h1>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">{{ endpoint.url }}</p>
+    </div>
+    <a href="/webhooks" class="rounded-lg border border-surface-200 px-4 py-2 text-[12px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Back to Webhooks</a>
+</div>
+
+<div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+    <h2 class="text-lg font-display text-surface-800 dark:text-white">Recent Deliveries</h2>
+    <div class="mt-4 space-y-2">
+        {% for delivery in deliveries %}
+        <div class="rounded-lg border border-surface-200/80 bg-surface-50 px-4 py-3 text-[12px] dark:border-surface-800/50 dark:bg-surface-800/40">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <p class="font-medium text-surface-800 dark:text-surface-100">{{ delivery.event }}</p>
+                    <p class="text-surface-400 dark:text-surface-500">Attempts: {{ delivery.attempts }} • Response: {{ delivery.response_code or "-" }}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="rounded-full border px-2 py-0.5 text-[10px]
+                        {% if delivery.status.value == 'success' %}border-emerald-200 text-emerald-700 dark:border-emerald-800/50 dark:text-emerald-400
+                        {% elif delivery.status.value == 'failed' %}border-red-200 text-red-700 dark:border-red-800/50 dark:text-red-400
+                        {% else %}border-surface-200 text-surface-500 dark:border-surface-700 dark:text-surface-400{% endif %}
+                    ">{{ delivery.status.value }}</span>
+                    <span class="text-[11px] text-surface-400">{{ delivery.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                </div>
+            </div>
+            <details class="mt-2 text-[11px] text-surface-500">
+                <summary class="cursor-pointer">Payload</summary>
+                <pre class="mt-2 max-h-48 overflow-auto rounded-lg bg-surface-900 p-3 text-surface-100">{{ delivery.payload | tojson(indent=2) }}</pre>
+            </details>
+            {% if delivery.response_body %}
+            <details class="mt-2 text-[11px] text-surface-500">
+                <summary class="cursor-pointer">Response Body</summary>
+                <pre class="mt-2 max-h-48 overflow-auto rounded-lg bg-surface-900 p-3 text-surface-100">{{ delivery.response_body }}</pre>
+            </details>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        {% if deliveries|length == 0 %}
+        <div class="rounded-lg border border-dashed border-surface-200/80 bg-surface-50 px-4 py-3 text-[12px] text-surface-500 dark:border-surface-800/50 dark:bg-surface-900/60 dark:text-surface-400">
+            No deliveries recorded yet.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

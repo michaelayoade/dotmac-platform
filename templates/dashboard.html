@@ -1,113 +1,164 @@
 {% extends "platform_base.html" %}
 
 {% block content %}
+{% set testing = testing if testing is defined else false %}
 <!-- Stats Row -->
-<div class="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-8">
-    <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <div class="flex items-center gap-3">
-            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-100 dark:bg-primary-900/30">
-                <svg class="h-5 w-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-            </div>
+<div class="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-10">
+    <div class="group rounded-xl border border-surface-200/80 bg-white p-5 dark:border-surface-800/50 dark:bg-surface-900/80 card-lift">
+        <div class="flex items-center justify-between">
             <div>
-                <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ stats.total_instances }}</p>
-                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Instances</p>
+                <p class="text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Instances</p>
+                <p class="mt-2 text-3xl font-display text-surface-900 dark:text-white">{{ stats.total_instances }}</p>
+            </div>
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-100 dark:bg-surface-800/80">
+                <svg class="h-5 w-5 text-surface-400 dark:text-surface-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/></svg>
             </div>
         </div>
     </div>
 
-    <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <div class="flex items-center gap-3">
-            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
-                <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            </div>
+    <div class="group rounded-xl border border-surface-200/80 bg-white p-5 dark:border-surface-800/50 dark:bg-surface-900/80 card-lift">
+        <div class="flex items-center justify-between">
             <div>
-                <p class="text-2xl font-bold text-green-600 dark:text-green-400 font-display">{{ stats.healthy }}</p>
-                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Healthy</p>
+                <p class="text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Healthy</p>
+                <p class="mt-2 text-3xl font-display text-emerald-600 dark:text-emerald-400">{{ stats.healthy }}</p>
+            </div>
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-900/20">
+                <svg class="h-5 w-5 text-emerald-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
             </div>
         </div>
     </div>
 
-    <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <div class="flex items-center gap-3">
-            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/30">
-                <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            </div>
+    <div class="group rounded-xl border border-surface-200/80 bg-white p-5 dark:border-surface-800/50 dark:bg-surface-900/80 card-lift">
+        <div class="flex items-center justify-between">
             <div>
-                <p class="text-2xl font-bold text-red-600 dark:text-red-400 font-display">{{ stats.unhealthy + stats.error }}</p>
-                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Issues</p>
+                <p class="text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Issues</p>
+                <p class="mt-2 text-3xl font-display text-red-600 dark:text-red-400">{{ stats.unhealthy + stats.error }}</p>
+            </div>
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 dark:bg-red-900/20">
+                <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/></svg>
             </div>
         </div>
     </div>
 
-    <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <div class="flex items-center gap-3">
-            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
-                <svg class="h-5 w-5 text-slate-600 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
-            </div>
+    <div class="group rounded-xl border border-surface-200/80 bg-white p-5 dark:border-surface-800/50 dark:bg-surface-900/80 card-lift">
+        <div class="flex items-center justify-between">
             <div>
-                <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ stats.total_servers }}</p>
-                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Servers</p>
+                <p class="text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Unknown</p>
+                <p class="mt-2 text-3xl font-display text-amber-600 dark:text-amber-400">{{ stats.unknown }}</p>
+            </div>
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-900/20">
+                <svg class="h-5 w-5 text-amber-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3h.007v.008H12v-.008ZM21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Instance Grid -->
-<div class="flex items-center justify-between mb-4">
-    <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Instances</h2>
-    <a href="/instances/new" class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 transition">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-        New Instance
+<div class="mb-8 flex flex-wrap items-center gap-2 text-[12px]">
+    <a href="/instances" class="rounded-full border border-surface-200 px-3 py-1.5 text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">All Instances</a>
+    <a href="/instances?health=unhealthy" class="rounded-full border border-red-200 px-3 py-1.5 text-red-600 hover:bg-red-50 dark:border-red-800/50 dark:text-red-400 dark:hover:bg-red-900/20 transition">
+        Unhealthy ({{ stats.unhealthy }})
+    </a>
+    <a href="/instances?status=error" class="rounded-full border border-red-200 px-3 py-1.5 text-red-600 hover:bg-red-50 dark:border-red-800/50 dark:text-red-400 dark:hover:bg-red-900/20 transition">
+        Errors ({{ stats.error }})
+    </a>
+    <a href="/instances?health=unknown" class="rounded-full border border-amber-200 px-3 py-1.5 text-amber-700 hover:bg-amber-50 dark:border-amber-800/60 dark:text-amber-400 dark:hover:bg-amber-900/20 transition">
+        Unknown ({{ stats.unknown }})
     </a>
 </div>
 
-{% if instances %}
-<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" hx-trigger="every 30s" hx-get="/dashboard" hx-select="#instance-grid" hx-target="#instance-grid" hx-swap="outerHTML">
-    <div id="instance-grid" class="contents">
-    {% for item in instances %}
-        {% set inst = item.instance %}
-        {% set health = item.health %}
-        <a href="/instances/{{ inst.instance_id }}" class="group rounded-xl border border-slate-200 bg-white p-5 transition hover:border-primary-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-primary-700">
-            <div class="flex items-start justify-between">
-                <div>
-                    <h3 class="font-semibold text-slate-900 dark:text-white font-display">{{ inst.org_code }}</h3>
-                    <p class="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{{ inst.org_name }}</p>
-                </div>
-                <!-- Status dot -->
-                {% if inst.status.value == 'running' and health and health.status.value == 'healthy' %}
-                    <span class="flex h-3 w-3 rounded-full bg-green-500 pulse-dot" title="Healthy"></span>
-                {% elif inst.status.value == 'running' %}
-                    <span class="flex h-3 w-3 rounded-full bg-yellow-500 pulse-dot" title="Running (unhealthy)"></span>
-                {% elif inst.status.value == 'deploying' %}
-                    <span class="flex h-3 w-3 rounded-full bg-blue-500 pulse-dot" title="Deploying"></span>
-                {% elif inst.status.value == 'error' %}
-                    <span class="flex h-3 w-3 rounded-full bg-red-500" title="Error"></span>
-                {% else %}
-                    <span class="flex h-3 w-3 rounded-full bg-slate-300 dark:bg-slate-600" title="{{ inst.status.value }}"></span>
-                {% endif %}
-            </div>
-            <div class="mt-4 flex flex-wrap gap-2">
-                <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">{{ inst.framework.value }}</span>
-                <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">{{ inst.sector_type.value }}</span>
-                <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">:{{ inst.app_port }}</span>
-            </div>
-            {% if health %}
-            <div class="mt-3 text-xs text-slate-400 dark:text-slate-500">
-                {{ health.response_ms }}ms &middot; {{ health.checked_at.strftime('%H:%M') if health.checked_at else '' }}
-            </div>
-            {% endif %}
+<!-- Instance Table -->
+<div class="flex items-end justify-between mb-5">
+    <div>
+        <h2 class="text-2xl font-display text-surface-800 dark:text-surface-100">Instances</h2>
+        <p class="mt-0.5 text-[13px] text-surface-400 dark:text-surface-500">All deployed ERP tenants</p>
+    </div>
+    <div class="flex items-center gap-3">
+        <a href="/instances" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">View All</a>
+        <a href="/instances/new" data-testid="dashboard-new-instance" class="inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-medium text-white dark:text-surface-950 shadow-sm hover:bg-surface-800 dark:hover:bg-primary-400 transition">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            New Instance
         </a>
-    {% endfor %}
     </div>
 </div>
+
+{% if instances %}
+<div class="overflow-hidden rounded-xl border border-surface-200/80 bg-white dark:border-surface-800/50 dark:bg-surface-900/80"
+     {% if not testing %}hx-trigger="every 30s" hx-get="/dashboard" hx-select="#instance-table" hx-target="#instance-table" hx-swap="outerHTML"{% endif %}>
+    <table id="instance-table" class="min-w-full divide-y divide-surface-100 dark:divide-surface-800/60">
+        <thead>
+            <tr class="bg-surface-50/80 dark:bg-surface-800/30">
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Instance</th>
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Status</th>
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Health</th>
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Port</th>
+                <th class="px-5 py-3"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-surface-100/80 dark:divide-surface-800/40">
+            {% for item in instances[:25] %}
+            {% set inst = item.instance %}
+            {% set health = item.health %}
+            {% set health_state = item.health_state %}
+            <tr class="hover:bg-surface-50/60 dark:hover:bg-surface-800/20 transition-colors">
+                <td class="px-5 py-4">
+                    <a href="/instances/{{ inst.instance_id }}" class="text-[13px] font-medium text-surface-900 hover:text-primary-600 dark:text-white dark:hover:text-primary-400 transition">{{ inst.org_code }}</a>
+                    <p class="text-[11px] text-surface-400 dark:text-surface-500">{{ inst.org_name }}</p>
+                </td>
+                <td class="px-5 py-4">
+                    {% if inst.status.value == 'running' %}
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Running
+                        </span>
+                    {% elif inst.status.value == 'deploying' %}
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>Deploying
+                        </span>
+                    {% elif inst.status.value == 'error' %}
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Error
+                        </span>
+                    {% elif inst.status.value == 'stopped' %}
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-surface-100 px-2.5 py-0.5 text-[11px] font-medium text-surface-500 dark:bg-surface-800 dark:text-surface-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-surface-400"></span>Stopped
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>Provisioned
+                        </span>
+                    {% endif %}
+                </td>
+                <td class="px-5 py-4">
+                    {% if health_state == 'healthy' %}
+                        <span class="text-[12px] font-mono text-emerald-600 dark:text-emerald-400">{{ health.response_ms|default('--') }}ms</span>
+                    {% elif health_state == 'unhealthy' %}
+                        <span class="text-[12px] text-red-600 dark:text-red-400">Unhealthy</span>
+                    {% else %}
+                        <span class="text-[12px] text-amber-600 dark:text-amber-400">Unknown</span>
+                    {% endif %}
+                </td>
+                <td class="px-5 py-4 text-[13px] text-surface-500 dark:text-surface-400 font-mono">:{{ inst.app_port }}</td>
+                <td class="px-5 py-4 text-right">
+                    <a href="/instances/{{ inst.instance_id }}" class="text-[13px] text-surface-400 hover:text-surface-600 dark:text-surface-500 dark:hover:text-surface-300 transition">&rarr;</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if instances|length > 25 %}
+    <div class="flex items-center justify-between border-t border-surface-100 px-5 py-3 text-[12px] text-surface-400 dark:border-surface-800/60 dark:text-surface-500">
+        <span>Showing 25 of {{ instances|length }} instances</span>
+        <a href="/instances" class="text-primary-600 hover:text-primary-700 dark:text-primary-400 transition">View all</a>
+    </div>
+    {% endif %}
+</div>
 {% else %}
-<div class="rounded-xl border-2 border-dashed border-slate-200 p-12 text-center dark:border-slate-800">
-    <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-    <h3 class="mt-4 text-sm font-semibold text-slate-900 dark:text-white">No instances yet</h3>
-    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Get started by adding a server and creating your first instance.</p>
+<div class="rounded-xl border border-dashed border-surface-300 bg-white/50 p-16 text-center dark:border-surface-700 dark:bg-surface-900/30">
+    <svg class="mx-auto h-12 w-12 text-surface-300 dark:text-surface-600" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/></svg>
+    <h3 class="mt-5 text-base font-display text-surface-700 dark:text-surface-300">No instances yet</h3>
+    <p class="mt-1.5 text-[13px] text-surface-400 dark:text-surface-500">Get started by adding a server and creating your first ERP instance.</p>
     <div class="mt-6 flex justify-center gap-3">
-        <a href="/servers/new" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">Add Server</a>
-        <a href="/instances/new" class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">New Instance</a>
+        <a href="/servers/new" class="rounded-lg border border-surface-200 px-4 py-2.5 text-[13px] font-medium text-surface-600 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Add Server</a>
+        <a href="/instances/new" class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2.5 text-[13px] font-medium text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">New Instance</a>
     </div>
 </div>
 {% endif %}

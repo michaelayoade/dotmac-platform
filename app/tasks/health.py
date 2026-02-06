@@ -10,8 +10,8 @@ from app.db import SessionLocal
 logger = logging.getLogger(__name__)
 
 
-@shared_task
-def poll_instance_health() -> dict:
+@shared_task(bind=True, max_retries=3, default_retry_delay=30)
+def poll_instance_health(self) -> dict:
     """Poll /health for all running instances."""
     logger.info("Polling instance health")
 
@@ -21,6 +21,7 @@ def poll_instance_health() -> dict:
         svc = HealthService(db)
         results = svc.poll_all_running()
         svc.prune_all_old_checks()
+        db.commit()
 
     logger.info(
         "Health poll complete: %s healthy, %s unhealthy, %s unreachable (of %s)",

@@ -1,3 +1,8 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 def list_response(items: list, limit: int, offset: int, total: int | None = None) -> dict:
     result = {"items": items, "count": len(items), "limit": limit, "offset": offset}
     if total is not None:

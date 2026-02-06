@@ -1,6 +1,6 @@
 from fastapi import HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 
 def _error_payload(code: str, message: str, details):
@@ -10,6 +10,12 @@ def _error_payload(code: str, message: str, details):
 def register_error_handlers(app) -> None:
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
+        # Preserve redirect responses (e.g. 302 from require_web_auth)
+        if 300 <= exc.status_code < 400 and exc.headers:
+            location = exc.headers.get("Location")
+            if location:
+                return RedirectResponse(url=location, status_code=exc.status_code)
+
         detail = exc.detail
         code = f"http_{exc.status_code}"
         message = "Request failed"

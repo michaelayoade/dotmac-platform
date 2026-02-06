@@ -1,17 +1,17 @@
 {% if success %}
-<div class="rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">
+<div class="rounded-lg bg-emerald-50 px-4 py-3 text-[13px] text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
     <div class="flex items-center gap-2">
-        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
         <span class="font-medium">Connection successful</span>
     </div>
-    {% if hostname %}<p class="mt-1 text-xs ml-7">Hostname: <span class="font-mono">{{ hostname }}</span></p>{% endif %}
+    {% if hostname %}<p class="mt-1 text-[11px] ml-7">Hostname: <span class="font-mono">{{ hostname }}</span></p>{% endif %}
 </div>
 {% else %}
-<div class="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+<div class="rounded-lg bg-red-50 px-4 py-3 text-[13px] text-red-700 dark:bg-red-900/20 dark:text-red-400">
     <div class="flex items-center gap-2">
-        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
         <span class="font-medium">Connection failed</span>
     </div>
-    {% if error %}<p class="mt-1 text-xs ml-7">{{ error }}</p>{% endif %}
+    {% if error %}<p class="mt-1 text-[11px] ml-7">{{ error }}</p>{% endif %}
 </div>
 {% endif %}

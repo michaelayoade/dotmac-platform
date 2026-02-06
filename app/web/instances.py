@@ -34,14 +34,96 @@ def instance_list(
     # Batch-fetch latest health checks to avoid N+1
     instance_ids = [inst.instance_id for inst in instances]
     health_map = health_svc.get_latest_checks_batch(instance_ids)
-    instance_data = [
-        {"instance": inst, "health": health_map.get(inst.instance_id)}
-        for inst in instances
-    ]
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    instance_data = []
+    for inst in instances:
+        check = health_map.get(inst.instance_id)
+        health_state = health_svc.classify_health(check, now) if inst.status.value == "running" else "n/a"
+        instance_data.append(
+            {
+                "instance": inst,
+                "health": check,
+                "health_state": health_state,
+                "health_checked_at": check.checked_at if check else None,
+            }
+        )
+
+    # Filters
+    params = request.query_params
+    q = (params.get("q") or "").strip().lower()
+    status_filter = (params.get("status") or "").strip().lower()
+    health_filter = (params.get("health") or "").strip().lower()
+    view = (params.get("view") or "table").strip().lower()
+    sort_key = (params.get("sort") or "org_code").strip().lower()
+    sort_dir = (params.get("dir") or "asc").strip().lower()
+
+    if q:
+        instance_data = [
+            item for item in instance_data
+            if q in item["instance"].org_code.lower() or q in item["instance"].org_name.lower()
+        ]
+    if status_filter:
+        instance_data = [
+            item for item in instance_data
+            if item["instance"].status.value.lower() == status_filter
+        ]
+    if health_filter:
+        instance_data = [
+            item for item in instance_data
+            if item["health_state"] == health_filter
+        ]
+
+    # Sorting
+    health_rank = {"healthy": 0, "unhealthy": 1, "unknown": 2, "n/a": 3}
+    def _sort_value(item):
+        inst = item["instance"]
+        if sort_key == "status":
+            return inst.status.value
+        if sort_key == "health":
+            return health_rank.get(item["health_state"], 99)
+        if sort_key == "last_check":
+            return item["health_checked_at"] or datetime.min.replace(tzinfo=timezone.utc)
+        if sort_key == "port":
+            return inst.app_port or 0
+        return inst.org_code
+
+    reverse = sort_dir == "desc"
+    instance_data.sort(key=_sort_value, reverse=reverse)
+
+    # Pagination
+    try:
+        page = max(int(params.get("page") or 1), 1)
+    except ValueError:
+        page = 1
+    try:
+        page_size = min(max(int(params.get("page_size") or 25), 10), 100)
+    except ValueError:
+        page_size = 25
+
+    total = len(instance_data)
+    start = (page - 1) * page_size
+    end = start + page_size
+    paginated = instance_data[start:end]
 
     return templates.TemplateResponse(
         "instances/list.html",
-        ctx(request, auth, "Instances", active_page="instances", instances=instance_data),
+        ctx(
+            request,
+            auth,
+            "Instances",
+            active_page="instances",
+            instances=paginated,
+            total=total,
+            page=page,
+            page_size=page_size,
+            q=q,
+            status_filter=status_filter,
+            health_filter=health_filter,
+            view=view if view in {"table", "cards"} else "table",
+            sort=sort_key,
+            sort_dir=sort_dir if sort_dir in {"asc", "desc"} else "asc",
+        ),
     )
 
 
@@ -132,6 +214,7 @@ def instance_detail(
     from app.services.instance_service import InstanceService
     from app.services.module_service import ModuleService
     from app.services.plan_service import PlanService
+    from app.services.tenant_audit_service import TenantAuditService
 
     svc = InstanceService(db)
     instance = svc.get_or_404(instance_id)
@@ -152,6 +235,7 @@ def instance_detail(
     plans = PlanService(db).list_all()
     backups = BackupService(db).list_for_instance(instance_id)
     domains = DomainService(db).list_for_instance(instance_id)
+    audit_logs = TenantAuditService(db).get_logs(instance_id, limit=20)
 
     return templates.TemplateResponse(
         "instances/detail.html",
@@ -167,6 +251,7 @@ def instance_detail(
             plans=plans,
             backups=backups,
             domains=domains,
+            audit_logs=audit_logs,
         ),
     )
 
@@ -261,6 +346,8 @@ def instance_start(
 
     svc = InstanceService(db)
     instance = svc.get_or_404(instance_id)
+    if instance.status != InstanceStatus.stopped:
+        return RedirectResponse(f"/instances/{instance_id}", status_code=302)
     server = db.get(Server, instance.server_id)
     ssh = get_ssh_for_server(server)
     result = ssh.exec_command("docker compose up -d", cwd=instance.deploy_path)
@@ -290,6 +377,8 @@ def instance_stop(
 
     svc = InstanceService(db)
     instance = svc.get_or_404(instance_id)
+    if instance.status != InstanceStatus.running:
+        return RedirectResponse(f"/instances/{instance_id}", status_code=302)
     server = db.get(Server, instance.server_id)
     ssh = get_ssh_for_server(server)
     result = ssh.exec_command("docker compose down", cwd=instance.deploy_path)
@@ -312,15 +401,20 @@ def instance_restart(
     require_admin(auth)
     validate_csrf_token(request, csrf_token)
 
+    from app.models.instance import InstanceStatus
     from app.models.server import Server
     from app.services.instance_service import InstanceService
     from app.services.ssh_service import get_ssh_for_server
 
     svc = InstanceService(db)
     instance = svc.get_or_404(instance_id)
+    if instance.status != InstanceStatus.running:
+        return RedirectResponse(f"/instances/{instance_id}", status_code=302)
     server = db.get(Server, instance.server_id)
     ssh = get_ssh_for_server(server)
-    ssh.exec_command("docker compose restart", cwd=instance.deploy_path)
+    result = ssh.exec_command("docker compose restart", cwd=instance.deploy_path)
+    if not result.ok:
+        instance.status = InstanceStatus.error
     db.commit()
     return RedirectResponse(f"/instances/{instance_id}", status_code=302)
 
@@ -374,7 +468,7 @@ def instance_delete(
     instance = svc.get_or_404(instance_id)
 
     if instance.status == InstanceStatus.running:
-        raise ValueError("Cannot delete a running instance. Stop it first.")
+        return RedirectResponse(f"/instances/{instance_id}", status_code=302)
 
     svc.delete(instance_id)
     db.commit()
@@ -389,14 +483,22 @@ def instance_health_badge(
     db: Session = Depends(get_db),
 ):
     """HTMX partial: health status badge."""
+    from datetime import datetime, timezone
+
+    from app.config import settings as platform_settings
     from app.services.health_service import HealthService
 
     svc = HealthService(db)
     check = svc.get_latest_check(instance_id)
 
+    is_stale = False
+    if check and check.checked_at:
+        age = (datetime.now(timezone.utc) - check.checked_at).total_seconds()
+        is_stale = age > platform_settings.health_stale_seconds
+
     return templates.TemplateResponse(
         "partials/health_badge.html",
-        {"request": request, "health": check},
+        {"request": request, "health": check, "is_stale": is_stale},
     )
 
 
