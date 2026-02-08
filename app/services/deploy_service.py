@@ -311,7 +311,7 @@ class DeployService:
         self._dispatch_webhook("deploy_started", instance, deployment_id)
 
         ssh = get_ssh_for_server(server)
-        results = {}
+        results: dict[str, dict[str, object]] = {}
         steps = RECONFIGURE_STEPS if deployment_type == "reconfigure" else DEPLOY_STEPS
 
         try:
@@ -548,6 +548,15 @@ class DeployService:
         step = "transfer"
         self._update_step(instance.instance_id, deployment_id, step, DeployStepStatus.running)
         # Files are already transferred during generate step via SFTP
+        if not instance.deploy_path:
+            self._update_step(
+                instance.instance_id,
+                deployment_id,
+                step,
+                DeployStepStatus.failed,
+                "Deploy path not configured",
+            )
+            return False
         result = ssh.exec_command(f"ls -la {shlex.quote(instance.deploy_path)}/")
         if result.ok:
             self._update_step(
@@ -885,6 +894,15 @@ class DeployService:
         self._update_step(instance.instance_id, deployment_id, step, DeployStepStatus.running)
         slug = _safe_slug(instance.org_code.lower())
         app_container = f"dotmac_{slug}_app"
+        if not instance.deploy_path:
+            self._update_step(
+                instance.instance_id,
+                deployment_id,
+                step,
+                DeployStepStatus.failed,
+                "Deploy path not configured",
+            )
+            return False
         deploy_path = shlex.quote(instance.deploy_path)
         # Copy bootstrap script into container (it's generated at deploy path, not in the image)
         cp_result = ssh.exec_command(

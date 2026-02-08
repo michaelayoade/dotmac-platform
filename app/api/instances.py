@@ -390,9 +390,10 @@ def start_trial(
     try:
         instance = svc.start_trial(instance_id, days)
         db.commit()
+        trial_expires_at = instance.trial_expires_at.isoformat() if instance.trial_expires_at else None
         return {
             "status": instance.status.value,
-            "trial_expires_at": instance.trial_expires_at.isoformat(),
+            "trial_expires_at": trial_expires_at,
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

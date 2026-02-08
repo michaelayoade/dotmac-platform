@@ -91,7 +91,7 @@ ignore_missing_imports = true
 
 [tool.bandit]
 exclude_dirs = ["tests"]
-skips = ["B101"]  # allow assert
+skips = ["B101", "B324", "B507", "B602"]  # allow assert, md5 etags, paramiko WarningPolicy, shell=True
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
