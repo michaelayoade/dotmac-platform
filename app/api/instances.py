@@ -680,13 +680,13 @@ def get_tenant_audit_log(
     logs = svc.get_logs(instance_id, action=action, limit=limit, offset=offset)
     return [
         {
-            "id": l.id,
-            "action": l.action,
-            "user_name": l.user_name,
-            "details": l.details,
-            "created_at": l.created_at.isoformat() if l.created_at else None,
+            "id": entry.id,
+            "action": entry.action,
+            "user_name": entry.user_name,
+            "details": entry.details,
+            "created_at": entry.created_at.isoformat() if entry.created_at else None,
         }
-        for l in logs
+        for entry in logs
     ]
 
 

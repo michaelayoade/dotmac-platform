@@ -17,7 +17,7 @@ from uuid import UUID
 
 from cryptography.fernet import InvalidToken
 from fastapi import HTTPException
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.deployment_log import DeploymentLog, DeployStepStatus
@@ -592,10 +592,12 @@ class DeployService:
             self._update_step(
                 instance.instance_id, deployment_id, step, DeployStepStatus.running, f"Updating source at {src_path}..."
             )
-            pull_result = ssh.exec_command(
-                f"git -C {q_src} fetch origin && git -C {q_src} checkout {q_branch} && git -C {q_src} pull origin {q_branch}",
-                timeout=120,
+            git_cmd = (
+                f"git -C {q_src} fetch origin"
+                f" && git -C {q_src} checkout {q_branch}"
+                f" && git -C {q_src} pull origin {q_branch}"
             )
+            pull_result = ssh.exec_command(git_cmd, timeout=120)
             if pull_result.ok:
                 self._update_step(
                     instance.instance_id,
