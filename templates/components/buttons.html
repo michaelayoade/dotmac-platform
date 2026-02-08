@@ -1,0 +1,93 @@
+{#
+    Button component macros — standardized sizes and variants.
+
+    Sizes:  sm (table actions), md (default), lg (primary page CTAs)
+    Variants: primary, secondary, danger, success, ghost
+
+    Usage:
+        {% from "components/buttons.html" import btn_primary, btn_secondary, btn_danger, btn_submit %}
+        {{ btn_primary("Create Instance", href="/instances/new") }}
+        {{ btn_secondary("Cancel", href="/instances") }}
+        {{ btn_danger("Delete", type="submit") }}
+        {{ btn_submit("Save Settings", size="lg", submitting_text="Saving...") }}
+#}
+
+{# ── Spinner SVG (shared) ── #}
+{% macro _spinner() %}
+<svg class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+{% endmacro %}
+
+{# ── Size classes ── #}
+{% macro _size_classes(size) %}
+{%- if size == 'sm' -%}px-3 py-1.5 text-[11px]{%- elif size == 'lg' -%}px-5 py-2.5 text-[13px]{%- else -%}px-4 py-2 text-[13px]{%- endif -%}
+{% endmacro %}
+
+{# ── Primary button (dark bg, yellow in dark mode) ── #}
+{% macro btn_primary(label, href="", type="button", size="md", icon="", extra_class="", testid="", disabled=false) %}
+{% if href %}
+<a href="{{ href }}" class="inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 {{ _size_classes(size) }} font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition shadow-sm {{ extra_class }}" {% if testid %}data-testid="{{ testid }}"{% endif %}>
+    {{ icon | safe }}{{ label }}
+</a>
+{% else %}
+<button type="{{ type }}" class="inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 {{ _size_classes(size) }} font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition shadow-sm {{ extra_class }}" {% if testid %}data-testid="{{ testid }}"{% endif %} {% if disabled %}disabled{% endif %}>
+    {{ icon | safe }}{{ label }}
+</button>
+{% endif %}
+{% endmacro %}
+
+{# ── Secondary button (bordered) ── #}
+{% macro btn_secondary(label, href="", type="button", size="md", icon="", extra_class="", testid="") %}
+{% if href %}
+<a href="{{ href }}" class="inline-flex items-center gap-2 rounded-lg border border-surface-200 {{ _size_classes(size) }} font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition {{ extra_class }}" {% if testid %}data-testid="{{ testid }}"{% endif %}>
+    {{ icon | safe }}{{ label }}
+</a>
+{% else %}
+<button type="{{ type }}" class="inline-flex items-center gap-2 rounded-lg border border-surface-200 {{ _size_classes(size) }} font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition {{ extra_class }}" {% if testid %}data-testid="{{ testid }}"{% endif %}>
+    {{ icon | safe }}{{ label }}
+</button>
+{% endif %}
+{% endmacro %}
+
+{# ── Danger button (red border) ── #}
+{% macro btn_danger(label, type="submit", size="md", extra_class="", testid="") %}
+<button type="{{ type }}" class="inline-flex items-center gap-2 rounded-lg border border-red-200 {{ _size_classes(size) }} font-medium text-red-600 hover:bg-red-50 dark:border-red-800/60 dark:text-red-400 dark:hover:bg-red-900/20 transition {{ extra_class }}" {% if testid %}data-testid="{{ testid }}"{% endif %}>
+    {{ label }}
+</button>
+{% endmacro %}
+
+{# ── Success button (green bg) ── #}
+{% macro btn_success(label, type="submit", size="md", extra_class="", testid="") %}
+<button type="{{ type }}" class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 {{ _size_classes(size) }} font-semibold text-white hover:bg-emerald-700 transition {{ extra_class }}" {% if testid %}data-testid="{{ testid }}"{% endif %}>
+    {{ label }}
+</button>
+{% endmacro %}
+
+{# ── Submit button with loading state (for forms) ── #}
+{% macro btn_submit(label, submitting_text="", size="lg", variant="primary", extra_class="", testid="") %}
+{% set sub_text = submitting_text or (label.rstrip('.') ~ '...') %}
+{% if variant == 'primary' %}
+<button type="submit" :disabled="submitting"
+        :class="submitting && 'opacity-60 pointer-events-none'"
+        class="inline-flex items-center justify-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 {{ _size_classes(size) }} font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition shadow-sm {{ extra_class }}"
+        {% if testid %}data-testid="{{ testid }}"{% endif %}>
+    <template x-if="!submitting">
+        <span>{{ label }}</span>
+    </template>
+    <template x-if="submitting">
+        <span class="inline-flex items-center gap-2">{{ _spinner() }} {{ sub_text }}</span>
+    </template>
+</button>
+{% elif variant == 'fullwidth' %}
+<button type="submit" :disabled="submitting"
+        :class="submitting && 'opacity-60 pointer-events-none'"
+        class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-surface-900 dark:bg-primary-500 px-4 py-3.5 text-[14px] font-semibold text-white dark:text-surface-950 shadow-lg shadow-surface-900/10 dark:shadow-primary-500/20 transition hover:bg-surface-800 dark:hover:bg-primary-400 hover:-translate-y-0.5 active:translate-y-0 {{ extra_class }}"
+        {% if testid %}data-testid="{{ testid }}"{% endif %}>
+    <template x-if="!submitting">
+        <span>{{ label }}</span>
+    </template>
+    <template x-if="submitting">
+        <span class="inline-flex items-center gap-2">{{ _spinner() }} {{ sub_text }}</span>
+    </template>
+</button>
+{% endif %}
+{% endmacro %}

@@ -26,11 +26,32 @@ class LifecycleService:
     def __init__(self, db: Session):
         self.db = db
 
-    def start_trial(self, instance_id: UUID, days: int = DEFAULT_TRIAL_DAYS) -> Instance:
-        """Set an instance to trial status with an expiry date."""
-        instance = self.db.get(Instance, instance_id)
+    def _get_instance_for_update(self, instance_id: UUID) -> Instance:
+        stmt = select(Instance).where(Instance.instance_id == instance_id).with_for_update()
+        instance = self.db.scalar(stmt)
         if not instance:
             raise ValueError(f"Instance {instance_id} not found")
+        return instance
+
+    def _run_compose(self, instance: Instance, command: str) -> None:
+        server = self.db.get(Server, instance.server_id)
+        if not server or not instance.deploy_path:
+            raise ValueError("Instance server or deploy path not configured")
+        ssh = get_ssh_for_server(server)
+        result = ssh.exec_command(
+            command,
+            timeout=60,
+            cwd=instance.deploy_path,
+        )
+        if not result.ok:
+            detail = (result.stderr or result.stdout or "Unknown error")[:2000]
+            raise ValueError(f"Container operation failed: {detail}")
+
+    def start_trial(self, instance_id: UUID, days: int = DEFAULT_TRIAL_DAYS) -> Instance:
+        """Set an instance to trial status with an expiry date."""
+        instance = self._get_instance_for_update(instance_id)
+        if instance.status not in {InstanceStatus.provisioned, InstanceStatus.trial}:
+            raise ValueError("Instance is not eligible for trial")
         instance.status = InstanceStatus.trial
         instance.trial_expires_at = datetime.now(timezone.utc) + timedelta(days=days)
         self.db.flush()
@@ -39,22 +60,16 @@ class LifecycleService:
 
     def suspend_instance(self, instance_id: UUID, reason: str | None = None) -> Instance:
         """Suspend an instance — stops containers but preserves data."""
-        instance = self.db.get(Instance, instance_id)
-        if not instance:
-            raise ValueError(f"Instance {instance_id} not found")
+        instance = self._get_instance_for_update(instance_id)
+        if instance.status in {InstanceStatus.deploying, InstanceStatus.archived}:
+            raise ValueError("Instance cannot be suspended in its current state")
 
         # Stop containers
-        server = self.db.get(Server, instance.server_id)
-        if server and instance.deploy_path:
-            try:
-                ssh = get_ssh_for_server(server)
-                ssh.exec_command(
-                    "docker compose stop",
-                    timeout=60,
-                    cwd=instance.deploy_path,
-                )
-            except Exception:
-                logger.warning("Could not stop containers for %s", instance.org_code)
+        try:
+            self._run_compose(instance, "docker compose stop")
+        except Exception as exc:
+            logger.warning("Could not stop containers for %s: %s", instance.org_code, exc)
+            raise
 
         instance.status = InstanceStatus.suspended
         instance.suspended_at = datetime.now(timezone.utc)
@@ -66,23 +81,15 @@ class LifecycleService:
 
     def reactivate_instance(self, instance_id: UUID) -> Instance:
         """Reactivate a suspended instance — restarts containers."""
-        instance = self.db.get(Instance, instance_id)
-        if not instance:
-            raise ValueError(f"Instance {instance_id} not found")
+        instance = self._get_instance_for_update(instance_id)
         if instance.status != InstanceStatus.suspended:
             raise ValueError("Instance is not suspended")
 
-        server = self.db.get(Server, instance.server_id)
-        if server and instance.deploy_path:
-            try:
-                ssh = get_ssh_for_server(server)
-                ssh.exec_command(
-                    "docker compose start",
-                    timeout=60,
-                    cwd=instance.deploy_path,
-                )
-            except Exception:
-                logger.warning("Could not restart containers for %s", instance.org_code)
+        try:
+            self._run_compose(instance, "docker compose start")
+        except Exception as exc:
+            logger.warning("Could not restart containers for %s: %s", instance.org_code, exc)
+            raise
 
         instance.status = InstanceStatus.running
         instance.suspended_at = None
@@ -92,22 +99,15 @@ class LifecycleService:
 
     def archive_instance(self, instance_id: UUID) -> Instance:
         """Archive an instance — stops and removes containers, preserves data volumes."""
-        instance = self.db.get(Instance, instance_id)
-        if not instance:
-            raise ValueError(f"Instance {instance_id} not found")
+        instance = self._get_instance_for_update(instance_id)
+        if instance.status == InstanceStatus.deploying:
+            raise ValueError("Instance cannot be archived while deploying")
 
-        server = self.db.get(Server, instance.server_id)
-        if server and instance.deploy_path:
-            try:
-                ssh = get_ssh_for_server(server)
-                # Stop containers but preserve volumes
-                ssh.exec_command(
-                    "docker compose down",
-                    timeout=60,
-                    cwd=instance.deploy_path,
-                )
-            except Exception:
-                logger.warning("Could not remove containers for %s", instance.org_code)
+        try:
+            self._run_compose(instance, "docker compose down")
+        except Exception as exc:
+            logger.warning("Could not remove containers for %s: %s", instance.org_code, exc)
+            raise
 
         instance.status = InstanceStatus.archived
         instance.archived_at = datetime.now(timezone.utc)
@@ -122,7 +122,7 @@ class LifecycleService:
             Instance.status == InstanceStatus.trial,
             Instance.trial_expires_at.isnot(None),
             Instance.trial_expires_at <= now,
-        )
+        ).with_for_update()
         expired = list(self.db.scalars(stmt).all())
 
         for instance in expired:

@@ -339,23 +339,15 @@ def instance_start(
     require_admin(auth)
     validate_csrf_token(request, csrf_token)
 
-    from app.models.instance import InstanceStatus
-    from app.models.server import Server
     from app.services.instance_service import InstanceService
-    from app.services.ssh_service import get_ssh_for_server
 
     svc = InstanceService(db)
-    instance = svc.get_or_404(instance_id)
-    if instance.status != InstanceStatus.stopped:
-        return RedirectResponse(f"/instances/{instance_id}", status_code=302)
-    server = db.get(Server, instance.server_id)
-    ssh = get_ssh_for_server(server)
-    result = ssh.exec_command("docker compose up -d", cwd=instance.deploy_path)
-    if result.ok:
-        instance.status = InstanceStatus.running
-    else:
-        instance.status = InstanceStatus.error
-    db.commit()
+    try:
+        svc.start_instance(instance_id)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to start instance %s", instance_id)
     return RedirectResponse(f"/instances/{instance_id}", status_code=302)
 
 
@@ -370,23 +362,15 @@ def instance_stop(
     require_admin(auth)
     validate_csrf_token(request, csrf_token)
 
-    from app.models.instance import InstanceStatus
-    from app.models.server import Server
     from app.services.instance_service import InstanceService
-    from app.services.ssh_service import get_ssh_for_server
 
     svc = InstanceService(db)
-    instance = svc.get_or_404(instance_id)
-    if instance.status != InstanceStatus.running:
-        return RedirectResponse(f"/instances/{instance_id}", status_code=302)
-    server = db.get(Server, instance.server_id)
-    ssh = get_ssh_for_server(server)
-    result = ssh.exec_command("docker compose down", cwd=instance.deploy_path)
-    if result.ok:
-        instance.status = InstanceStatus.stopped
-    else:
-        instance.status = InstanceStatus.error
-    db.commit()
+    try:
+        svc.stop_instance(instance_id)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to stop instance %s", instance_id)
     return RedirectResponse(f"/instances/{instance_id}", status_code=302)
 
 
@@ -401,21 +385,15 @@ def instance_restart(
     require_admin(auth)
     validate_csrf_token(request, csrf_token)
 
-    from app.models.instance import InstanceStatus
-    from app.models.server import Server
     from app.services.instance_service import InstanceService
-    from app.services.ssh_service import get_ssh_for_server
 
     svc = InstanceService(db)
-    instance = svc.get_or_404(instance_id)
-    if instance.status != InstanceStatus.running:
-        return RedirectResponse(f"/instances/{instance_id}", status_code=302)
-    server = db.get(Server, instance.server_id)
-    ssh = get_ssh_for_server(server)
-    result = ssh.exec_command("docker compose restart", cwd=instance.deploy_path)
-    if not result.ok:
-        instance.status = InstanceStatus.error
-    db.commit()
+    try:
+        svc.restart_instance(instance_id)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to restart instance %s", instance_id)
     return RedirectResponse(f"/instances/{instance_id}", status_code=302)
 
 
@@ -482,8 +460,11 @@ def instance_health_badge(
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
 ):
-    """HTMX partial: health status badge."""
+    """HTMX partial: health status badge with ETag caching."""
+    import hashlib
     from datetime import datetime, timezone
+
+    from fastapi.responses import Response
 
     from app.config import settings as platform_settings
     from app.services.health_service import HealthService
@@ -496,10 +477,24 @@ def instance_health_badge(
         age = (datetime.now(timezone.utc) - check.checked_at).total_seconds()
         is_stale = age > platform_settings.health_stale_seconds
 
-    return templates.TemplateResponse(
+    # Build a content fingerprint for ETag
+    tag_parts = f"{check.status.value if check else 'none'}"
+    tag_parts += f":{check.response_ms if check else ''}"
+    tag_parts += f":{check.checked_at.isoformat() if check and check.checked_at else ''}"
+    tag_parts += f":{is_stale}"
+    etag = '"' + hashlib.md5(tag_parts.encode()).hexdigest()[:16] + '"'
+
+    # Return 304 if client already has this version
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match and if_none_match == etag:
+        return Response(status_code=304, headers={"ETag": etag})
+
+    response = templates.TemplateResponse(
         "partials/health_badge.html",
         {"request": request, "health": check, "is_stale": is_stale},
     )
+    response.headers["ETag"] = etag
+    return response
 
 
 # ──────────────────── Reconfigure (lightweight deploy) ───────────
@@ -724,7 +719,7 @@ def verify_domain(
 
     from app.services.domain_service import DomainService
     svc = DomainService(db)
-    svc.verify_domain(domain_id)
+    svc.verify_domain(instance_id, domain_id)
     db.commit()
     return RedirectResponse(f"/instances/{instance_id}#domains", status_code=302)
 
@@ -743,6 +738,6 @@ def delete_domain(
 
     from app.services.domain_service import DomainService
     svc = DomainService(db)
-    svc.remove_domain(domain_id)
+    svc.remove_domain(instance_id, domain_id)
     db.commit()
     return RedirectResponse(f"/instances/{instance_id}#domains", status_code=302)

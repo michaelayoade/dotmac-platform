@@ -75,9 +75,9 @@ class TestRefreshCookieSettings:
             assert _refresh_cookie_secure(None) is False
 
     def test_cookie_secure_default(self, monkeypatch):
-        """Test default secure=false."""
+        """Test default secure=true."""
         monkeypatch.delenv("REFRESH_COOKIE_SECURE", raising=False)
-        assert _refresh_cookie_secure(None) is False
+        assert _refresh_cookie_secure(None) is True
 
     def test_cookie_secure_from_db(self, db_session, monkeypatch):
         """Test secure setting from database."""

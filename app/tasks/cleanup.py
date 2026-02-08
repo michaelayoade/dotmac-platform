@@ -41,6 +41,7 @@ def cleanup_old_health_checks(self) -> dict:
 
         svc = HealthService(db)
         pruned = svc.prune_all_old_checks()
+        db.commit()
 
     logger.info("Pruned %d old health checks", pruned)
     return {"pruned_health_checks": pruned}
@@ -95,3 +96,17 @@ def cleanup_old_webhook_deliveries(self) -> dict:
 
     logger.info("Cleaned up %d old webhook deliveries", count)
     return {"deleted_webhook_deliveries": count}
+
+
+@shared_task(bind=True, max_retries=2, default_retry_delay=60)
+def cleanup_stuck_deployments(self, max_age_minutes: int = 60) -> dict:
+    """Mark stuck deploying instances as error."""
+    with SessionLocal() as db:
+        from app.services.deploy_service import DeployService
+
+        svc = DeployService(db)
+        marked = svc.mark_stuck_deployments(max_age_minutes=max_age_minutes)
+        db.commit()
+
+    logger.info("Marked %d stuck deployments as error", marked)
+    return {"marked_stuck_deployments": marked}

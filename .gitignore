@@ -71,5 +71,9 @@ Thumbs.db
 # Poetry
 poetry.lock
 
+# Node / Tailwind build
+node_modules/
+static/css/tailwind.out.css
+
 # Docker
 .docker/

@@ -72,7 +72,13 @@ os.environ["TOTP_ISSUER"] = "StarterTemplate"
 
 # Now import the models - they'll use our mocked db module
 from app.models.person import Person
-from app.models.auth import UserCredential, Session as AuthSession, SessionStatus
+from app.models.auth import (
+    PasswordResetToken,
+    SessionRefreshToken,
+    UserCredential,
+    Session as AuthSession,
+    SessionStatus,
+)
 from app.models.rbac import Role, Permission, RolePermission, PersonRole
 from app.models.audit import AuditEvent, AuditActorType
 from app.models.domain_settings import DomainSetting, SettingDomain
@@ -144,8 +150,14 @@ def client(db_session):
     from app.api.scheduler import get_db as scheduler_get_db
     from app.services.auth_dependencies import _get_db as auth_deps_get_db
 
+    Session = sessionmaker(bind=db_session.bind, autoflush=False, autocommit=False)
+
     def override_get_db():
-        yield db_session
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
 
     # Override all get_db dependencies
     app.dependency_overrides[persons_get_db] = override_get_db

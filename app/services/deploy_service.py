@@ -11,16 +11,19 @@ import re
 import shlex
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.models.deployment_log import DeploymentLog, DeployStepStatus
 from app.models.instance import Instance, InstanceStatus
 from app.models.server import Server
 from app.config import settings as platform_settings
-from app.services.ssh_service import SSHResult, get_ssh_for_server
+from app.services.ssh_service import SSHResult, SSHService, get_ssh_for_server
+from app.services.auth_flow import _decrypt_secret as _decrypt_auth_secret
+from app.services.auth_flow import _encrypt_secret as _encrypt_auth_secret
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +69,25 @@ def _safe_slug(value: str) -> str:
     if not re.match(r'^[a-zA-Z0-9_-]+$', value):
         raise ValueError(f"Invalid slug: {value!r} — must be alphanumeric, hyphens, or underscores")
     return value
+
+
+def _safe_schema_name(value: str) -> str:
+    """Validate and return a safe PostgreSQL schema identifier."""
+    if not re.match(r"^[a-z][a-z0-9_]*$", value):
+        raise ValueError(f"Invalid schema name: {value!r}")
+    return value
+
+
+def _encrypt_deploy_secret(db: Session, value: str) -> str:
+    return _encrypt_auth_secret(db, value)
+
+
+def _decrypt_deploy_secret(db: Session, value: str) -> str:
+    try:
+        return _decrypt_auth_secret(db, value)
+    except Exception:
+        # Backward compatibility for existing plaintext secrets.
+        return value
 
 
 class DeployService:
@@ -116,7 +138,7 @@ class DeployService:
         if self.has_active_deployment(instance_id):
             raise ValueError("A deployment is already in progress for this instance")
 
-        deployment_id = str(uuid.uuid4())[:8]
+        deployment_id = uuid.uuid4().hex
         steps = RECONFIGURE_STEPS if deployment_type == "reconfigure" else DEPLOY_STEPS
 
         for i, step in enumerate(steps):
@@ -128,7 +150,9 @@ class DeployService:
                 step=step,
                 status=DeployStepStatus.pending,
                 message=STEP_LABELS.get(step, step),
-                deploy_secret=admin_password if i == 0 and admin_password else None,
+                deploy_secret=_encrypt_deploy_secret(self.db, admin_password)
+                if i == 0 and admin_password
+                else None,
             )
             self.db.add(log)
 
@@ -140,21 +164,31 @@ class DeployService:
         return deployment_id
 
     def get_deploy_secret(self, instance_id: UUID, deployment_id: str) -> str | None:
-        """Retrieve and clear the deploy secret (admin password) for a deployment."""
+        """Retrieve the deploy secret (admin password) for a deployment."""
         from sqlalchemy import select
 
         stmt = select(DeploymentLog).where(
             DeploymentLog.instance_id == instance_id,
             DeploymentLog.deployment_id == deployment_id,
-            DeploymentLog.step == DEPLOY_STEPS[0],
-        )
+            DeploymentLog.deploy_secret.isnot(None),
+        ).order_by(DeploymentLog.id.asc())
         log = self.db.scalar(stmt)
         if not log or not log.deploy_secret:
             return None
-        secret = log.deploy_secret
-        log.deploy_secret = None  # Clear after reading
+        return _decrypt_deploy_secret(self.db, log.deploy_secret)
+
+    def clear_deploy_secret(self, instance_id: UUID, deployment_id: str) -> None:
+        """Clear deploy secrets after a successful deployment."""
+        from sqlalchemy import select
+
+        stmt = select(DeploymentLog).where(
+            DeploymentLog.instance_id == instance_id,
+            DeploymentLog.deployment_id == deployment_id,
+            DeploymentLog.deploy_secret.isnot(None),
+        )
+        for log in self.db.scalars(stmt).all():
+            log.deploy_secret = None
         self.db.commit()
-        return secret
 
     def get_deployment_logs(
         self, instance_id: UUID, deployment_id: str | None = None
@@ -181,6 +215,30 @@ class DeployService:
             .limit(1)
         )
         return self.db.scalar(stmt)
+
+    def mark_stuck_deployments(self, max_age_minutes: int = 60) -> int:
+        """Mark instances stuck in deploying state as error."""
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
+        subq = (
+            select(
+                DeploymentLog.instance_id,
+                func.max(DeploymentLog.created_at).label("last_log_at"),
+            )
+            .group_by(DeploymentLog.instance_id)
+            .subquery()
+        )
+        stmt = (
+            select(Instance)
+            .join(subq, subq.c.instance_id == Instance.instance_id)
+            .where(Instance.status == InstanceStatus.deploying)
+            .where(subq.c.last_log_at < cutoff)
+        )
+        count = 0
+        for inst in self.db.scalars(stmt).all():
+            inst.status = InstanceStatus.error
+            count += 1
+        self.db.flush()
+        return count
 
     def _update_step(
         self,
@@ -337,6 +395,7 @@ class DeployService:
                 instance.deployed_git_ref = git_ref
             instance.status = InstanceStatus.running
             self.db.commit()
+            self.clear_deploy_secret(instance_id, deployment_id)
             self._dispatch_webhook("deploy_success", instance, deployment_id)
             return {"success": True, "results": results}
 
@@ -372,7 +431,7 @@ class DeployService:
         instance: Instance,
         deployment_id: str,
         admin_password: str,
-        ssh,
+        ssh: SSHService,
         results: dict,
         steps: list[str],
     ) -> dict:
@@ -400,6 +459,7 @@ class DeployService:
 
         instance.status = InstanceStatus.running
         self.db.commit()
+        self.clear_deploy_secret(instance_id, deployment_id)
         return {"success": True, "results": results}
 
     def _step_backup(self, instance: Instance, deployment_id: str) -> bool:
@@ -441,7 +501,7 @@ class DeployService:
             )
             return True  # Non-fatal
 
-    def _step_restart(self, instance: Instance, deployment_id: str, ssh) -> bool:
+    def _step_restart(self, instance: Instance, deployment_id: str, ssh: SSHService) -> bool:
         """Restart app containers only (for reconfigure)."""
         step = "restart"
         self._update_step(
@@ -491,7 +551,7 @@ class DeployService:
             return False
 
     def _step_transfer(
-        self, instance: Instance, deployment_id: str, ssh
+        self, instance: Instance, deployment_id: str, ssh: SSHService
     ) -> bool:
         step = "transfer"
         self._update_step(
@@ -513,7 +573,7 @@ class DeployService:
         return False
 
     def _step_ensure_source(
-        self, instance: Instance, deployment_id: str, ssh,
+        self, instance: Instance, deployment_id: str, ssh: SSHService,
         git_ref: str | None = None,
     ) -> bool:
         step = "ensure_source"
@@ -602,7 +662,7 @@ class DeployService:
         return False
 
     def _step_build(
-        self, instance: Instance, deployment_id: str, ssh
+        self, instance: Instance, deployment_id: str, ssh: SSHService
     ) -> bool:
         step = "build"
         self._update_step(
@@ -629,7 +689,7 @@ class DeployService:
         return False
 
     def _step_start_infra(
-        self, instance: Instance, deployment_id: str, ssh
+        self, instance: Instance, deployment_id: str, ssh: SSHService
     ) -> bool:
         step = "start_infra"
         self._update_step(
@@ -680,7 +740,7 @@ class DeployService:
         return False
 
     def _step_start_app(
-        self, instance: Instance, deployment_id: str, ssh
+        self, instance: Instance, deployment_id: str, ssh: SSHService
     ) -> bool:
         step = "start_app"
         self._update_step(
@@ -706,7 +766,7 @@ class DeployService:
         return True
 
     def _step_migrate(
-        self, instance: Instance, deployment_id: str, ssh
+        self, instance: Instance, deployment_id: str, ssh: SSHService
     ) -> bool:
         step = "migrate"
         self._update_step(
@@ -730,8 +790,17 @@ class DeployService:
                 "pm", "proc", "recruit", "rpt", "scheduling", "support",
                 "sync", "tax", "training",
             ]
+        try:
+            safe_schemas = [_safe_schema_name(s) for s in schemas]
+        except ValueError as exc:
+            self._update_step(
+                instance.instance_id, deployment_id, step,
+                DeployStepStatus.failed, "Invalid schema name",
+                str(exc),
+            )
+            return False
         schema_sql = "; ".join(
-            f"CREATE SCHEMA IF NOT EXISTS {s}" for s in schemas
+            f'CREATE SCHEMA IF NOT EXISTS "{s}"' for s in safe_schemas
         )
         slug = _safe_slug(instance.org_code.lower())
         db_container = f"dotmac_{slug}_db"
@@ -774,7 +843,7 @@ class DeployService:
         return False
 
     def _step_bootstrap(
-        self, instance: Instance, deployment_id: str, ssh
+        self, instance: Instance, deployment_id: str, ssh: SSHService
     ) -> bool:
         step = "bootstrap"
         self._update_step(
@@ -814,7 +883,7 @@ class DeployService:
         return False
 
     def _step_nginx(
-        self, instance: Instance, deployment_id: str, ssh
+        self, instance: Instance, deployment_id: str, ssh: SSHService
     ) -> bool:
         step = "nginx"
         self._update_step(
@@ -847,7 +916,7 @@ class DeployService:
             return False
 
     def _step_verify(
-        self, instance: Instance, deployment_id: str, ssh
+        self, instance: Instance, deployment_id: str, ssh: SSHService
     ) -> bool:
         step = "verify"
         self._update_step(

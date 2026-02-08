@@ -30,6 +30,15 @@ from app.services.ssh_service import get_ssh_for_server
 
 logger = logging.getLogger(__name__)
 
+_DOMAIN_RE = re.compile(r'^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$')
+
+
+def _validate_domain(domain: str) -> str:
+    domain = domain.strip().lower()
+    if not domain or len(domain) > 253 or not _DOMAIN_RE.match(domain):
+        raise ValueError(f"Invalid domain: {domain!r}")
+    return domain
+
 # Port allocation base
 BASE_APP_PORT = 8010
 BASE_DB_PORT = 5440
@@ -115,16 +124,21 @@ class InstanceService:
         )
         instances = list(self.db.scalars(stmt).all())
 
-        app_port = BASE_APP_PORT
-        db_port = BASE_DB_PORT
-        redis_port = BASE_REDIS_PORT
+        used_app = {inst.app_port for inst in instances}
+        used_db = {inst.db_port for inst in instances}
+        used_redis = {inst.redis_port for inst in instances}
 
-        for inst in instances:
-            app_port = max(app_port, inst.app_port + 1)
-            db_port = max(db_port, inst.db_port + 1)
-            redis_port = max(redis_port, inst.redis_port + 1)
+        def _next_free(base: int, used: set[int]) -> int:
+            port = base
+            while port in used:
+                port += 1
+            return port
 
-        return app_port, db_port, redis_port
+        return (
+            _next_free(BASE_APP_PORT, used_app),
+            _next_free(BASE_DB_PORT, used_db),
+            _next_free(BASE_REDIS_PORT, used_redis),
+        )
 
     def create(
         self,
@@ -150,7 +164,7 @@ class InstanceService:
             )
 
         # Auto-allocate ports if not specified
-        if not app_port or not db_port or not redis_port:
+        if app_port is None or db_port is None or redis_port is None:
             auto_app, auto_db, auto_redis = self.allocate_ports(server_id)
             app_port = app_port or auto_app
             db_port = db_port or auto_db
@@ -169,6 +183,7 @@ class InstanceService:
         deploy_path = os.path.join(default_deploy, slug)
 
         if domain:
+            domain = _validate_domain(domain)
             app_url = f"https://{domain}"
         elif server and server.base_domain:
             domain = f"{slug}.{server.base_domain}"
@@ -202,6 +217,57 @@ class InstanceService:
     def update_status(self, instance_id: UUID, status: InstanceStatus) -> Instance:
         instance = self.get_or_404(instance_id)
         instance.status = status
+        self.db.flush()
+        return instance
+
+    def _exec_compose(self, instance: Instance, command: str) -> None:
+        server = self.db.get(Server, instance.server_id)
+        if not server or not instance.deploy_path:
+            raise ValueError("Instance server or deploy path not configured")
+        ssh = get_ssh_for_server(server)
+        result = ssh.exec_command(command, cwd=instance.deploy_path)
+        if not result.ok:
+            detail = (result.stderr or result.stdout or "Unknown error")[:2000]
+            raise ValueError(detail)
+
+    def start_instance(self, instance_id: UUID) -> Instance:
+        instance = self.get_or_404(instance_id)
+        if instance.status != InstanceStatus.stopped:
+            raise ValueError("Instance is not stopped")
+        try:
+            self._exec_compose(instance, "docker compose up -d")
+            instance.status = InstanceStatus.running
+        except Exception:
+            instance.status = InstanceStatus.error
+            self.db.flush()
+            raise
+        self.db.flush()
+        return instance
+
+    def stop_instance(self, instance_id: UUID) -> Instance:
+        instance = self.get_or_404(instance_id)
+        if instance.status != InstanceStatus.running:
+            raise ValueError("Instance is not running")
+        try:
+            self._exec_compose(instance, "docker compose down")
+            instance.status = InstanceStatus.stopped
+        except Exception:
+            instance.status = InstanceStatus.error
+            self.db.flush()
+            raise
+        self.db.flush()
+        return instance
+
+    def restart_instance(self, instance_id: UUID) -> Instance:
+        instance = self.get_or_404(instance_id)
+        if instance.status != InstanceStatus.running:
+            raise ValueError("Instance is not running")
+        try:
+            self._exec_compose(instance, "docker compose restart")
+        except Exception:
+            instance.status = InstanceStatus.error
+            self.db.flush()
+            raise
         self.db.flush()
         return instance
 

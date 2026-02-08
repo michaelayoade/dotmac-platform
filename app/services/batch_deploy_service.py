@@ -48,11 +48,12 @@ class BatchDeployService:
         )
         return batch
 
-    def list_batches(self, limit: int = 20) -> list[DeploymentBatch]:
+    def list_batches(self, limit: int = 20, offset: int = 0) -> list[DeploymentBatch]:
         stmt = (
             select(DeploymentBatch)
             .order_by(DeploymentBatch.created_at.desc())
             .limit(limit)
+            .offset(offset)
         )
         return list(self.db.scalars(stmt).all())
 

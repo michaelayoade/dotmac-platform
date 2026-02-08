@@ -3,7 +3,9 @@ from app.models.auth import (  # noqa: F401
     AuthProvider,
     MFAMethod,
     MFAMethodType,
+    PasswordResetToken,
     Session,
+    SessionRefreshToken,
     SessionStatus,
     UserCredential,
 )

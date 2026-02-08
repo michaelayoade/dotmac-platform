@@ -1,6 +1,10 @@
+import logging
+
 from fastapi import HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
+
+logger = logging.getLogger(__name__)
 
 
 def _error_payload(code: str, message: str, details):
@@ -44,6 +48,7 @@ def register_error_handlers(app) -> None:
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
+        logger.exception("Unhandled exception")
         return JSONResponse(
             status_code=500,
             content=_error_payload(

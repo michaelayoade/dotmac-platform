@@ -70,13 +70,15 @@ class NginxService:
         domain = _validate_domain(instance.domain)
         vhost_content = self.generate_vhost(domain, instance.app_port)
         vhost_path = f"/etc/nginx/sites-enabled/{domain}"
+        tmp_path = f"{vhost_path}.tmp"
 
-        ssh.sftp_put_string(vhost_content, vhost_path)
-        logger.info("Wrote nginx vhost: %s", vhost_path)
+        ssh.sftp_put_string(vhost_content, tmp_path)
+        logger.info("Wrote nginx vhost: %s", tmp_path)
 
         # Test and reload
         test_result = ssh.exec_command("nginx -t")
         if test_result.ok:
+            ssh.exec_command(f"mv {shlex.quote(tmp_path)} {shlex.quote(vhost_path)}")
             ssh.exec_command("systemctl reload nginx")
             logger.info("Nginx reloaded for %s", domain)
 
@@ -89,6 +91,7 @@ class NginxService:
             if certbot_result.ok:
                 logger.info("SSL configured for %s", domain)
         else:
+            ssh.exec_command(f"rm -f {shlex.quote(tmp_path)}")
             logger.warning(
                 "Nginx config test failed for %s: %s",
                 domain,

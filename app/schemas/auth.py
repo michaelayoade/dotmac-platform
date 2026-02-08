@@ -21,14 +21,18 @@ class UserCredentialBase(BaseModel):
 
 
 class UserCredentialCreate(UserCredentialBase):
-    password_hash: str | None = Field(default=None, max_length=255)
+    model_config = ConfigDict(extra="forbid")
+
+    password: str | None = Field(default=None, min_length=8, max_length=255)
 
 
 class UserCredentialUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     person_id: UUID | None = None
     provider: AuthProvider | None = None
     username: str | None = Field(default=None, max_length=150)
-    password_hash: str | None = Field(default=None, max_length=255)
+    password: str | None = Field(default=None, min_length=8, max_length=255)
     must_change_password: bool | None = None
     password_updated_at: datetime | None = None
     failed_login_attempts: int | None = None
@@ -59,14 +63,15 @@ class MFAMethodBase(BaseModel):
 
 
 class MFAMethodCreate(MFAMethodBase):
-    secret: str | None = Field(default=None, max_length=255)
+    model_config = ConfigDict(extra="forbid")
 
 
 class MFAMethodUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     person_id: UUID | None = None
     method_type: MFAMethodType | None = None
     label: str | None = Field(default=None, max_length=120)
-    secret: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=40)
     email: str | None = Field(default=None, max_length=255)
     is_primary: bool | None = None
@@ -87,7 +92,6 @@ class MFAMethodRead(MFAMethodBase):
 class SessionBase(BaseModel):
     person_id: UUID
     status: SessionStatus = SessionStatus.active
-    token_hash: str = Field(min_length=1, max_length=255)
     ip_address: str | None = Field(default=None, max_length=64)
     user_agent: str | None = Field(default=None, max_length=512)
     last_seen_at: datetime | None = None
@@ -96,13 +100,16 @@ class SessionBase(BaseModel):
 
 
 class SessionCreate(SessionBase):
-    pass
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=1, max_length=255)
 
 
 class SessionUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     person_id: UUID | None = None
     status: SessionStatus | None = None
-    token_hash: str | None = Field(default=None, max_length=255)
     ip_address: str | None = Field(default=None, max_length=64)
     user_agent: str | None = Field(default=None, max_length=512)
     last_seen_at: datetime | None = None
@@ -120,7 +127,6 @@ class SessionRead(SessionBase):
 class ApiKeyBase(BaseModel):
     person_id: UUID | None = None
     label: str | None = Field(default=None, max_length=120)
-    key_hash: str = Field(min_length=1, max_length=255)
     is_active: bool = True
     last_used_at: datetime | None = None
     expires_at: datetime | None = None
@@ -128,7 +134,9 @@ class ApiKeyBase(BaseModel):
 
 
 class ApiKeyCreate(ApiKeyBase):
-    pass
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1, max_length=255)
 
 
 class ApiKeyGenerateRequest(BaseModel):
@@ -138,9 +146,10 @@ class ApiKeyGenerateRequest(BaseModel):
 
 
 class ApiKeyUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     person_id: UUID | None = None
     label: str | None = Field(default=None, max_length=120)
-    key_hash: str | None = Field(default=None, max_length=255)
     is_active: bool | None = None
     last_used_at: datetime | None = None
     expires_at: datetime | None = None
@@ -152,6 +161,7 @@ class ApiKeyRead(ApiKeyBase):
 
     id: UUID
     created_at: datetime
+    key_hash: str = Field(min_length=1, max_length=255)
 
     @field_serializer("key_hash")
     def _mask_key_hash(self, value: str) -> str:

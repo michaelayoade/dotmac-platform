@@ -19,6 +19,7 @@ def evaluate_alert_rules() -> int:
 
         svc = AlertService(db)
         count = svc.evaluate_all()
+        db.commit()
         if count:
             logger.info("Fired %d alerts", count)
         return count
@@ -33,6 +34,7 @@ def collect_usage_metrics() -> int:
 
         svc = UsageService(db)
         count = svc.collect_all_usage()
+        db.commit()
         logger.info("Collected usage for %d instances", count)
         return count
 
@@ -46,6 +48,7 @@ def detect_config_drift() -> int:
 
         svc = DriftService(db)
         drift_count = svc.detect_all_drift()
+        db.commit()
         if drift_count:
             logger.warning("Config drift detected in %d instances", drift_count)
         return drift_count

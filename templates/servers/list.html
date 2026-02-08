@@ -9,10 +9,10 @@
 
 {% block content %}
 {% if servers %}
-<div class="overflow-hidden rounded-xl border border-surface-200/80 bg-white dark:border-surface-800/50 dark:bg-surface-900/80">
+<div class="overflow-x-auto rounded-xl border border-surface-200/80 bg-white dark:border-surface-800/50 dark:bg-surface-900/80 max-h-[calc(100vh-220px)]">
     <table class="min-w-full divide-y divide-surface-100 dark:divide-surface-800/60">
-        <thead>
-            <tr class="bg-surface-50/80 dark:bg-surface-800/30">
+        <thead class="sticky top-0 z-10">
+            <tr class="bg-surface-50 dark:bg-surface-800/80 backdrop-blur-sm">
                 <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Server</th>
                 <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Host</th>
                 <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Status</th>

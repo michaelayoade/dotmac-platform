@@ -1,21 +1,23 @@
 {% extends "platform_base.html" %}
+{% from "components/buttons.html" import btn_submit, btn_primary, btn_secondary, btn_danger, btn_success %}
+{% from "components/breadcrumb.html" import breadcrumb %}
 
 {% block content %}
 {% set testing = testing if testing is defined else false %}
 {# ===== HEADER: Breadcrumb + Org Name + Action Buttons ===== #}
 <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
     <div>
-        <div class="flex items-center gap-2 text-[13px] text-surface-400 dark:text-surface-500">
-            <a href="/instances" class="hover:text-surface-700 dark:hover:text-surface-300 transition">Instances</a>
-            <span class="text-surface-300 dark:text-surface-600">/</span>
-            <span class="text-surface-600 dark:text-surface-300">{{ instance.org_code }}</span>
-        </div>
+        {{ breadcrumb([
+            {"label": "Instances", "url": "/instances"},
+            {"label": instance.org_code}
+        ]) }}
         <p class="mt-1 text-[13px] text-surface-400 dark:text-surface-500">{{ instance.org_name }}</p>
     </div>
     <div class="flex flex-wrap gap-2">
         {# Deploy button (provisioned/error only) #}
         {% if instance.status.value in ('provisioned', 'error') %}
-        <form method="POST" action="/instances/{{ instance.instance_id }}/deploy" class="inline" x-data="{ open: false }">
+        <form method="POST" action="/instances/{{ instance.instance_id }}/deploy" class="inline"
+              x-data="{ open: false, submitting: false }" @submit="submitting = true">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <button type="button" @click="open = true" data-testid="instance-deploy-open"
                     class="inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 px-3 py-2 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">
@@ -23,8 +25,16 @@
                 Deploy
             </button>
             <!-- Deploy modal -->
-            <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" @click.self="open = false">
-                <div class="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl dark:bg-surface-800" @click.stop>
+            <div x-show="open" x-cloak
+                 x-effect="document.body.classList.toggle('overflow-hidden', open)"
+                 @keydown.escape.window="open = false"
+                 class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+                 x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+                 @click.self="open = false">
+                <div class="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl dark:bg-surface-800" @click.stop
+                     x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95">
                     <h3 class="text-lg font-display text-surface-900 dark:text-white">Deploy {{ instance.org_code }}</h3>
                     <p class="mt-2 text-[13px] text-surface-400 dark:text-surface-500">This will run the full 10-step deployment pipeline.</p>
                     <div class="mt-4">
@@ -33,9 +43,8 @@
                                class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
                     </div>
                     <div class="mt-6 flex justify-end gap-3">
-                        <button type="button" @click="open = false" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-500 dark:border-surface-700 dark:text-surface-400">Cancel</button>
-                        <button type="submit" data-testid="instance-deploy-submit"
-                                class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">Start Deploy</button>
+                        <button type="button" @click="open = false" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-500 dark:border-surface-700 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-700 transition">Cancel</button>
+                        {{ btn_submit("Start Deploy", submitting_text="Deploying...", size="md", testid="instance-deploy-submit") }}
                     </div>
                 </div>
             </div>
@@ -44,33 +53,43 @@
 
         {# Reconfigure button (running only) #}
         {% if instance.status.value == 'running' %}
-        <form method="POST" action="/instances/{{ instance.instance_id }}/reconfigure" onsubmit="return confirm('Reconfigure this instance? This will regenerate config files and restart services.')">
+        <form method="POST" action="/instances/{{ instance.instance_id }}/reconfigure"
+              x-data="{ submitting: false }" @submit.prevent="if(confirm('Reconfigure this instance? This will regenerate config files and restart services.')){submitting=true;$el.submit()}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" data-testid="instance-reconfigure"
+            <button type="submit" data-testid="instance-reconfigure" :disabled="submitting"
+                    :class="submitting && 'opacity-60 pointer-events-none'"
                     class="inline-flex items-center gap-2 rounded-lg border border-surface-200 px-3 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
-                Reconfigure
+                <svg class="h-4 w-4" x-show="!submitting" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+                <svg class="h-4 w-4 animate-spin" x-show="submitting" x-cloak fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <span x-text="submitting ? 'Reconfiguring...' : 'Reconfigure'"></span>
             </button>
         </form>
         {% endif %}
 
         {# Start / Stop / Restart buttons #}
         {% if instance.status.value == 'running' %}
-        <form method="POST" action="/instances/{{ instance.instance_id }}/restart">
+        <form method="POST" action="/instances/{{ instance.instance_id }}/restart"
+              x-data="{ submitting: false }" @submit="submitting = true">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" data-testid="instance-restart"
-                    class="inline-flex items-center gap-2 rounded-lg border border-surface-200 px-3 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Restart</button>
+            <button type="submit" data-testid="instance-restart" :disabled="submitting"
+                    :class="submitting && 'opacity-60 pointer-events-none'"
+                    class="inline-flex items-center gap-2 rounded-lg border border-surface-200 px-3 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">
+                <span x-text="submitting ? 'Restarting...' : 'Restart'"></span>
+            </button>
         </form>
         <form method="POST" action="/instances/{{ instance.instance_id }}/stop" onsubmit="return confirm('Stop this instance?')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" data-testid="instance-stop"
-                    class="rounded-lg border border-red-200 px-3 py-2 text-[13px] font-medium text-red-600 hover:bg-red-50 dark:border-red-800/60 dark:text-red-400 dark:hover:bg-red-900/20 transition">Stop</button>
+            {{ btn_danger("Stop", testid="instance-stop", size="sm") }}
         </form>
         {% elif instance.status.value == 'stopped' %}
-        <form method="POST" action="/instances/{{ instance.instance_id }}/start">
+        <form method="POST" action="/instances/{{ instance.instance_id }}/start"
+              x-data="{ submitting: false }" @submit="submitting = true">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" data-testid="instance-start"
-                    class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-[13px] font-semibold text-white hover:bg-emerald-700 transition">Start</button>
+            <button type="submit" data-testid="instance-start" :disabled="submitting"
+                    :class="submitting && 'opacity-60 pointer-events-none'"
+                    class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-[13px] font-semibold text-white hover:bg-emerald-700 transition">
+                <span x-text="submitting ? 'Starting...' : 'Start'"></span>
+            </button>
         </form>
         {% endif %}
 
@@ -229,7 +248,8 @@
     <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
         <div class="flex items-center justify-between mb-5">
             <h2 class="text-lg font-display text-surface-700 dark:text-surface-300">Health</h2>
-            <div {% if not testing %}hx-get="/instances/{{ instance.instance_id }}/health" hx-trigger="every 30s" hx-swap="innerHTML"{% endif %}>
+            <div class="relative" {% if not testing %}hx-get="/instances/{{ instance.instance_id }}/health" hx-trigger="every 30s" hx-swap="innerHTML"{% endif %}>
+                <span class="htmx-indicator absolute inset-0 flex items-center justify-center"><span class="h-4 w-16 skeleton rounded-full"></span></span>
                 {% if latest_health %}
                     {% if latest_health.status.value == 'healthy' %}
                         <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
@@ -424,7 +444,8 @@
     <div x-show="activeTab === 'plan'" x-cloak class="mt-4 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
         <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-5">Subscription Plan</h2>
         {% if plans %}
-        <form method="POST" action="/instances/{{ instance.instance_id }}/plan">
+        <form method="POST" action="/instances/{{ instance.instance_id }}/plan"
+              x-data="{ submitting: false }" @submit="submitting = true">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <div class="space-y-3">
                 <label class="flex cursor-pointer items-start gap-4 rounded-lg border px-4 py-3.5 transition {{ 'border-primary-300 bg-primary-50/50 dark:border-primary-700/50 dark:bg-primary-950/20' if not instance.plan_id else 'border-surface-100 hover:border-surface-200 dark:border-surface-800/60 dark:hover:border-surface-700' }}">
@@ -447,8 +468,7 @@
                 {% endfor %}
             </div>
             <div class="mt-5 flex justify-end">
-                <button type="submit" data-testid="instance-update-plan"
-                        class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">Update Plan</button>
+                {{ btn_submit("Update Plan", submitting_text="Updating...", size="md", testid="instance-update-plan") }}
             </div>
         </form>
         {% else %}
@@ -460,11 +480,14 @@
     <div x-show="activeTab === 'backups'" x-cloak class="mt-4 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
         <div class="flex items-center justify-between mb-5">
             <h2 class="text-lg font-display text-surface-700 dark:text-surface-300">Backups</h2>
-            <form method="POST" action="/instances/{{ instance.instance_id }}/backup">
+            <form method="POST" action="/instances/{{ instance.instance_id }}/backup"
+                  x-data="{ submitting: false }" @submit="submitting = true">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 px-3 py-2 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-                    Create Backup
+                <button type="submit" :disabled="submitting" :class="submitting && 'opacity-60 pointer-events-none'"
+                        class="inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 px-3 py-2 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">
+                    <svg x-show="!submitting" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                    <svg x-show="submitting" x-cloak class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <span x-text="submitting ? 'Creating...' : 'Create Backup'"></span>
                 </button>
             </form>
         </div>
@@ -529,16 +552,19 @@
         <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-5">Custom Domains</h2>
 
         {# Add Domain Form #}
-        <form method="POST" action="/instances/{{ instance.instance_id }}/domains/add" class="mb-6 flex flex-wrap items-end gap-3">
+        <form method="POST" action="/instances/{{ instance.instance_id }}/domains/add" class="mb-6 flex flex-wrap items-end gap-3"
+              x-data="{ submitting: false }" @submit="submitting = true">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <input type="text" name="domain" placeholder="e.g. erp.example.com" required class="flex-1 min-w-[200px] rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
             <label class="inline-flex items-center gap-2 text-[13px] text-surface-600 dark:text-surface-400">
                 <input type="checkbox" name="is_primary" value="true" class="h-4 w-4 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
                 Primary
             </label>
-            <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2.5 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-                Add Domain
+            <button type="submit" :disabled="submitting" :class="submitting && 'opacity-60 pointer-events-none'"
+                    class="inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2.5 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">
+                <svg x-show="!submitting" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                <svg x-show="submitting" x-cloak class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <span x-text="submitting ? 'Adding...' : 'Add Domain'"></span>
             </button>
         </form>
 

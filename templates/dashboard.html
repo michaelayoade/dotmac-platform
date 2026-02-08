@@ -82,8 +82,11 @@
 </div>
 
 {% if instances %}
-<div class="overflow-hidden rounded-xl border border-surface-200/80 bg-white dark:border-surface-800/50 dark:bg-surface-900/80"
+<div class="relative overflow-hidden rounded-xl border border-surface-200/80 bg-white dark:border-surface-800/50 dark:bg-surface-900/80"
      {% if not testing %}hx-trigger="every 30s" hx-get="/dashboard" hx-select="#instance-table" hx-target="#instance-table" hx-swap="outerHTML"{% endif %}>
+    <div class="htmx-indicator absolute top-0 left-0 right-0 h-0.5 overflow-hidden z-20">
+        <div class="h-full w-1/3 bg-primary-500 rounded-full htmx-progress-bar"></div>
+    </div>
     <table id="instance-table" class="min-w-full divide-y divide-surface-100 dark:divide-surface-800/60">
         <thead>
             <tr class="bg-surface-50/80 dark:bg-surface-800/30">

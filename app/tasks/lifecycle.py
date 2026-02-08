@@ -38,7 +38,7 @@ def check_ssl_expiry(self) -> int:
         renewed = 0
         for domain in expiring:
             try:
-                result = svc.provision_ssl(domain.domain_id)
+                result = svc.provision_ssl(domain.instance_id, domain.domain_id)
                 if result.get("success"):
                     renewed += 1
             except Exception:

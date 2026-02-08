@@ -1,0 +1,65 @@
+{#
+  Numbered pagination component.
+
+  Usage:
+    {% from "components/pagination.html" import pagination %}
+    {{ pagination(page=page, total=total, page_size=page_size, base_qs="q=foo&status=bar") }}
+
+  Shows: [Prev] 1 ... 3 [4] 5 ... 12 [Next]
+  Current page is highlighted. Ellipsis when gaps exist.
+#}
+
+{% macro pagination(page, total, page_size, base_qs="") %}
+{% set total_pages = [(total // page_size) + (1 if total % page_size else 0), 1] | max %}
+{% if total_pages > 1 %}
+<nav aria-label="Pagination" class="mt-4 flex items-center justify-between text-[12px] text-surface-400 dark:text-surface-500">
+    <div>
+        Page {{ page }} of {{ total_pages }}
+    </div>
+    <div class="flex items-center gap-1">
+        {# Prev #}
+        {% if page > 1 %}
+        <a href="?{{ base_qs }}&page={{ page - 1 }}&page_size={{ page_size }}"
+           class="rounded-lg border border-surface-200 px-2.5 py-1.5 text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">
+            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5"/></svg>
+        </a>
+        {% endif %}
+
+        {# Page numbers: show 1, current-1, current, current+1, total_pages, with ellipsis #}
+        {% set pages_to_show = [] %}
+        {% for p in range(1, total_pages + 1) %}
+            {% if p == 1 or p == total_pages or (p >= page - 1 and p <= page + 1) %}
+                {% if pages_to_show | length > 0 and p - pages_to_show[-1] > 1 %}
+                    {# Insert ellipsis marker: use 0 as sentinel #}
+                    {% set _ = pages_to_show.append(0) %}
+                {% endif %}
+                {% set _ = pages_to_show.append(p) %}
+            {% endif %}
+        {% endfor %}
+
+        {% for p in pages_to_show %}
+            {% if p == 0 %}
+                <span class="px-1.5 text-surface-300 dark:text-surface-600">&hellip;</span>
+            {% elif p == page %}
+                <span class="rounded-lg bg-surface-900 px-2.5 py-1.5 text-[12px] font-semibold text-white dark:bg-primary-500 dark:text-surface-950">{{ p }}</span>
+            {% else %}
+                <a href="?{{ base_qs }}&page={{ p }}&page_size={{ page_size }}"
+                   class="rounded-lg border border-surface-200 px-2.5 py-1.5 text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">{{ p }}</a>
+            {% endif %}
+        {% endfor %}
+
+        {# Next #}
+        {% if page < total_pages %}
+        <a href="?{{ base_qs }}&page={{ page + 1 }}&page_size={{ page_size }}"
+           class="rounded-lg border border-surface-200 px-2.5 py-1.5 text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">
+            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg>
+        </a>
+        {% endif %}
+    </div>
+</nav>
+{% elif total > 0 %}
+<div class="mt-4 text-[12px] text-surface-400 dark:text-surface-500">
+    Page 1 of 1
+</div>
+{% endif %}
+{% endmacro %}

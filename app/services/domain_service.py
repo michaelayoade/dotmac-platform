@@ -37,6 +37,12 @@ class DomainService:
     def __init__(self, db: Session):
         self.db = db
 
+    def _get_for_instance(self, instance_id: UUID, domain_id: UUID) -> InstanceDomain:
+        inst_domain = self.db.get(InstanceDomain, domain_id)
+        if not inst_domain or inst_domain.instance_id != instance_id:
+            raise ValueError("Domain not found")
+        return inst_domain
+
     def list_for_instance(self, instance_id: UUID) -> list[InstanceDomain]:
         stmt = (
             select(InstanceDomain)
@@ -82,11 +88,9 @@ class DomainService:
         logger.info("Added domain %s for instance %s", domain, instance_id)
         return inst_domain
 
-    def verify_domain(self, domain_id: UUID) -> dict:
+    def verify_domain(self, instance_id: UUID, domain_id: UUID) -> dict:
         """Check DNS TXT record for verification token."""
-        inst_domain = self.get_by_id(domain_id)
-        if not inst_domain:
-            raise ValueError("Domain not found")
+        inst_domain = self._get_for_instance(instance_id, domain_id)
 
         # In production, this would query DNS for a TXT record.
         # For now, we check via the server's dig command.
@@ -118,11 +122,9 @@ class DomainService:
             "message": f"Add a TXT record for _dotmac-verification.{inst_domain.domain} with value: {expected}",
         }
 
-    def provision_ssl(self, domain_id: UUID) -> dict:
+    def provision_ssl(self, instance_id: UUID, domain_id: UUID) -> dict:
         """Run certbot to provision SSL for a verified domain."""
-        inst_domain = self.get_by_id(domain_id)
-        if not inst_domain:
-            raise ValueError("Domain not found")
+        inst_domain = self._get_for_instance(instance_id, domain_id)
 
         if inst_domain.status not in (DomainStatus.verified, DomainStatus.active):
             raise ValueError("Domain must be verified before SSL provisioning")
@@ -148,29 +150,23 @@ class DomainService:
         self.db.flush()
         return {"success": False, "error": result.stderr[:500]}
 
-    def activate_domain(self, domain_id: UUID) -> InstanceDomain:
+    def activate_domain(self, instance_id: UUID, domain_id: UUID) -> InstanceDomain:
         """Mark a domain as fully active (SSL provisioned + nginx configured)."""
-        inst_domain = self.get_by_id(domain_id)
-        if not inst_domain:
-            raise ValueError("Domain not found")
+        inst_domain = self._get_for_instance(instance_id, domain_id)
         inst_domain.status = DomainStatus.active
         self.db.flush()
         return inst_domain
 
-    def remove_domain(self, domain_id: UUID) -> None:
+    def remove_domain(self, instance_id: UUID, domain_id: UUID) -> None:
         """Remove a domain from an instance."""
-        inst_domain = self.get_by_id(domain_id)
-        if not inst_domain:
-            raise ValueError("Domain not found")
+        inst_domain = self._get_for_instance(instance_id, domain_id)
         self.db.delete(inst_domain)
         self.db.flush()
         logger.info("Removed domain: %s", inst_domain.domain)
 
-    def set_primary(self, domain_id: UUID) -> InstanceDomain:
+    def set_primary(self, instance_id: UUID, domain_id: UUID) -> InstanceDomain:
         """Set a domain as the primary domain for its instance."""
-        inst_domain = self.get_by_id(domain_id)
-        if not inst_domain:
-            raise ValueError("Domain not found")
+        inst_domain = self._get_for_instance(instance_id, domain_id)
         self._unset_primary(inst_domain.instance_id)
         inst_domain.is_primary = True
         self.db.flush()

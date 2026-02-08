@@ -108,7 +108,7 @@ def domains_verify(
 
     svc = DomainService(db)
     try:
-        result = svc.verify_domain(domain_id)
+        result = svc.verify_domain(instance_id, domain_id)
         db.commit()
         if result.get("verified"):
             return _redirect_with(instance_id, message="Domain verified.")
@@ -133,7 +133,7 @@ def domains_provision_ssl(
 
     svc = DomainService(db)
     try:
-        result = svc.provision_ssl(domain_id)
+        result = svc.provision_ssl(instance_id, domain_id)
         db.commit()
         if result.get("success"):
             return _redirect_with(instance_id, message="SSL provisioned.")
@@ -158,7 +158,7 @@ def domains_activate(
 
     svc = DomainService(db)
     try:
-        svc.activate_domain(domain_id)
+        svc.activate_domain(instance_id, domain_id)
         db.commit()
         return _redirect_with(instance_id, message="Domain activated.")
     except ValueError as e:
@@ -181,7 +181,7 @@ def domains_primary(
 
     svc = DomainService(db)
     try:
-        svc.set_primary(domain_id)
+        svc.set_primary(instance_id, domain_id)
         db.commit()
         return _redirect_with(instance_id, message="Primary domain updated.")
     except ValueError as e:
@@ -204,7 +204,7 @@ def domains_delete(
 
     svc = DomainService(db)
     try:
-        svc.remove_domain(domain_id)
+        svc.remove_domain(instance_id, domain_id)
         db.commit()
         return _redirect_with(instance_id, message="Domain removed.")
     except ValueError as e:

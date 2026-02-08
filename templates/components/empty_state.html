@@ -1,0 +1,30 @@
+{#
+    Empty state component for pages with no data.
+
+    Usage:
+        {% from "components/empty_state.html" import empty_state %}
+        {{ empty_state(
+            title="No instances yet",
+            description="Deploy your first ERP tenant to get started.",
+            icon='<svg ...>...</svg>',
+            action_label="New Instance",
+            action_url="/instances/new"
+        ) }}
+#}
+
+{% macro empty_state(title, description="", icon="", action_label="", action_url="") %}
+<div class="flex flex-col items-center justify-center py-16 text-center">
+    {% if icon %}
+    <div class="rounded-2xl bg-surface-100 dark:bg-surface-800/50 p-4 mb-4">
+        {{ icon | safe }}
+    </div>
+    {% endif %}
+    <h3 class="font-display text-lg text-surface-800 dark:text-surface-200">{{ title }}</h3>
+    {% if description %}
+    <p class="mt-1.5 text-[13px] text-surface-500 dark:text-surface-400 max-w-sm">{{ description }}</p>
+    {% endif %}
+    {% if action_url %}
+    <a href="{{ action_url }}" class="mt-4 inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition shadow-sm">{{ action_label }}</a>
+    {% endif %}
+</div>
+{% endmacro %}

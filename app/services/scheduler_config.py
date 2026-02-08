@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from app.db import SessionLocal
 from app.models.domain_settings import DomainSetting, SettingDomain
+from app.services.settings_crypto import resolve_setting_value
 from app.models.scheduler import ScheduleType, ScheduledTask
 logger = logging.getLogger(__name__)
 
@@ -35,11 +36,7 @@ def _get_setting_value(db, domain: SettingDomain, key: str) -> str | None:
     )
     if not setting:
         return None
-    if setting.value_text:
-        return setting.value_text
-    if setting.value_json is not None:
-        return str(setting.value_json)
-    return None
+    return resolve_setting_value(setting.value_text, setting.value_json, setting.is_secret)
 
 
 def _effective_int(
@@ -123,6 +120,8 @@ def get_celery_config() -> dict:
     config = {"broker_url": broker, "result_backend": backend, "timezone": timezone}
     config["beat_max_loop_interval"] = beat_max_loop_interval
     config["beat_refresh_seconds"] = beat_refresh_seconds
+    config["task_acks_late"] = True
+    config["task_reject_on_worker_lost"] = True
     return config
 
 

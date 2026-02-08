@@ -3,14 +3,27 @@ Instance API — Modules, feature flags, plans, backups, domains, lifecycle, and
 """
 from __future__ import annotations
 
+import re
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role, require_user_auth
 
 router = APIRouter(prefix="/instances", tags=["instances"])
+
+_GIT_REF_RE = re.compile(r"^[A-Za-z0-9._/-]{1,120}$")
+
+
+def _validate_git_ref(value: str, label: str) -> str:
+    if not _GIT_REF_RE.match(value) or ".." in value or value.startswith("-"):
+        raise HTTPException(status_code=400, detail=f"Invalid {label}")
+    return value
+
+
+def _paginate_list(items: list, limit: int, offset: int):
+    return items[offset: offset + limit]
 
 
 # ──────────────────────────── Modules ────────────────────────────
@@ -19,12 +32,15 @@ router = APIRouter(prefix="/instances", tags=["instances"])
 @router.get("/{instance_id}/modules")
 def list_instance_modules(
     instance_id: UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
     from app.services.module_service import ModuleService
     svc = ModuleService(db)
-    return svc.get_instance_modules(instance_id)
+    modules = svc.get_instance_modules(instance_id)
+    return _paginate_list(modules, limit, offset)
 
 
 @router.put("/{instance_id}/modules/{module_id}")
@@ -47,6 +63,8 @@ def set_module_enabled(
 
 @router.get("/modules")
 def list_all_modules(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
@@ -63,7 +81,7 @@ def list_all_modules(
             "dependencies": m.dependencies,
             "is_core": m.is_core,
         }
-        for m in modules
+        for m in _paginate_list(modules, limit, offset)
     ]
 
 
@@ -73,12 +91,15 @@ def list_all_modules(
 @router.get("/{instance_id}/flags")
 def list_instance_flags(
     instance_id: UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
     from app.services.feature_flag_service import FeatureFlagService
     svc = FeatureFlagService(db)
-    return svc.list_for_instance(instance_id)
+    flags = svc.list_for_instance(instance_id)
+    return _paginate_list(flags, limit, offset)
 
 
 @router.put("/{instance_id}/flags/{flag_key}")
@@ -115,6 +136,8 @@ def delete_flag(
 
 @router.get("/plans")
 def list_plans(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
@@ -131,7 +154,7 @@ def list_plans(
             "allowed_modules": p.allowed_modules,
             "allowed_flags": p.allowed_flags,
         }
-        for p in plans
+        for p in _paginate_list(plans, limit, offset)
     ]
 
 
@@ -157,6 +180,8 @@ def assign_plan(
 @router.get("/{instance_id}/backups")
 def list_backups(
     instance_id: UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
@@ -172,11 +197,11 @@ def list_backups(
             "size_bytes": b.size_bytes,
             "created_at": b.created_at.isoformat() if b.created_at else None,
         }
-        for b in backups
+        for b in _paginate_list(backups, limit, offset)
     ]
 
 
-@router.post("/{instance_id}/backups")
+@router.post("/{instance_id}/backups", status_code=status.HTTP_201_CREATED)
 def create_backup(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -196,7 +221,7 @@ def create_backup(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{instance_id}/backups/{backup_id}/restore")
+@router.post("/{instance_id}/backups/{backup_id}/restore", status_code=status.HTTP_202_ACCEPTED)
 def restore_backup(
     instance_id: UUID,
     backup_id: UUID,
@@ -206,7 +231,7 @@ def restore_backup(
     from app.services.backup_service import BackupService
     svc = BackupService(db)
     try:
-        result = svc.restore_backup(backup_id)
+        result = svc.restore_backup(instance_id, backup_id)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -222,7 +247,7 @@ def delete_backup(
     from app.services.backup_service import BackupService
     svc = BackupService(db)
     try:
-        svc.delete_backup(backup_id)
+        svc.delete_backup(instance_id, backup_id)
         db.commit()
         return {"deleted": str(backup_id)}
     except ValueError as e:
@@ -235,6 +260,8 @@ def delete_backup(
 @router.get("/{instance_id}/domains")
 def list_domains(
     instance_id: UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
@@ -250,11 +277,11 @@ def list_domains(
             "verification_token": d.verification_token,
             "ssl_expires_at": d.ssl_expires_at.isoformat() if d.ssl_expires_at else None,
         }
-        for d in domains
+        for d in _paginate_list(domains, limit, offset)
     ]
 
 
-@router.post("/{instance_id}/domains")
+@router.post("/{instance_id}/domains", status_code=status.HTTP_201_CREATED)
 def add_domain(
     instance_id: UUID,
     domain: str,
@@ -287,7 +314,7 @@ def verify_domain(
     from app.services.domain_service import DomainService
     svc = DomainService(db)
     try:
-        result = svc.verify_domain(domain_id)
+        result = svc.verify_domain(instance_id, domain_id)
         db.commit()
         return result
     except ValueError as e:
@@ -304,7 +331,7 @@ def provision_ssl(
     from app.services.domain_service import DomainService
     svc = DomainService(db)
     try:
-        result = svc.provision_ssl(domain_id)
+        result = svc.provision_ssl(instance_id, domain_id)
         db.commit()
         return result
     except ValueError as e:
@@ -321,7 +348,7 @@ def remove_domain(
     from app.services.domain_service import DomainService
     svc = DomainService(db)
     try:
-        svc.remove_domain(domain_id)
+        svc.remove_domain(instance_id, domain_id)
         db.commit()
         return {"deleted": str(domain_id)}
     except ValueError as e:
@@ -331,10 +358,10 @@ def remove_domain(
 # ──────────────────────────── Lifecycle ──────────────────────────
 
 
-@router.post("/{instance_id}/trial")
+@router.post("/{instance_id}/trial", status_code=status.HTTP_200_OK)
 def start_trial(
     instance_id: UUID,
-    days: int = 14,
+    days: int = Query(default=14, ge=1, le=365),
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
@@ -351,7 +378,7 @@ def start_trial(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{instance_id}/suspend")
+@router.post("/{instance_id}/suspend", status_code=status.HTTP_200_OK)
 def suspend_instance(
     instance_id: UUID,
     reason: str | None = None,
@@ -368,7 +395,7 @@ def suspend_instance(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{instance_id}/reactivate")
+@router.post("/{instance_id}/reactivate", status_code=status.HTTP_200_OK)
 def reactivate_instance(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -384,7 +411,7 @@ def reactivate_instance(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{instance_id}/archive")
+@router.post("/{instance_id}/archive", status_code=status.HTTP_200_OK)
 def archive_instance(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -403,7 +430,7 @@ def archive_instance(
 # ──────────────────────────── Reconfigure ────────────────────────
 
 
-@router.post("/{instance_id}/reconfigure")
+@router.post("/{instance_id}/reconfigure", status_code=status.HTTP_202_ACCEPTED)
 def reconfigure_instance(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -443,9 +470,9 @@ def set_version(
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
     if git_branch is not None:
-        instance.git_branch = git_branch
+        instance.git_branch = _validate_git_ref(git_branch, "git_branch")
     if git_tag is not None:
-        instance.git_tag = git_tag
+        instance.git_tag = _validate_git_ref(git_tag, "git_tag")
     db.commit()
     return {
         "git_branch": instance.git_branch,
@@ -457,7 +484,7 @@ def set_version(
 # ──────────────────────────── Batch Deploy ───────────────────────
 
 
-@router.post("/batch-deploy")
+@router.post("/batch-deploy", status_code=status.HTTP_202_ACCEPTED)
 def create_batch_deploy(
     instance_ids: list[str],
     strategy: str = "rolling",
@@ -480,12 +507,14 @@ def create_batch_deploy(
 
 @router.get("/batch-deploys")
 def list_batch_deploys(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
     from app.services.batch_deploy_service import BatchDeployService
     svc = BatchDeployService(db)
-    batches = svc.list_batches()
+    batches = svc.list_batches(limit=limit, offset=offset)
     return [
         {
             "batch_id": str(b.batch_id),
@@ -505,12 +534,15 @@ def list_batch_deploys(
 
 @router.get("/resource-stats")
 def get_resource_stats(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
     from app.services.health_service import HealthService
     svc = HealthService(db)
     consumers = svc.get_top_resource_consumers()
+    consumers = _paginate_list(consumers, limit, offset)
     return [
         {
             "org_code": c["instance"].org_code,
@@ -529,6 +561,8 @@ def get_resource_stats(
 
 @router.get("/webhooks")
 def list_webhooks(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
@@ -544,11 +578,11 @@ def list_webhooks(
             "instance_id": str(e.instance_id) if e.instance_id else None,
             "is_active": e.is_active,
         }
-        for e in endpoints
+        for e in _paginate_list(endpoints, limit, offset)
     ]
 
 
-@router.post("/webhooks")
+@router.post("/webhooks", status_code=status.HTTP_201_CREATED)
 def create_webhook(
     url: str,
     events: list[str] = Query(default=[]),
@@ -581,12 +615,14 @@ def delete_webhook(
 @router.get("/webhooks/{endpoint_id}/deliveries")
 def list_webhook_deliveries(
     endpoint_id: UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
     from app.services.webhook_service import WebhookService
     svc = WebhookService(db)
-    deliveries = svc.get_deliveries(endpoint_id)
+    deliveries = svc.get_deliveries(endpoint_id, limit=limit, offset=offset)
     return [
         {
             "delivery_id": str(d.delivery_id),
@@ -630,7 +666,7 @@ def get_tenant_audit_log(
 # ──────────────────────────── Instance Cloning ───────────────────
 
 
-@router.post("/{instance_id}/clone")
+@router.post("/{instance_id}/clone", status_code=status.HTTP_201_CREATED)
 def clone_instance(
     instance_id: UUID,
     new_org_code: str,
@@ -661,6 +697,8 @@ def clone_instance(
 @router.get("/{instance_id}/maintenance-windows")
 def list_maintenance_windows(
     instance_id: UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
@@ -675,11 +713,11 @@ def list_maintenance_windows(
             "end_time": w.end_time.isoformat(),
             "timezone": w.timezone,
         }
-        for w in windows
+        for w in _paginate_list(windows, limit, offset)
     ]
 
 
-@router.post("/{instance_id}/maintenance-windows")
+@router.post("/{instance_id}/maintenance-windows", status_code=status.HTTP_201_CREATED)
 def set_maintenance_window(
     instance_id: UUID,
     day_of_week: int,
@@ -717,7 +755,7 @@ def delete_maintenance_window(
 ):
     from app.services.maintenance_service import MaintenanceService
     svc = MaintenanceService(db)
-    svc.delete_window(window_id)
+    svc.delete_window(instance_id, window_id)
     db.commit()
     return {"deleted": str(window_id)}
 
@@ -729,6 +767,8 @@ def delete_maintenance_window(
 def get_instance_usage(
     instance_id: UUID,
     metric: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
@@ -744,7 +784,7 @@ def get_instance_usage(
             "period_start": r.period_start.isoformat(),
             "period_end": r.period_end.isoformat(),
         }
-        for r in records
+        for r in _paginate_list(records, limit, offset)
     ]
 
 
@@ -768,6 +808,8 @@ def get_billing_summary(
 @router.get("/{instance_id}/tags")
 def list_tags(
     instance_id: UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
@@ -777,7 +819,7 @@ def list_tags(
     return [{
         "key": t.key,
         "value": t.value,
-    } for t in tags]
+    } for t in _paginate_list(tags, limit, offset)]
 
 
 @router.put("/{instance_id}/tags/{key}")
@@ -817,6 +859,8 @@ def delete_tag(
 
 @router.get("/approvals")
 def list_pending_approvals(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
@@ -834,11 +878,11 @@ def list_pending_approvals(
             "status": a.status.value,
             "created_at": a.created_at.isoformat() if a.created_at else None,
         }
-        for a in approvals
+        for a in _paginate_list(approvals, limit, offset)
     ]
 
 
-@router.post("/{instance_id}/approvals")
+@router.post("/{instance_id}/approvals", status_code=status.HTTP_201_CREATED)
 def request_deploy_approval(
     instance_id: UUID,
     deployment_type: str = "full",
@@ -852,7 +896,7 @@ def request_deploy_approval(
     try:
         approval = svc.request_approval(
             instance_id,
-            requested_by=str(auth.get("sub", "")) if isinstance(auth, dict) else "unknown",
+            requested_by=str(auth.get("person_id", "")) if isinstance(auth, dict) else "unknown",
             deployment_type=deployment_type,
             git_ref=git_ref,
             reason=reason,
@@ -863,7 +907,7 @@ def request_deploy_approval(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/approvals/{approval_id}/approve")
+@router.post("/approvals/{approval_id}/approve", status_code=status.HTTP_200_OK)
 def approve_deploy(
     approval_id: UUID,
     db: Session = Depends(get_db),
@@ -874,7 +918,7 @@ def approve_deploy(
     try:
         approval = svc.approve(
             approval_id,
-            approved_by=str(auth.get("sub", "")) if isinstance(auth, dict) else "unknown",
+            approved_by=str(auth.get("person_id", "")) if isinstance(auth, dict) else "unknown",
         )
         db.commit()
         return {"approval_id": str(approval.approval_id), "status": approval.status.value}
@@ -882,7 +926,7 @@ def approve_deploy(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/approvals/{approval_id}/reject")
+@router.post("/approvals/{approval_id}/reject", status_code=status.HTTP_200_OK)
 def reject_deploy(
     approval_id: UUID,
     reason: str | None = None,
@@ -894,7 +938,7 @@ def reject_deploy(
     try:
         approval = svc.reject(
             approval_id,
-            rejected_by=str(auth.get("sub", "")) if isinstance(auth, dict) else "unknown",
+            rejected_by=str(auth.get("person_id", "")) if isinstance(auth, dict) else "unknown",
             reason=reason,
         )
         db.commit()
@@ -924,7 +968,7 @@ def get_drift_report(
     }
 
 
-@router.post("/{instance_id}/drift/detect")
+@router.post("/{instance_id}/drift/detect", status_code=status.HTTP_200_OK)
 def detect_drift(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -949,6 +993,8 @@ def detect_drift(
 
 @router.get("/alerts/rules")
 def list_alert_rules(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
@@ -967,11 +1013,11 @@ def list_alert_rules(
             "is_active": r.is_active,
             "cooldown_minutes": r.cooldown_minutes,
         }
-        for r in rules
+        for r in _paginate_list(rules, limit, offset)
     ]
 
 
-@router.post("/alerts/rules")
+@router.post("/alerts/rules", status_code=status.HTTP_201_CREATED)
 def create_alert_rule(
     name: str,
     metric: str,
@@ -1016,12 +1062,13 @@ def delete_alert_rule(
 def list_alert_events(
     instance_id: UUID | None = None,
     limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
     from app.services.alert_service import AlertService
     svc = AlertService(db)
-    events = svc.get_events(instance_id=instance_id, limit=limit)
+    events = svc.get_events(instance_id=instance_id, limit=limit, offset=offset)
     return [
         {
             "event_id": str(e.event_id),
@@ -1043,13 +1090,14 @@ def list_alert_events(
 @router.get("/{instance_id}/self-service/health")
 def tenant_health(
     instance_id: UUID,
+    limit: int = Query(default=10, ge=1, le=200),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
     """Tenant self-service: view instance health (read-only)."""
     from app.services.health_service import HealthService
     svc = HealthService(db)
-    checks = svc.get_recent_checks(instance_id, limit=10)
+    checks = svc.get_recent_checks(instance_id, limit=limit)
     return [
         {
             "status": c.status.value,
@@ -1065,18 +1113,23 @@ def tenant_health(
 @router.get("/{instance_id}/self-service/flags")
 def tenant_flags(
     instance_id: UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
     """Tenant self-service: view feature flags (read-only)."""
     from app.services.feature_flag_service import FeatureFlagService
     svc = FeatureFlagService(db)
-    return svc.list_for_instance(instance_id)
+    flags = svc.list_for_instance(instance_id)
+    return _paginate_list(flags, limit, offset)
 
 
 @router.get("/{instance_id}/self-service/backups")
 def tenant_backups(
     instance_id: UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
@@ -1092,5 +1145,5 @@ def tenant_backups(
             "size_bytes": b.size_bytes,
             "created_at": b.created_at.isoformat() if b.created_at else None,
         }
-        for b in backups
+        for b in _paginate_list(backups, limit, offset)
     ]

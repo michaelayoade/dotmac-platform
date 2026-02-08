@@ -6,6 +6,7 @@ Uses pg_dump via SSH to create backups of individual tenant databases.
 from __future__ import annotations
 
 import logging
+import re
 import shlex
 from datetime import datetime, timezone
 from uuid import UUID
@@ -22,6 +23,13 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_BACKUP_DIR = "/opt/dotmac/backups"
 DEFAULT_RETENTION_COUNT = 5
+
+
+def _safe_slug(value: str) -> str:
+    """Validate and return a safe slug for use in shell commands."""
+    if not re.match(r"^[a-zA-Z0-9_-]+$", value):
+        raise ValueError(f"Invalid slug: {value!r}")
+    return value
 
 
 class BackupService:
@@ -61,7 +69,7 @@ class BackupService:
         self.db.add(backup)
         self.db.flush()
 
-        slug = instance.org_code.lower()
+        slug = _safe_slug(instance.org_code.lower())
         db_container = f"dotmac_{slug}_db"
         db_name = f"dotmac_{slug}"
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -76,11 +84,13 @@ class BackupService:
 
             # Run pg_dump inside the db container, pipe through gzip
             q_file = shlex.quote(backup_file)
-            dump_cmd = (
-                f"docker exec {db_container} "
+            dump_inner = (
+                f"set -o pipefail; "
+                f"docker exec {shlex.quote(db_container)} "
                 f"pg_dump -U postgres -d {shlex.quote(db_name)} "
                 f"| gzip > {q_file}"
             )
+            dump_cmd = f"bash -lc {shlex.quote(dump_inner)}"
             result = ssh.exec_command(dump_cmd, timeout=300)
 
             if not result.ok:
@@ -112,10 +122,14 @@ class BackupService:
             logger.exception("Backup failed for %s", instance.org_code)
             return backup
 
-    def restore_backup(self, backup_id: UUID) -> dict:
+    def restore_backup(self, instance_id: UUID, backup_id: UUID) -> dict:
         """Restore a database from backup."""
         backup = self.get_by_id(backup_id)
-        if not backup or backup.status != BackupStatus.completed:
+        if (
+            not backup
+            or backup.instance_id != instance_id
+            or backup.status != BackupStatus.completed
+        ):
             raise ValueError("Backup not found or not completed")
 
         instance = self.db.get(Instance, backup.instance_id)
@@ -127,16 +141,18 @@ class BackupService:
             raise ValueError("Server not found")
 
         ssh = get_ssh_for_server(server)
-        slug = instance.org_code.lower()
+        slug = _safe_slug(instance.org_code.lower())
         db_container = f"dotmac_{slug}_db"
         db_name = f"dotmac_{slug}"
 
         q_file = shlex.quote(backup.file_path)
-        restore_cmd = (
+        restore_inner = (
+            f"set -o pipefail; "
             f"gunzip -c {q_file} | "
-            f"docker exec -i {db_container} "
+            f"docker exec -i {shlex.quote(db_container)} "
             f"psql -U postgres -d {shlex.quote(db_name)}"
         )
+        restore_cmd = f"bash -lc {shlex.quote(restore_inner)}"
         result = ssh.exec_command(restore_cmd, timeout=300)
 
         if result.ok:
@@ -144,10 +160,10 @@ class BackupService:
             return {"success": True, "message": "Restore completed"}
         return {"success": False, "error": result.stderr[:2000]}
 
-    def delete_backup(self, backup_id: UUID) -> None:
+    def delete_backup(self, instance_id: UUID, backup_id: UUID) -> None:
         """Delete a backup record and its file on disk."""
         backup = self.get_by_id(backup_id)
-        if not backup:
+        if not backup or backup.instance_id != instance_id:
             raise ValueError(f"Backup {backup_id} not found")
 
         # Try to delete the file if it exists
@@ -175,7 +191,7 @@ class BackupService:
 
         to_delete = completed[keep:]
         for backup in to_delete:
-            self.delete_backup(backup.backup_id)
+            self.delete_backup(instance_id, backup.backup_id)
 
         logger.info("Pruned %d old backups for instance %s", len(to_delete), instance_id)
         return len(to_delete)

@@ -1,0 +1,174 @@
+/*
+ * DotMac Platform — Shared Styles
+ * Used by both platform_base.html (authenticated) and base.html (public/auth).
+ * Loaded via <link> to enable browser caching.
+ */
+
+/* ── Alpine / HTMX ── */
+[x-cloak] { display: none !important; }
+
+.htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator { opacity: 1; }
+
+/* ── Typography ── */
+h1, h2, h3, .font-display {
+    font-family: 'Instrument Serif', Georgia, serif;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(168, 162, 158, 0.3); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(168, 162, 158, 0.5); }
+.dark ::-webkit-scrollbar-thumb { background: rgba(87, 83, 78, 0.5); }
+.dark ::-webkit-scrollbar-thumb:hover { background: rgba(87, 83, 78, 0.8); }
+
+/* ── Noise grain overlay ── */
+.grain::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.018;
+    pointer-events: none;
+    z-index: 9999;
+    mix-blend-mode: overlay;
+}
+.dark .grain::after { opacity: 0.03; }
+
+/* ── Keyframes ── */
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes glow {
+    0%, 100% { opacity: 0.6; }
+    50%      { opacity: 1; }
+}
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+}
+@keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+@keyframes staggerFadeIn {
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes counterPop {
+    0%   { transform: scale(0.8); opacity: 0; }
+    50%  { transform: scale(1.05); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* ── Animation classes ── */
+.fade-up   { animation: fadeUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.glow      { animation: glow 2.5s ease-in-out infinite; }
+.pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+.stagger-in {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: staggerFadeIn 0.5s ease-out forwards;
+}
+.stagger-in:nth-child(1) { animation-delay: 0ms; }
+.stagger-in:nth-child(2) { animation-delay: 75ms; }
+.stagger-in:nth-child(3) { animation-delay: 150ms; }
+.stagger-in:nth-child(4) { animation-delay: 225ms; }
+.stagger-in:nth-child(5) { animation-delay: 300ms; }
+.stagger-in:nth-child(6) { animation-delay: 375ms; }
+
+.counter-animate {
+    display: inline-block;
+    animation: counterPop 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Skeleton loading ── */
+.skeleton {
+    background: linear-gradient(90deg, rgba(168,162,158,0.08) 25%, rgba(168,162,158,0.15) 50%, rgba(168,162,158,0.08) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+    border-radius: 0.375rem;
+}
+.dark .skeleton {
+    background: linear-gradient(90deg, rgba(87,83,78,0.15) 25%, rgba(87,83,78,0.3) 50%, rgba(87,83,78,0.15) 75%);
+    background-size: 200% 100%;
+}
+
+/* ── HTMX progress bar (for polling indicators) ── */
+.htmx-progress-bar {
+    animation: shimmer 1.2s ease-in-out infinite;
+}
+
+/* ── Sidebar nav active indicator ── */
+.nav-active { position: relative; }
+.nav-active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 20px;
+    background: linear-gradient(to bottom, #eab308, #ca8a04);
+    border-radius: 0 3px 3px 0;
+}
+
+/* ── Card hover lift ── */
+.card-lift {
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 36px -10px rgba(0, 0, 0, 0.14);
+}
+.dark .card-lift:hover {
+    box-shadow: 0 12px 36px -10px rgba(0, 0, 0, 0.55);
+}
+
+/* ── Button glow ── */
+.btn-glow {
+    position: relative;
+    overflow: hidden;
+}
+.btn-glow::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.3), transparent 60%);
+    border-radius: inherit;
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+.btn-glow:hover::after { opacity: 1; }
+
+/* ── Status ring ── */
+.status-ring {
+    box-shadow: 0 0 0 3px currentColor;
+    opacity: 0.15;
+}
+
+/* ── Focus-visible ring (keyboard-only) ── */
+:focus-visible {
+    outline: 2px solid #eab308;
+    outline-offset: 2px;
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+    outline: 2px solid #eab308;
+    outline-offset: 2px;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+    .fade-up, .glow, .pulse-dot, .stagger-in, .counter-animate, .skeleton {
+        animation: none !important;
+    }
+    .card-lift { transition: none !important; }
+}

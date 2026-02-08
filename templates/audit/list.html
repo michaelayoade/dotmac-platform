@@ -1,4 +1,5 @@
 {% extends "platform_base.html" %}
+{% from "components/pagination.html" import pagination %}
 
 {% block content %}
 <div class="mb-6 flex items-center justify-between">
@@ -75,10 +76,10 @@
     </div>
 </form>
 
-<div class="overflow-hidden rounded-xl border border-surface-200/80 bg-white dark:border-surface-800/50 dark:bg-surface-900/80">
+<div class="overflow-x-auto rounded-xl border border-surface-200/80 bg-white dark:border-surface-800/50 dark:bg-surface-900/80 max-h-[calc(100vh-340px)]">
     <table class="min-w-full divide-y divide-surface-100 dark:divide-surface-800/60">
-        <thead>
-            <tr class="bg-surface-50/80 dark:bg-surface-800/30">
+        <thead class="sticky top-0 z-10">
+            <tr class="bg-surface-50 dark:bg-surface-800/80 backdrop-blur-sm">
                 <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Time</th>
                 <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Actor</th>
                 <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Action</th>
@@ -110,16 +111,22 @@
     </table>
 </div>
 
+{# Audit list doesn't have a total count from the backend, so use simple prev/next with the new styling #}
 <div class="mt-4 flex items-center justify-between text-[12px] text-surface-400 dark:text-surface-500">
     <div>Page {{ page }}</div>
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-1">
         {% if page > 1 %}
         <a href="?page={{ page - 1 }}&page_size={{ page_size }}&actor_id={{ actor_id | urlencode }}&actor_type={{ actor_type }}&action={{ action | urlencode }}&entity_type={{ entity_type | urlencode }}&request_id={{ request_id | urlencode }}&is_success={{ is_success }}&status_code={{ status_code }}&order_by={{ order_by }}&order_dir={{ order_dir }}"
-           class="rounded-lg border border-surface-200 px-3 py-1.5 text-[12px] text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Prev</a>
+           class="rounded-lg border border-surface-200 px-2.5 py-1.5 text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">
+            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5"/></svg>
+        </a>
         {% endif %}
+        <span class="rounded-lg bg-surface-900 px-2.5 py-1.5 text-[12px] font-semibold text-white dark:bg-primary-500 dark:text-surface-950">{{ page }}</span>
         {% if events|length == page_size %}
         <a href="?page={{ page + 1 }}&page_size={{ page_size }}&actor_id={{ actor_id | urlencode }}&actor_type={{ actor_type }}&action={{ action | urlencode }}&entity_type={{ entity_type | urlencode }}&request_id={{ request_id | urlencode }}&is_success={{ is_success }}&status_code={{ status_code }}&order_by={{ order_by }}&order_dir={{ order_dir }}"
-           class="rounded-lg border border-surface-200 px-3 py-1.5 text-[12px] text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Next</a>
+           class="rounded-lg border border-surface-200 px-2.5 py-1.5 text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">
+            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg>
+        </a>
         {% endif %}
     </div>
 </div>

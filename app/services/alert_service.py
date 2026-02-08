@@ -206,11 +206,12 @@ class AlertService:
         instance_id: UUID | None = None,
         rule_id: UUID | None = None,
         limit: int = 50,
+        offset: int = 0,
     ) -> list[AlertEvent]:
         stmt = select(AlertEvent)
         if instance_id:
             stmt = stmt.where(AlertEvent.instance_id == instance_id)
         if rule_id:
             stmt = stmt.where(AlertEvent.rule_id == rule_id)
-        stmt = stmt.order_by(AlertEvent.triggered_at.desc()).limit(limit)
+        stmt = stmt.order_by(AlertEvent.triggered_at.desc()).limit(limit).offset(offset)
         return list(self.db.scalars(stmt).all())

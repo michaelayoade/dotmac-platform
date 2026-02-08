@@ -63,10 +63,11 @@ def _circuit_record_failure(server_id: str | None) -> None:
                 server_id, state["failures"],
             )
 
-# Connection cache: server_id -> (client, timestamp)
-_SSH_POOL: dict[str, tuple[paramiko.SSHClient, float]] = {}
+# Connection cache: server_id -> {"client": SSHClient, "ts": float, "lock": Lock}
+_SSH_POOL: dict[str, dict] = {}
 _SSH_POOL_LOCK = threading.Lock()
 _POOL_TTL = 300  # 5 minutes
+_POOL_MAX = 100
 
 
 class SSHResult:
@@ -107,7 +108,9 @@ class SSHService:
 
         with _SSH_POOL_LOCK:
             if self.server_id and self.server_id in _SSH_POOL:
-                client, ts = _SSH_POOL[self.server_id]
+                entry = _SSH_POOL[self.server_id]
+                client = entry["client"]
+                ts = entry["ts"]
                 if time.time() - ts < _POOL_TTL:
                     transport = client.get_transport()
                     if transport and transport.is_active():
@@ -158,7 +161,20 @@ class SSHService:
 
         with _SSH_POOL_LOCK:
             if self.server_id:
-                _SSH_POOL[self.server_id] = (client, time.time())
+                _SSH_POOL[self.server_id] = {
+                    "client": client,
+                    "ts": time.time(),
+                    "lock": threading.Lock(),
+                }
+                # Evict oldest entries if pool exceeds max size.
+                while len(_SSH_POOL) > _POOL_MAX:
+                    oldest_id = min(_SSH_POOL.items(), key=lambda item: item[1]["ts"])[0]
+                    entry = _SSH_POOL.pop(oldest_id, None)
+                    if entry:
+                        try:
+                            entry["client"].close()
+                        except Exception:
+                            pass
 
         return client
 
@@ -179,11 +195,43 @@ class SSHService:
         logger.info("SSH exec [%s]: %s", self.hostname, full_cmd[:200])
 
         client = self._get_client()
-        _, stdout_ch, stderr_ch = client.exec_command(full_cmd, timeout=timeout)
+        lock = None
+        if self.server_id:
+            with _SSH_POOL_LOCK:
+                entry = _SSH_POOL.get(self.server_id)
+                lock = entry.get("lock") if entry else None
 
-        stdout = stdout_ch.read().decode("utf-8", errors="replace")
-        stderr = stderr_ch.read().decode("utf-8", errors="replace")
-        exit_code = stdout_ch.channel.recv_exit_status()
+        def _run() -> SSHResult:
+            _, stdout_ch, stderr_ch = client.exec_command(full_cmd, timeout=timeout)
+            channel = stdout_ch.channel
+            stdout_chunks: list[bytes] = []
+            stderr_chunks: list[bytes] = []
+            start = time.time()
+            while True:
+                if channel.recv_ready():
+                    stdout_chunks.append(channel.recv(4096))
+                if channel.recv_stderr_ready():
+                    stderr_chunks.append(channel.recv_stderr(4096))
+                if channel.exit_status_ready():
+                    # drain remaining output
+                    while channel.recv_ready():
+                        stdout_chunks.append(channel.recv(4096))
+                    while channel.recv_stderr_ready():
+                        stderr_chunks.append(channel.recv_stderr(4096))
+                    break
+                if time.time() - start > timeout:
+                    channel.close()
+                    return SSHResult(1, "", f"Command timed out after {timeout}s")
+                time.sleep(0.05)
+            stdout = b"".join(stdout_chunks).decode("utf-8", errors="replace")
+            stderr = b"".join(stderr_chunks).decode("utf-8", errors="replace")
+            exit_code = channel.recv_exit_status()
+            return SSHResult(exit_code, stdout, stderr)
+
+        if lock:
+            with lock:
+                return _run()
+        return _run()
 
         return SSHResult(exit_code, stdout, stderr)
 
@@ -226,6 +274,7 @@ class SSHService:
         client = self._get_client()
         sftp = client.open_sftp()
         try:
+            sftp.get_channel().settimeout(30)
             sftp.put(local_path, remote_path)
         finally:
             sftp.close()
@@ -247,6 +296,7 @@ class SSHService:
         client = self._get_client()
         sftp = client.open_sftp()
         try:
+            sftp.get_channel().settimeout(30)
             with sftp.file(remote_path, "w") as f:
                 f.write(content)
             sftp.chmod(remote_path, mode)
@@ -264,6 +314,7 @@ class SSHService:
         client = self._get_client()
         sftp = client.open_sftp()
         try:
+            sftp.get_channel().settimeout(30)
             with sftp.file(remote_path, "r") as f:
                 return f.read().decode("utf-8", errors="replace")
         except FileNotFoundError:
@@ -280,6 +331,7 @@ class SSHService:
         client = self._get_client()
         sftp = client.open_sftp()
         try:
+            sftp.get_channel().settimeout(30)
             parts = remote_path.split("/")
             current = ""
             for part in parts:
@@ -302,9 +354,9 @@ class SSHService:
         """Close the SSH connection."""
         with _SSH_POOL_LOCK:
             if self.server_id and self.server_id in _SSH_POOL:
-                client, _ = _SSH_POOL.pop(self.server_id)
+                entry = _SSH_POOL.pop(self.server_id)
                 try:
-                    client.close()
+                    entry["client"].close()
                 except Exception:
                     pass
 

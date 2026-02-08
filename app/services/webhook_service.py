@@ -96,9 +96,21 @@ class WebhookService:
         endpoints = self._match_endpoints(event, instance_id)
         count = 0
         for ep in endpoints:
-            delivery = self._deliver(ep, event, payload)
-            if delivery:
-                count += 1
+            delivery = WebhookDelivery(
+                endpoint_id=ep.endpoint_id,
+                event=event,
+                payload=payload,
+            )
+            self.db.add(delivery)
+            self.db.flush()
+            try:
+                from app.tasks.webhooks import deliver_webhook  # lazy import
+                deliver_webhook.delay(str(delivery.delivery_id))
+            except Exception as exc:
+                logger.warning("Failed to enqueue webhook delivery: %s", exc)
+                # Fallback to a single synchronous attempt
+                self._attempt_delivery(ep, delivery)
+            count += 1
         self.db.flush()
         return count
 
@@ -114,42 +126,55 @@ class WebhookService:
             matched.append(ep)
         return matched
 
-    def _deliver(self, ep: WebhookEndpoint, event: str, payload: dict) -> WebhookDelivery | None:
-        body = json.dumps(payload, default=str)
-        headers = {"Content-Type": "application/json", "X-Webhook-Event": event}
+    def _attempt_delivery(self, ep: WebhookEndpoint, delivery: WebhookDelivery) -> bool:
+        """Attempt a single delivery; returns success."""
+        _validate_webhook_url(ep.url)
+        body = json.dumps(delivery.payload, default=str)
+        headers = {"Content-Type": "application/json", "X-Webhook-Event": delivery.event}
         if ep.secret:
             sig = hmac.new(ep.secret.encode(), body.encode(), hashlib.sha256).hexdigest()
             headers["X-Webhook-Signature"] = f"sha256={sig}"
 
-        delivery = WebhookDelivery(
-            endpoint_id=ep.endpoint_id,
-            event=event,
-            payload=payload,
-        )
-        self.db.add(delivery)
+        try:
+            resp = httpx.post(ep.url, content=body, headers=headers, timeout=TIMEOUT_SECONDS)
+            delivery.response_code = resp.status_code
+            delivery.response_body = resp.text[:2000] if resp.text else None
+            if 200 <= resp.status_code < 300:
+                delivery.status = DeliveryStatus.success
+                delivery.delivered_at = datetime.now(timezone.utc)
+                return True
+        except Exception as exc:
+            delivery.response_body = str(exc)[:2000]
+            logger.warning("Webhook delivery failed for %s: %s", ep.url, exc)
+        return False
 
-        for attempt in range(1, MAX_RETRIES + 1):
-            delivery.attempts = attempt
-            try:
-                resp = httpx.post(ep.url, content=body, headers=headers, timeout=TIMEOUT_SECONDS)
-                delivery.response_code = resp.status_code
-                delivery.response_body = resp.text[:2000] if resp.text else None
-                if 200 <= resp.status_code < 300:
-                    delivery.status = DeliveryStatus.success
-                    delivery.delivered_at = datetime.now(timezone.utc)
-                    return delivery
-            except Exception as e:
-                delivery.response_body = str(e)[:2000]
-                logger.warning("Webhook delivery attempt %d failed for %s: %s", attempt, ep.url, e)
+    def attempt_delivery_by_id(self, delivery_id: UUID, attempt: int) -> bool:
+        delivery = self.db.get(WebhookDelivery, delivery_id)
+        if not delivery:
+            return False
+        if delivery.status == DeliveryStatus.success:
+            return True
+        ep = self.db.get(WebhookEndpoint, delivery.endpoint_id)
+        if not ep or not ep.is_active:
+            delivery.status = DeliveryStatus.failed
+            delivery.response_body = "Endpoint not found or inactive"
+            return False
+        delivery.attempts = attempt
+        try:
+            ok = self._attempt_delivery(ep, delivery)
+        except Exception as exc:
+            delivery.response_body = str(exc)[:2000]
+            ok = False
+        if not ok and attempt >= MAX_RETRIES:
+            delivery.status = DeliveryStatus.failed
+        return ok
 
-        delivery.status = DeliveryStatus.failed
-        return delivery
-
-    def get_deliveries(self, endpoint_id: UUID, limit: int = 50) -> list[WebhookDelivery]:
+    def get_deliveries(self, endpoint_id: UUID, limit: int = 50, offset: int = 0) -> list[WebhookDelivery]:
         stmt = (
             select(WebhookDelivery)
             .where(WebhookDelivery.endpoint_id == endpoint_id)
             .order_by(WebhookDelivery.created_at.desc())
             .limit(limit)
+            .offset(offset)
         )
         return list(self.db.scalars(stmt).all())

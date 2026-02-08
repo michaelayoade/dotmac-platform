@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import logging
 import os
 import secrets
@@ -28,6 +29,7 @@ from app.services.response import ListResponseMixin
 from app.models.domain_settings import DomainSetting, SettingDomain
 from app.models.person import Person
 from app.services import settings_spec
+from app.services.settings_crypto import resolve_setting_value
 from app.schemas.auth import (
     ApiKeyCreate,
     ApiKeyGenerateRequest,
@@ -39,6 +41,7 @@ from app.schemas.auth import (
     UserCredentialCreate,
     UserCredentialUpdate,
 )
+from app.services.auth_flow import hash_password, hash_session_token
 
 
 def _apply_ordering(stmt: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]) -> Any:
@@ -57,8 +60,22 @@ def _apply_pagination(stmt: Any, limit: int, offset: int) -> Any:
     return stmt.limit(limit).offset(offset)
 
 
-def hash_api_key(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+def _api_key_hash_secret() -> str | None:
+    return os.getenv("API_KEY_HASH_SECRET") or os.getenv("JWT_SECRET")
+
+
+def hash_api_key(value: str, *, legacy: bool = False) -> str:
+    secret = _api_key_hash_secret()
+    if legacy or not secret:
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()
+    return hmac.new(secret.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def hash_api_key_candidates(value: str) -> list[str]:
+    secret = _api_key_hash_secret()
+    if not secret:
+        return [hash_api_key(value, legacy=True)]
+    return [hash_api_key(value), hash_api_key(value, legacy=True)]
 
 
 _API_KEY_WINDOW_SECONDS = 60
@@ -76,11 +93,7 @@ def _auth_setting(db: Session, key: str) -> str | None:
     setting = db.scalar(stmt)
     if not setting:
         return None
-    if setting.value_text is not None:
-        return setting.value_text
-    if setting.value_json is not None:
-        return str(setting.value_json)
-    return None
+    return resolve_setting_value(setting.value_text, setting.value_json, setting.is_secret)
 
 
 def _auth_int_setting(db: Session, key: str, default: int) -> int:
@@ -128,7 +141,10 @@ class UserCredentials(ListResponseMixin):
     @staticmethod
     def create(db: Session, payload: UserCredentialCreate):
         _ensure_person(db, str(payload.person_id))
-        data = payload.model_dump()
+        data = payload.model_dump(exclude={"password"})
+        if payload.password:
+            data["password_hash"] = hash_password(payload.password)
+            data["password_updated_at"] = datetime.now(timezone.utc)
         fields_set = payload.model_fields_set
         if "provider" not in fields_set:
             default_provider = settings_spec.resolve_value(
@@ -192,7 +208,10 @@ class UserCredentials(ListResponseMixin):
         credential = db.get(UserCredential, coerce_uuid(credential_id))
         if not credential:
             raise HTTPException(status_code=404, detail="User credential not found")
-        data = payload.model_dump(exclude_unset=True)
+        data = payload.model_dump(exclude_unset=True, exclude={"password"})
+        if payload.password:
+            data["password_hash"] = hash_password(payload.password)
+            data["password_updated_at"] = datetime.now(timezone.utc)
         if "person_id" in data:
             _ensure_person(db, str(data["person_id"]))
         for key, value in data.items():
@@ -328,7 +347,8 @@ class Sessions(ListResponseMixin):
     @staticmethod
     def create(db: Session, payload: SessionCreate):
         _ensure_person(db, str(payload.person_id))
-        data = payload.model_dump()
+        data = payload.model_dump(exclude={"token"})
+        data["token_hash"] = hash_session_token(payload.token)
         session = AuthSession(**data)
         db.add(session)
         db.commit()
@@ -449,8 +469,8 @@ class ApiKeys(ListResponseMixin):
     def create(db: Session, payload: ApiKeyCreate):
         if payload.person_id:
             _ensure_person(db, str(payload.person_id))
-        data = payload.model_dump()
-        data["key_hash"] = hash_api_key(data["key_hash"])
+        data = payload.model_dump(exclude={"key"})
+        data["key_hash"] = hash_api_key(payload.key)
         api_key = ApiKey(**data)
         db.add(api_key)
         db.commit()
@@ -498,8 +518,6 @@ class ApiKeys(ListResponseMixin):
         data = payload.model_dump(exclude_unset=True)
         if "person_id" in data and data["person_id"] is not None:
             _ensure_person(db, str(data["person_id"]))
-        if "key_hash" in data and data["key_hash"]:
-            data["key_hash"] = hash_api_key(data["key_hash"])
         for key, value in data.items():
             setattr(api_key, key, value)
         db.commit()

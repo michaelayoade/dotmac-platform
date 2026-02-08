@@ -1,4 +1,5 @@
 {% extends "platform_base.html" %}
+{% from "components/buttons.html" import btn_submit %}
 
 {% block content %}
 {% if saved %}
@@ -8,7 +9,8 @@
 </div>
 {% endif %}
 
-<form method="POST" action="/settings" class="max-w-2xl space-y-8" data-testid="settings-form">
+<form method="POST" action="/settings" class="max-w-2xl space-y-8" data-testid="settings-form"
+      x-data="{ submitting: false }" @submit="submitting = true">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
     <!-- Deployment Source -->
     <div class="rounded-xl border border-surface-200/80 bg-white p-7 dark:border-surface-800/50 dark:bg-surface-900/80">
@@ -68,11 +70,7 @@
 
     <!-- Save -->
     <div class="flex justify-end">
-        <button type="submit"
-                data-testid="settings-submit"
-                class="rounded-lg bg-surface-900 dark:bg-primary-500 px-5 py-2.5 text-[13px] font-semibold text-white dark:text-surface-950 shadow-sm hover:bg-surface-800 dark:hover:bg-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-surface-900 transition">
-            Save Settings
-        </button>
+        {{ btn_submit("Save Settings", submitting_text="Saving...", size="lg", testid="settings-submit") }}
     </div>
 </form>
 {% endblock %}

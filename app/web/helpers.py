@@ -17,6 +17,9 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+CSRF_COOKIE_NAME = "csrf_session"
+
+
 def _csrf_session_id(request: Request) -> str:
     """Return a per-client binding for CSRF tokens.
 
@@ -26,9 +29,13 @@ def _csrf_session_id(request: Request) -> str:
     token = request.cookies.get("access_token")
     if token:
         return token
-    client_ip = request.client.host if request.client else "unknown"
-    user_agent = request.headers.get("user-agent", "")
-    return hashlib.sha256(f"{client_ip}:{user_agent}".encode()).hexdigest()
+    csrf_session = request.cookies.get(CSRF_COOKIE_NAME)
+    if csrf_session:
+        return csrf_session
+    csrf_session = getattr(request.state, "csrf_session", None)
+    if csrf_session:
+        return csrf_session
+    return "anonymous"
 
 
 def brand() -> dict:

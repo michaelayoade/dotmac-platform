@@ -10,6 +10,8 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -37,12 +39,15 @@ class SessionStatus(enum.Enum):
 
 class UserCredential(Base):
     __tablename__ = "user_credentials"
+    __table_args__ = (
+        UniqueConstraint("username", name="uq_user_credentials_username"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     person_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("people.id"), nullable=False, index=True
+        UUID(as_uuid=True), ForeignKey("people.id"), nullable=False
     )
     provider: Mapped[AuthProvider] = mapped_column(
         Enum(AuthProvider), default=AuthProvider.local, nullable=False
@@ -85,7 +90,7 @@ class MFAMethod(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     person_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("people.id"), nullable=False, index=True
+        UUID(as_uuid=True), ForeignKey("people.id"), nullable=False
     )
     method_type: Mapped[MFAMethodType] = mapped_column(
         Enum(MFAMethodType), nullable=False
@@ -138,10 +143,49 @@ class Session(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    person = relationship("Person")
+
+class SessionRefreshToken(Base):
+    __tablename__ = "session_refresh_tokens"
+    __table_args__ = (
+        Index("ix_session_refresh_tokens_session_id", "session_id"),
+        Index("ix_session_refresh_tokens_token_hash", "token_hash", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+    __table_args__ = (
+        Index("ix_password_reset_tokens_token_hash", "token_hash", unique=True),
+        Index("ix_password_reset_tokens_person_id", "person_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    person_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("people.id"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
 
 
 class ApiKey(Base):

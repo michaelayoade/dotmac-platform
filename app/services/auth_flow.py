@@ -13,6 +13,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException, Request, Response, status
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -20,12 +21,15 @@ from app.models.auth import (
     AuthProvider,
     MFAMethod,
     MFAMethodType,
+    PasswordResetToken,
+    SessionRefreshToken,
     Session as AuthSession,
     SessionStatus,
     UserCredential,
 )
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+from app.services.settings_crypto import resolve_setting_value
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.models.domain_settings import DomainSetting, SettingDomain
 from app.models.person import Person
@@ -34,7 +38,7 @@ from app.schemas.auth_flow import LoginResponse, LogoutResponse, TokenResponse
 
 PASSWORD_CONTEXT = CryptContext(
     schemes=["pbkdf2_sha256", "bcrypt"],
-    default="pbkdf2_sha256",
+    default="bcrypt",
     deprecated="auto",
 )
 
@@ -79,20 +83,16 @@ def _truncate_user_agent(value: str | None, max_len: int = 512) -> str | None:
 def _setting_value(db: Session | None, key: str) -> str | None:
     if db is None:
         return None
-    setting = (
-        db.query(DomainSetting)
-        .filter(DomainSetting.domain == SettingDomain.auth)
-        .filter(DomainSetting.key == key)
-        .filter(DomainSetting.is_active.is_(True))
-        .first()
+    stmt = (
+        select(DomainSetting)
+        .where(DomainSetting.domain == SettingDomain.auth)
+        .where(DomainSetting.key == key)
+        .where(DomainSetting.is_active.is_(True))
     )
+    setting = db.scalar(stmt)
     if not setting:
         return None
-    if setting.value_text:
-        return setting.value_text
-    if setting.value_json is not None:
-        return str(setting.value_json)
-    return None
+    return resolve_setting_value(setting.value_text, setting.value_json, setting.is_secret)
 
 
 def _jwt_secret(db: Session | None) -> str:
@@ -152,7 +152,7 @@ def _refresh_cookie_secure(db: Session | None) -> bool:
     value = _setting_value(db, "refresh_cookie_secure")
     if value is not None:
         return str(value).lower() in {"1", "true", "yes", "on"}
-    return False
+    return True
 
 
 def _refresh_cookie_samesite(db: Session | None) -> str:
@@ -287,38 +287,38 @@ def _load_rbac_claims(db: Session, person_id: str):
     if db is None:
         return [], []
     person_uuid = coerce_uuid(person_id)
-    roles = (
-        db.query(Role)
+    roles_stmt = (
+        select(Role)
         .join(PersonRole, PersonRole.role_id == Role.id)
-        .filter(PersonRole.person_id == person_uuid)
-        .filter(Role.is_active.is_(True))
-        .all()
+        .where(PersonRole.person_id == person_uuid)
+        .where(Role.is_active.is_(True))
     )
-    permissions = (
-        db.query(Permission)
+    perms_stmt = (
+        select(Permission)
         .join(RolePermission, RolePermission.permission_id == Permission.id)
         .join(Role, RolePermission.role_id == Role.id)
         .join(PersonRole, PersonRole.role_id == Role.id)
-        .filter(PersonRole.person_id == person_uuid)
-        .filter(Role.is_active.is_(True))
-        .filter(Permission.is_active.is_(True))
-        .all()
+        .where(PersonRole.person_id == person_uuid)
+        .where(Role.is_active.is_(True))
+        .where(Permission.is_active.is_(True))
     )
+    roles = list(db.scalars(roles_stmt).all())
+    permissions = list(db.scalars(perms_stmt).all())
     role_names = [role.name for role in roles]
     permission_keys = list({perm.key for perm in permissions})
     return role_names, permission_keys
 
 
 def _primary_totp_method(db: Session, person_id: str) -> MFAMethod | None:
-    return (
-        db.query(MFAMethod)
-        .filter(MFAMethod.person_id == coerce_uuid(person_id))
-        .filter(MFAMethod.method_type == MFAMethodType.totp)
-        .filter(MFAMethod.is_active.is_(True))
-        .filter(MFAMethod.enabled.is_(True))
-        .filter(MFAMethod.is_primary.is_(True))
-        .first()
+    stmt = (
+        select(MFAMethod)
+        .where(MFAMethod.person_id == coerce_uuid(person_id))
+        .where(MFAMethod.method_type == MFAMethodType.totp)
+        .where(MFAMethod.is_active.is_(True))
+        .where(MFAMethod.enabled.is_(True))
+        .where(MFAMethod.is_primary.is_(True))
     )
+    return db.scalar(stmt)
 
 
 def _encrypt_secret(db: Session | None, secret: str) -> str:
@@ -348,16 +348,15 @@ def revoke_sessions_for_person(
     exclude_session_id: str | None = None,
 ) -> int:
     person_uuid = coerce_uuid(person_id)
-    query = (
-        db.query(AuthSession)
-        .filter(AuthSession.person_id == person_uuid)
-        .filter(AuthSession.status == SessionStatus.active)
-        .filter(AuthSession.revoked_at.is_(None))
+    stmt = (
+        select(AuthSession)
+        .where(AuthSession.person_id == person_uuid)
+        .where(AuthSession.status == SessionStatus.active)
+        .where(AuthSession.revoked_at.is_(None))
     )
     if exclude_session_id:
-        query = query.filter(AuthSession.id != coerce_uuid(exclude_session_id))
-
-    sessions = query.all()
+        stmt = stmt.where(AuthSession.id != coerce_uuid(exclude_session_id))
+    sessions = list(db.scalars(stmt).all())
     if not sessions:
         return 0
 
@@ -434,13 +433,13 @@ class AuthFlow(ListResponseMixin):
             resolved_provider = AuthProvider(provider_value)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Invalid auth provider") from exc
-        credential = (
-            db.query(UserCredential)
-            .filter(UserCredential.username == username)
-            .filter(UserCredential.provider == resolved_provider)
-            .filter(UserCredential.is_active.is_(True))
-            .first()
+        stmt = (
+            select(UserCredential)
+            .where(UserCredential.username == username)
+            .where(UserCredential.provider == resolved_provider)
+            .where(UserCredential.is_active.is_(True))
         )
+        credential = db.scalar(stmt)
         if not credential:
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -481,12 +480,12 @@ class AuthFlow(ListResponseMixin):
     def mfa_setup(db: Session, person_id: str, label: str | None):
         person = _person_or_404(db, person_id)
         username = person.email
-        credential = (
-            db.query(UserCredential)
-            .filter(UserCredential.person_id == person.id)
-            .filter(UserCredential.provider == AuthProvider.local)
-            .first()
+        stmt = (
+            select(UserCredential)
+            .where(UserCredential.person_id == person.id)
+            .where(UserCredential.provider == AuthProvider.local)
         )
+        credential = db.scalar(stmt)
         if credential and credential.username:
             username = credential.username
 
@@ -532,11 +531,13 @@ class AuthFlow(ListResponseMixin):
         if not totp.verify(code, valid_window=0):
             raise HTTPException(status_code=401, detail="Invalid MFA code")
 
-        db.query(MFAMethod).filter(
-            MFAMethod.person_id == method.person_id,
-            MFAMethod.id != method.id,
-            MFAMethod.is_primary.is_(True),
-        ).update({"is_primary": False})
+        db.execute(
+            update(MFAMethod)
+            .where(MFAMethod.person_id == method.person_id)
+            .where(MFAMethod.id != method.id)
+            .where(MFAMethod.is_primary.is_(True))
+            .values(is_primary=False)
+        )
 
         method.enabled = True
         method.is_primary = True
@@ -566,10 +567,14 @@ class AuthFlow(ListResponseMixin):
 
         secret = _decrypt_secret(db, method.secret or "")
         totp = pyotp.TOTP(secret)
+        now = _now()
+        last_used = _as_utc(method.last_used_at)
+        if last_used and totp.timecode(last_used) == totp.timecode(now):
+            raise HTTPException(status_code=401, detail="MFA code already used")
         if not totp.verify(code, valid_window=0):
             raise HTTPException(status_code=401, detail="Invalid MFA code")
 
-        method.last_used_at = _now()
+        method.last_used_at = now
         db.commit()
         return AuthFlow._issue_tokens(db, person_id, request)
 
@@ -583,25 +588,23 @@ class AuthFlow(ListResponseMixin):
     @staticmethod
     def refresh(db: Session, refresh_token: str, request: Request):
         token_hash = _hash_token(refresh_token)
-        session = (
-            db.query(AuthSession)
-            .filter(AuthSession.token_hash == token_hash)
-            .filter(AuthSession.status == SessionStatus.active)
-            .filter(AuthSession.revoked_at.is_(None))
+        session_stmt = (
+            select(AuthSession)
+            .where(AuthSession.token_hash == token_hash)
+            .where(AuthSession.status == SessionStatus.active)
+            .where(AuthSession.revoked_at.is_(None))
             .with_for_update()
-            .first()
         )
+        session = db.scalar(session_stmt)
         if not session:
-            reused = (
-                db.query(AuthSession)
-                .filter(AuthSession.previous_token_hash == token_hash)
-                .filter(AuthSession.status == SessionStatus.active)
-                .filter(AuthSession.revoked_at.is_(None))
-                .first()
+            reused = db.scalar(
+                select(SessionRefreshToken).where(SessionRefreshToken.token_hash == token_hash)
             )
             if reused:
-                reused.status = SessionStatus.revoked
-                reused.revoked_at = _now()
+                reused_session = db.get(AuthSession, reused.session_id)
+                if reused_session and reused_session.status == SessionStatus.active:
+                    reused_session.status = SessionStatus.revoked
+                    reused_session.revoked_at = _now()
                 db.commit()
                 raise HTTPException(
                     status_code=401,
@@ -622,6 +625,19 @@ class AuthFlow(ListResponseMixin):
         if request.client:
             session.ip_address = request.client.host
         session.user_agent = _truncate_user_agent(request.headers.get("user-agent"))
+        prev = db.scalar(
+            select(SessionRefreshToken)
+            .where(SessionRefreshToken.session_id == session.id)
+            .where(SessionRefreshToken.token_hash == session.previous_token_hash)
+        )
+        if prev and prev.revoked_at is None:
+            prev.revoked_at = _now()
+        db.add(
+            SessionRefreshToken(
+                session_id=session.id,
+                token_hash=session.token_hash,
+            )
+        )
         db.commit()
 
         roles, permissions = _load_rbac_claims(db, str(session.person_id))
@@ -643,11 +659,10 @@ class AuthFlow(ListResponseMixin):
     @staticmethod
     def logout(db: Session, refresh_token: str):
         token_hash = _hash_token(refresh_token)
-        session = (
-            db.query(AuthSession)
-            .filter(AuthSession.token_hash == token_hash)
-            .filter(AuthSession.revoked_at.is_(None))
-            .first()
+        session = db.scalar(
+            select(AuthSession)
+            .where(AuthSession.token_hash == token_hash)
+            .where(AuthSession.revoked_at.is_(None))
         )
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -702,6 +717,13 @@ class AuthFlow(ListResponseMixin):
         db.add(session)
         db.commit()
         db.refresh(session)
+        db.add(
+            SessionRefreshToken(
+                session_id=session.id,
+                token_hash=session.token_hash,
+            )
+        )
+        db.commit()
         roles, permissions = _load_rbac_claims(db, str(person_uuid))
         access_token = _issue_access_token(db, str(person_uuid), str(session.id), roles, permissions)
         return {"access_token": access_token, "refresh_token": refresh_token}
@@ -716,20 +738,27 @@ def request_password_reset(db: Session, email: str) -> dict | None:
     Returns dict with token and person info if successful, None if email not found.
     Does not raise an error if email doesn't exist (security best practice).
     """
-    person = db.query(Person).filter(Person.email == email).first()
+    person = db.scalar(select(Person).where(Person.email == email))
     if not person:
         return None
 
-    credential = (
-        db.query(UserCredential)
-        .filter(UserCredential.person_id == person.id)
-        .filter(UserCredential.is_active.is_(True))
-        .first()
+    credential = db.scalar(
+        select(UserCredential)
+        .where(UserCredential.person_id == person.id)
+        .where(UserCredential.is_active.is_(True))
     )
     if not credential:
         return None
 
     token = _issue_password_reset_token(db, str(person.id), email)
+    expires_at = _now() + timedelta(minutes=_password_reset_ttl_minutes(db))
+    reset_token = PasswordResetToken(
+        person_id=person.id,
+        token_hash=_hash_token(token),
+        expires_at=expires_at,
+    )
+    db.add(reset_token)
+    db.commit()
     return {
         "token": token,
         "email": email,
@@ -749,25 +778,36 @@ def reset_password(db: Session, token: str, new_password: str) -> datetime:
     if not person_id or not email:
         raise HTTPException(status_code=401, detail="Invalid reset token")
 
-    person = db.get(Person, coerce_uuid(person_id))
+    person_uuid = coerce_uuid(person_id)
+    person = db.get(Person, person_uuid)
     if not person or person.email != email:
         raise HTTPException(status_code=401, detail="Invalid reset token")
 
-    credential = (
-        db.query(UserCredential)
-        .filter(UserCredential.person_id == person.id)
-        .filter(UserCredential.is_active.is_(True))
-        .first()
+    token_hash = _hash_token(token)
+    reset_record = db.scalar(
+        select(PasswordResetToken)
+        .where(PasswordResetToken.token_hash == token_hash)
+        .where(PasswordResetToken.person_id == person_uuid)
+        .where(PasswordResetToken.used_at.is_(None))
+    )
+    now = _now()
+    if not reset_record or reset_record.expires_at <= now:
+        raise HTTPException(status_code=401, detail="Invalid reset token")
+
+    credential = db.scalar(
+        select(UserCredential)
+        .where(UserCredential.person_id == person.id)
+        .where(UserCredential.is_active.is_(True))
     )
     if not credential:
         raise HTTPException(status_code=404, detail="No credentials found")
 
-    now = _now()
     credential.password_hash = hash_password(new_password)
     credential.password_updated_at = now
     credential.must_change_password = False
     credential.failed_login_attempts = 0
     credential.locked_until = None
+    reset_record.used_at = now
     revoke_sessions_for_person(db, str(person.id))
     db.commit()
 

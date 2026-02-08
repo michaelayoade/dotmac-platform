@@ -10,7 +10,7 @@ class ScheduledTaskBase(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     task_name: str = Field(min_length=1, max_length=200)
     schedule_type: ScheduleType = ScheduleType.interval
-    interval_seconds: int = 3600
+    interval_seconds: int = Field(default=3600, ge=1)
     args_json: list | None = None
     kwargs_json: dict | None = None
     enabled: bool = True
@@ -24,7 +24,7 @@ class ScheduledTaskUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=160)
     task_name: str | None = Field(default=None, max_length=200)
     schedule_type: ScheduleType | None = None
-    interval_seconds: int | None = None
+    interval_seconds: int | None = Field(default=None, ge=1)
     args_json: list | None = None
     kwargs_json: dict | None = None
     enabled: bool | None = None

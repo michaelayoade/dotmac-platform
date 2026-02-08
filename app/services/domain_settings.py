@@ -10,6 +10,7 @@ from app.models.domain_settings import DomainSetting, SettingDomain
 from app.models.domain_settings import SettingValueType
 from app.schemas.settings import DomainSettingCreate, DomainSettingUpdate
 from app.services.common import apply_ordering, apply_pagination, coerce_uuid
+from app.services.settings_crypto import encrypt_payload
 from app.services.response import ListResponseMixin
 
 
@@ -29,6 +30,13 @@ class DomainSettings(ListResponseMixin):
     def create(self, db: Session, payload: DomainSettingCreate):
         data = payload.model_dump()
         data["domain"] = self._resolve_domain(payload.domain)
+        if data.get("is_secret"):
+            value_text, value_json = encrypt_payload(
+                data.get("value_text"), data.get("value_json")
+            )
+            data["value_text"] = value_text
+            data["value_json"] = value_json
+            data["value_type"] = SettingValueType.string
         setting = DomainSetting(**data)
         db.add(setting)
         db.flush()
@@ -75,6 +83,14 @@ class DomainSettings(ListResponseMixin):
         data = payload.model_dump(exclude_unset=True)
         if "domain" in data and data["domain"] != setting.domain:
             raise HTTPException(status_code=400, detail="Setting domain mismatch")
+        if data.get("is_secret") or setting.is_secret:
+            value_text, value_json = encrypt_payload(
+                data.get("value_text"), data.get("value_json")
+            )
+            if value_text is not None:
+                data["value_text"] = value_text
+                data["value_json"] = value_json
+                data["value_type"] = SettingValueType.string
         for key, value in data.items():
             setattr(setting, key, value)
         db.flush()
@@ -107,6 +123,14 @@ class DomainSettings(ListResponseMixin):
             data = payload.model_dump(exclude_unset=True)
             data.pop("domain", None)
             data.pop("key", None)
+            if data.get("is_secret") or setting.is_secret:
+                value_text, value_json = encrypt_payload(
+                    data.get("value_text"), data.get("value_json")
+                )
+                if value_text is not None:
+                    data["value_text"] = value_text
+                    data["value_json"] = value_json
+                    data["value_type"] = SettingValueType.string
             for field, value in data.items():
                 setattr(setting, field, value)
             db.flush()

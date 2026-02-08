@@ -1,3 +1,4 @@
+import html
 import logging
 import os
 import smtplib
@@ -49,6 +50,11 @@ def _get_smtp_config() -> dict:
         "from_name": _env_value("SMTP_FROM_NAME") or _env_value("BRAND_NAME") or "DotMac Platform",
     }
 
+def _sanitize_header(value: str, field: str) -> str:
+    if "\r" in value or "\n" in value:
+        raise ValueError(f"Invalid header value for {field}")
+    return value
+
 
 def send_email(
     _db: Session | None,
@@ -58,9 +64,13 @@ def send_email(
     body_text: str | None = None,
 ) -> bool:
     config = _get_smtp_config()
+    subject = _sanitize_header(subject, "subject")
+    to_email = _sanitize_header(to_email, "to_email")
+    from_email = _sanitize_header(config["from_email"], "from_email")
+    from_name = _sanitize_header(config["from_name"], "from_name")
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = f"{config['from_name']} <{config['from_email']}>"
+    msg["From"] = f"{from_name} <{from_email}>"
     msg["To"] = to_email
 
     if body_text:
@@ -116,11 +126,12 @@ def send_password_reset_email(
     person_name: str | None = None,
 ) -> bool:
     name = person_name or "there"
+    safe_name = html.escape(name)
     app_url = _env_value("APP_URL") or "http://localhost:8000"
     reset_link = f"{app_url.rstrip('/')}/auth/reset-password?token={reset_token}"
     subject = "Reset your password"
     body_html = (
-        f"<p>Hi {name},</p>"
+        f"<p>Hi {safe_name},</p>"
         "<p>Use the link below to reset your password:</p>"
         f'<p><a href="{reset_link}">Reset password</a></p>'
     )

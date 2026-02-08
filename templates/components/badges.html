@@ -1,0 +1,42 @@
+{#
+    Badge/status component macros.
+
+    Usage:
+        {% from "components/badges.html" import status_badge, health_badge %}
+        {{ status_badge("running") }}
+        {{ health_badge(latest_health, is_stale=false) }}
+#}
+
+{# ── Instance/server status badge with dot indicator ── #}
+{% macro status_badge(status) %}
+{% if status == 'running' %}
+    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-600 dark:text-emerald-400"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Running</span>
+{% elif status == 'deploying' %}
+    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-blue-600 dark:text-blue-400"><span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>Deploying</span>
+{% elif status == 'error' %}
+    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Error</span>
+{% elif status == 'stopped' %}
+    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-surface-500"><span class="h-1.5 w-1.5 rounded-full bg-surface-400"></span>Stopped</span>
+{% elif status == 'suspended' %}
+    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Suspended</span>
+{% elif status == 'archived' %}
+    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-surface-400"><span class="h-1.5 w-1.5 rounded-full bg-surface-300 dark:bg-surface-600"></span>Archived</span>
+{% elif status == 'connected' %}
+    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-600 dark:text-emerald-400"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Connected</span>
+{% elif status == 'unreachable' %}
+    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Unreachable</span>
+{% else %}
+    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>{{ status | title }}</span>
+{% endif %}
+{% endmacro %}
+
+{# ── Tag-style label badge ── #}
+{% macro tag_badge(label, color="gray") %}
+{% if color == 'primary' %}
+<span class="rounded-md bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-400">{{ label }}</span>
+{% elif color == 'amber' %}
+<span class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">{{ label }}</span>
+{% else %}
+<span class="rounded-md bg-surface-100 px-2 py-0.5 text-[11px] font-medium text-surface-600 dark:bg-surface-800 dark:text-surface-400">{{ label }}</span>
+{% endif %}
+{% endmacro %}

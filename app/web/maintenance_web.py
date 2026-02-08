@@ -99,7 +99,7 @@ def maintenance_delete(
     from app.services.maintenance_service import MaintenanceService
 
     try:
-        MaintenanceService(db).delete_window(window_id)
+        MaintenanceService(db).delete_window(instance_id, window_id)
         db.commit()
     except Exception as e:
         db.rollback()

@@ -62,8 +62,18 @@ class ServerService:
 
     def update(self, server_id: UUID, **kwargs) -> Server:
         server = self.get_or_404(server_id)
+        allowed = {
+            "name",
+            "hostname",
+            "ssh_port",
+            "ssh_user",
+            "ssh_key_path",
+            "base_domain",
+            "is_local",
+            "notes",
+        }
         for key, value in kwargs.items():
-            if hasattr(server, key) and value is not None:
+            if key in allowed and value is not None:
                 setattr(server, key, value)
         self.db.flush()
         return server

@@ -46,138 +46,19 @@
         </script>
 
         <script src="https://unpkg.com/htmx.org@2.0.0"></script>
+        <meta name="htmx-config" content='{"responseHandling":[{"code":"204","swap":false},{"code":"304","swap":false},{"code":"[23]..", "swap":true},{"code":"[45]..", "swap":false, "error":true}]}' />
+        <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/focus@3.x.x/dist/cdn.min.js"></script>
         <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     {% else %}
         <link rel="stylesheet" href="/static/vendor/fonts.css">
-        <script src="/static/vendor/tailwind.js"></script>
-        <script>
-            tailwind.config = {
-                darkMode: 'class',
-                theme: {
-                    extend: {
-                        fontFamily: {
-                            sans: ['DM Sans', 'system-ui', 'sans-serif'],
-                            display: ['Instrument Serif', 'Georgia', 'serif'],
-                            mono: ['IBM Plex Mono', 'monospace'],
-                        },
-                        colors: {
-                            primary: {
-                                50: '#fefce8', 100: '#fef9c3', 200: '#fef08a',
-                                300: '#fde047', 400: '#facc15', 500: '#eab308',
-                                600: '#ca8a04', 700: '#a16207', 800: '#854d0e',
-                                900: '#713f12', 950: '#422006',
-                            },
-                            surface: {
-                                50: '#fafaf9', 100: '#f5f5f4', 200: '#e7e5e4',
-                                300: '#d6d3d1', 400: '#a8a29e', 500: '#78716c',
-                                600: '#57534e', 700: '#44403c', 800: '#292524',
-                                900: '#1c1917', 950: '#0c0a09',
-                            }
-                        }
-                    }
-                }
-            }
-        </script>
+        <link rel="stylesheet" href="/static/css/tailwind.out.css" />
         <script src="/static/vendor/htmx.min.js"></script>
+        <meta name="htmx-config" content='{"responseHandling":[{"code":"204","swap":false},{"code":"304","swap":false},{"code":"[23]..", "swap":true},{"code":"[45]..", "swap":false, "error":true}]}' />
+        <script defer src="/static/vendor/alpine-focus.min.js"></script>
         <script defer src="/static/vendor/alpine.min.js"></script>
     {% endif %}
 
-    <style>
-        [x-cloak] { display: none !important; }
-
-        /* Typography */
-        h1, h2, h3, .font-display { font-family: 'Instrument Serif', Georgia, serif; }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(168, 162, 158, 0.3); border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(168, 162, 158, 0.5); }
-        .dark ::-webkit-scrollbar-thumb { background: rgba(87, 83, 78, 0.5); }
-        .dark ::-webkit-scrollbar-thumb:hover { background: rgba(87, 83, 78, 0.8); }
-
-        /* Noise grain overlay */
-        .grain::after {
-            content: '';
-            position: fixed;
-            inset: 0;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-            opacity: 0.018;
-            pointer-events: none;
-            z-index: 9999;
-            mix-blend-mode: overlay;
-        }
-        .dark .grain::after { opacity: 0.03; }
-
-        /* Animations */
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes glow {
-            0%, 100% { opacity: 0.6; }
-            50% { opacity: 1; }
-        }
-        .fade-up { animation: fadeUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
-        .glow { animation: glow 2.5s ease-in-out infinite; }
-
-        @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
-
-        /* Sidebar active indicator */
-        .nav-active { position: relative; }
-        .nav-active::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 3px;
-            height: 20px;
-            background: linear-gradient(to bottom, #eab308, #ca8a04);
-            border-radius: 0 3px 3px 0;
-        }
-
-        /* Card hover */
-        .card-lift {
-            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .card-lift:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px -8px rgba(0, 0, 0, 0.12);
-        }
-        .dark .card-lift:hover {
-            box-shadow: 0 8px 30px -8px rgba(0, 0, 0, 0.5);
-        }
-
-        /* Subtle border glow for primary actions */
-        .btn-glow {
-            position: relative;
-            overflow: hidden;
-        }
-        .btn-glow::after {
-            content: '';
-            position: absolute;
-            inset: -1px;
-            background: linear-gradient(135deg, rgba(234, 179, 8, 0.3), transparent 60%);
-            border-radius: inherit;
-            z-index: -1;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .btn-glow:hover::after { opacity: 1; }
-
-        /* Status ring */
-        .status-ring {
-            box-shadow: 0 0 0 3px currentColor;
-            opacity: 0.15;
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            .fade-up, .glow, .pulse-dot { animation: none !important; }
-            .card-lift { transition: none !important; }
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/platform.css" />
     {% block head %}{% endblock %}
 </head>
 <body class="min-h-screen bg-surface-50 text-surface-900 dark:bg-surface-950 dark:text-surface-100 antialiased grain">
@@ -466,6 +347,23 @@
         localStorage.setItem('darkMode', 'true');
         document.documentElement.classList.add('dark');
     }
+
+    /* ETag cache for HTMX polling — stores last ETag per URL and sends If-None-Match */
+    (function() {
+        const etagCache = {};
+        document.body.addEventListener('htmx:configRequest', function(e) {
+            const url = e.detail.path;
+            if (etagCache[url]) {
+                e.detail.headers['If-None-Match'] = etagCache[url];
+            }
+        });
+        document.body.addEventListener('htmx:afterRequest', function(e) {
+            const etag = e.detail.xhr && e.detail.xhr.getResponseHeader('ETag');
+            if (etag) {
+                etagCache[e.detail.pathInfo.requestPath] = etag;
+            }
+        });
+    })();
 </script>
 {% block scripts %}{% endblock %}
 </body>

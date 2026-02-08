@@ -1,0 +1,12 @@
+{
+  "name": "dotmac-platform",
+  "private": true,
+  "scripts": {
+    "css:build": "tailwindcss -i static/css/tailwind.css -o static/css/tailwind.out.css --minify",
+    "css:watch": "tailwindcss -i static/css/tailwind.css -o static/css/tailwind.out.css --watch",
+    "build": "npm run css:build"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}

@@ -1,0 +1,23 @@
+{#
+    Breadcrumb navigation component.
+
+    Usage:
+        {% from "components/breadcrumb.html" import breadcrumb %}
+        {{ breadcrumb([
+            {"label": "Servers", "url": "/servers"},
+            {"label": server.name}
+        ]) }}
+#}
+
+{% macro breadcrumb(items) %}
+<nav aria-label="Breadcrumb" class="flex items-center gap-1.5 text-[13px] text-surface-400 dark:text-surface-500 mb-1">
+    {% for item in items %}
+        {% if not loop.last %}
+            <a href="{{ item.url }}" class="hover:text-surface-700 dark:hover:text-surface-300 transition">{{ item.label }}</a>
+            <span class="text-surface-300 dark:text-surface-600">/</span>
+        {% else %}
+            <span class="text-surface-600 dark:text-surface-300">{{ item.label }}</span>
+        {% endif %}
+    {% endfor %}
+</nav>
+{% endmacro %}

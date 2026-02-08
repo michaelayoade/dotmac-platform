@@ -11,7 +11,6 @@ from app.schemas.auth import (
     UserCredentialCreate,
 )
 from app.services import auth as auth_service
-from app.services.auth_flow import hash_password
 
 
 class _FakeRedis:
@@ -30,7 +29,7 @@ def test_user_credentials_soft_delete(db_session, person):
     payload = UserCredentialCreate(
         person_id=person.id,
         username="user@example.com",
-        password_hash=hash_password("secret"),
+        password="secret",
     )
     credential = auth_service.user_credentials.create(db_session, payload)
     active = auth_service.user_credentials.list(
@@ -85,7 +84,6 @@ def test_mfa_primary_switch(db_session, person):
             person_id=person.id,
             method_type="totp",
             label="secondary",
-            secret="encrypted2",
             is_primary=True,
             enabled=True,
         ),
@@ -100,7 +98,7 @@ def test_session_delete_revokes(db_session, person):
     payload = SessionCreate(
         person_id=person.id,
         status=SessionStatus.active,
-        token_hash="hash",
+        token="raw-token",
         ip_address="127.0.0.1",
         user_agent="pytest",
         expires_at="2099-01-01T00:00:00+00:00",

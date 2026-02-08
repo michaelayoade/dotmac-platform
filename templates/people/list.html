@@ -1,4 +1,6 @@
 {% extends "platform_base.html" %}
+{% from "components/buttons.html" import btn_submit %}
+{% from "components/pagination.html" import pagination %}
 
 {% block header_actions %}
 <a href="/people" class="inline-flex items-center gap-2 rounded-lg border border-surface-200 px-3.5 py-1.5 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">
@@ -53,10 +55,10 @@
             Showing {{ people | length }} of {{ total }} people
         </div>
 
-        <div class="overflow-hidden rounded-xl border border-surface-200/80 bg-white dark:border-surface-800/50 dark:bg-surface-900/80">
+        <div class="overflow-x-auto rounded-xl border border-surface-200/80 bg-white dark:border-surface-800/50 dark:bg-surface-900/80 max-h-[calc(100vh-280px)]">
             <table class="min-w-full divide-y divide-surface-100 dark:divide-surface-800/60">
-                <thead>
-                    <tr class="bg-surface-50/80 dark:bg-surface-800/30">
+                <thead class="sticky top-0 z-10">
+                    <tr class="bg-surface-50 dark:bg-surface-800/80 backdrop-blur-sm">
                         <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Person</th>
                         <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Email</th>
                         <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Roles</th>
@@ -90,27 +92,14 @@
             </table>
         </div>
 
-        <div class="mt-4 flex items-center justify-between text-[12px] text-surface-400 dark:text-surface-500">
-            <div>
-                Page {{ page }} of {{ (total // page_size) + (1 if total % page_size else 0) }}
-            </div>
-            <div class="flex items-center gap-2">
-                {% if page > 1 %}
-                <a href="?q={{ q | urlencode }}&status={{ status }}&is_active={{ is_active }}&page={{ page - 1 }}&page_size={{ page_size }}"
-                   class="rounded-lg border border-surface-200 px-3 py-1.5 text-[12px] text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Prev</a>
-                {% endif %}
-                {% if total > page * page_size %}
-                <a href="?q={{ q | urlencode }}&status={{ status }}&is_active={{ is_active }}&page={{ page + 1 }}&page_size={{ page_size }}"
-                   class="rounded-lg border border-surface-200 px-3 py-1.5 text-[12px] text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Next</a>
-                {% endif %}
-            </div>
-        </div>
+        {{ pagination(page=page, total=total, page_size=page_size, base_qs="q=" ~ (q | urlencode) ~ "&status=" ~ status ~ "&is_active=" ~ is_active) }}
     </div>
 
     <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
         <h2 class="text-lg font-display text-surface-800 dark:text-white">Add Person</h2>
         <p class="mt-1 text-[12px] text-surface-400 dark:text-surface-500">Create a new user profile.</p>
-        <form method="POST" action="/people/new" class="mt-4 space-y-4">
+        <form method="POST" action="/people/new" class="mt-4 space-y-5"
+              x-data="{ submitting: false }" @submit="submitting = true">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <div>
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">First name</label>
@@ -138,7 +127,7 @@
                     <label class="text-[13px] text-surface-600 dark:text-surface-400">Active</label>
                 </div>
             </div>
-            <button type="submit" class="w-full rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2.5 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">Create Person</button>
+            {{ btn_submit("Create Person", submitting_text="Creating...", size="lg", extra_class="w-full") }}
         </form>
     </div>
 </div>

@@ -358,6 +358,28 @@ class TestPasswordAPI:
             assert session.status == SessionStatus.revoked
             assert session.revoked_at is not None
 
+    def test_reset_password_token_single_use(self, client, db_session, person):
+        """Test reset token cannot be reused."""
+        credential = UserCredential(
+            person_id=person.id,
+            username=f"singleuse_{uuid.uuid4().hex[:8]}",
+            password_hash=hash_password("oldpassword123"),
+            is_active=True,
+        )
+        db_session.add(credential)
+        db_session.commit()
+
+        reset = auth_flow_service.request_password_reset(db_session, person.email)
+        assert reset is not None
+
+        payload = {"token": reset["token"], "new_password": "newpassword456"}
+        response = client.post("/auth/reset-password", json=payload)
+        assert response.status_code == 200
+
+        # Reuse should fail
+        response = client.post("/auth/reset-password", json=payload)
+        assert response.status_code == 401
+
 
 class TestRefreshAPI:
     """Tests for token refresh endpoint."""

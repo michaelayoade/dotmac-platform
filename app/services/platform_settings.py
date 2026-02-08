@@ -16,6 +16,7 @@ from app.models.domain_settings import (
     SettingDomain,
     SettingValueType,
 )
+from app.services.settings_crypto import resolve_setting_value
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,10 @@ class PlatformSettingsService:
             DomainSetting.is_active.is_(True),
         )
         row = self.db.scalar(stmt)
-        if row and row.value_text is not None:
-            return row.value_text
+        if row:
+            resolved = resolve_setting_value(row.value_text, row.value_json, row.is_secret)
+            if resolved is not None:
+                return resolved
         return PLATFORM_DEFAULTS.get(key, "")
 
     def get_all(self) -> dict[str, str]:
@@ -55,8 +58,9 @@ class PlatformSettingsService:
         )
         rows = self.db.scalars(stmt).all()
         for row in rows:
-            if row.value_text is not None:
-                result[row.key] = row.value_text
+            resolved = resolve_setting_value(row.value_text, row.value_json, row.is_secret)
+            if resolved is not None:
+                result[row.key] = resolved
         return result
 
     def set(self, key: str, value: str) -> None:

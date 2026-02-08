@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import Depends, Header, HTTPException, Request
+from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -10,7 +11,7 @@ logger = logging.getLogger(__name__)
 from app.db import SessionLocal
 from app.models.auth import ApiKey, Session as AuthSession, SessionStatus
 from app.models.rbac import Permission, PersonRole, RolePermission, Role
-from app.services.auth import hash_api_key
+from app.services.auth import hash_api_key_candidates
 from app.services.auth_flow import decode_access_token, hash_session_token
 from app.services.common import coerce_uuid
 
@@ -42,7 +43,13 @@ def _extract_bearer_token(authorization: str | None) -> str | None:
 
 
 def _is_jwt(token: str) -> bool:
-    return token.count(".") == 2
+    try:
+        jwt.get_unverified_header(token)
+        return True
+    except JWTError:
+        return False
+    except Exception:
+        return False
 
 
 def _has_audit_scope(payload: dict) -> bool:
@@ -94,6 +101,7 @@ def require_audit_auth(
             actor_id = str(payload.get("sub"))
             if request is not None:
                 request.state.actor_id = actor_id
+                request.state.actor_type = "user"
             return {"actor_type": "user", "actor_id": actor_id}
         stmt = (
             select(AuthSession)
@@ -106,11 +114,13 @@ def require_audit_auth(
         if session:
             if request is not None:
                 request.state.actor_id = str(session.person_id)
+                request.state.actor_type = "user"
             return {"actor_type": "user", "actor_id": str(session.person_id)}
     if x_api_key:
+        candidates = hash_api_key_candidates(x_api_key)
         stmt = (
             select(ApiKey)
-            .where(ApiKey.key_hash == hash_api_key(x_api_key))
+            .where(ApiKey.key_hash.in_(candidates))
             .where(ApiKey.is_active.is_(True))
             .where(ApiKey.revoked_at.is_(None))
             .where((ApiKey.expires_at.is_(None)) | (ApiKey.expires_at > now))
@@ -119,6 +129,7 @@ def require_audit_auth(
         if api_key:
             if request is not None:
                 request.state.actor_id = str(api_key.id)
+                request.state.actor_type = "api_key"
             return {"actor_type": "api_key", "actor_id": str(api_key.id)}
     raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -151,6 +162,9 @@ def require_user_auth(
     session = db.scalar(stmt)
     if not session:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    expires_at = _make_aware(session.expires_at)
+    if expires_at and expires_at <= now:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     roles_value = payload.get("roles")
     scopes_value = payload.get("scopes")
     roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
@@ -158,6 +172,7 @@ def require_user_auth(
     actor_id = str(person_id)
     if request is not None:
         request.state.actor_id = actor_id
+        request.state.actor_type = "user"
     return {
         "person_id": str(person_id),
         "session_id": str(session_id),

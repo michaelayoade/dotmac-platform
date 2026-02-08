@@ -1,4 +1,5 @@
 import os
+import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
@@ -33,7 +34,9 @@ from app.web.secrets_web import router as secrets_web_router
 from app.web.domains_web import router as domains_web_router
 from app.web.drift_web import router as drift_web_router
 from app.web.clone_web import router as clone_web_router
+from app.web.helpers import CSRF_COOKIE_NAME
 from app.db import SessionLocal
+from app.config import settings
 from app.services import audit as audit_service
 from app.api.deps import require_role, require_user_auth
 from app.models.domain_settings import DomainSetting, SettingDomain
@@ -83,8 +86,28 @@ register_error_handlers(app)
 
 
 @app.middleware("http")
+async def csrf_middleware(request: Request, call_next):
+    if not request.cookies.get("access_token") and not request.cookies.get(CSRF_COOKIE_NAME):
+        request.state.csrf_session = secrets.token_urlsafe(32)
+    response = await call_next(request)
+    # Issue CSRF session cookie for anonymous users.
+    if not request.cookies.get("access_token") and not request.cookies.get(CSRF_COOKIE_NAME):
+        response.set_cookie(
+            CSRF_COOKIE_NAME,
+            request.state.csrf_session,
+            httponly=True,
+            samesite="lax",
+            secure=not settings.testing,
+            max_age=3600 * 4,
+        )
+    return response
+
+
+@app.middleware("http")
 async def audit_middleware(request: Request, call_next):
     response: Response
+    if settings.testing:
+        return await call_next(request)
     path = request.url.path
     db = SessionLocal()
     try:

@@ -1,0 +1,61 @@
+{#
+    Form component macros — submit-aware forms with loading states.
+
+    Usage:
+        {% from "components/forms.html" import form_open, form_close %}
+        {{ form_open(action="/instances/new", testid="instance-form") }}
+            ... fields ...
+        {{ form_close() }}
+#}
+
+{# ── Form wrapper with Alpine.js submit tracking ── #}
+{% macro form_open(action, method="POST", testid="", extra_class="", extra_attrs="", spacing="space-y-5") %}
+<form method="{{ method }}" action="{{ action }}"
+      x-data="{ submitting: false }" @submit="submitting = true"
+      class="{{ spacing }} {{ extra_class }}"
+      {% if testid %}data-testid="{{ testid }}"{% endif %}
+      {{ extra_attrs }}>
+    {% if method == "POST" %}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    {% endif %}
+{% endmacro %}
+
+{# ── Close the form tag ── #}
+{% macro form_close() %}
+</form>
+{% endmacro %}
+
+{# ── Text input field ── #}
+{% macro text_input(name, label, type="text", required=false, placeholder="", value="", help="", testid="", extra_class="", pattern="", maxlength="") %}
+<div class="{{ extra_class }}">
+    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">{{ label }}</label>
+    <input type="{{ type }}" name="{{ name }}" {% if required %}required{% endif %}
+           {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+           {% if value %}value="{{ value }}"{% endif %}
+           {% if pattern %}pattern="{{ pattern }}"{% endif %}
+           {% if maxlength %}maxlength="{{ maxlength }}"{% endif %}
+           {% if testid %}data-testid="{{ testid }}"{% endif %}
+           class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+    {% if help %}
+    <p class="mt-1.5 text-[11px] text-surface-400 dark:text-surface-500">{{ help }}</p>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# ── Select dropdown ── #}
+{% macro select_input(name, label, options, selected="", required=false, testid="", extra_class="") %}
+<div class="{{ extra_class }}">
+    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">{{ label }}</label>
+    <select name="{{ name }}" {% if required %}required{% endif %}
+            {% if testid %}data-testid="{{ testid }}"{% endif %}
+            class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
+        {% for opt in options %}
+            {% if opt is mapping %}
+            <option value="{{ opt.value }}" {% if opt.value == selected %}selected{% endif %}>{{ opt.label }}</option>
+            {% else %}
+            <option value="{{ opt }}" {% if opt == selected %}selected{% endif %}>{{ opt }}</option>
+            {% endif %}
+        {% endfor %}
+    </select>
+</div>
+{% endmacro %}

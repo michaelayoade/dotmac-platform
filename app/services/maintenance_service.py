@@ -17,6 +17,12 @@ class MaintenanceService:
     def __init__(self, db: Session):
         self.db = db
 
+    def _get_for_instance(self, instance_id: UUID, window_id: UUID) -> MaintenanceWindow | None:
+        window = self.db.get(MaintenanceWindow, window_id)
+        if not window or window.instance_id != instance_id:
+            return None
+        return window
+
     def get_windows(self, instance_id: UUID) -> list[MaintenanceWindow]:
         stmt = (
             select(MaintenanceWindow)
@@ -64,8 +70,8 @@ class MaintenanceService:
         self.db.flush()
         return window
 
-    def delete_window(self, window_id: UUID) -> None:
-        window = self.db.get(MaintenanceWindow, window_id)
+    def delete_window(self, instance_id: UUID, window_id: UUID) -> None:
+        window = self._get_for_instance(instance_id, window_id)
         if window:
             window.is_active = False
             self.db.flush()
