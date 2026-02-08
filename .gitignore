@@ -69,7 +69,7 @@ static/avatars/*
 Thumbs.db
 
 # Poetry
-poetry.lock
+# poetry.lock is tracked — needed for Docker builds
 
 # Node / Tailwind build
 node_modules/
