@@ -3,13 +3,14 @@ Domain Service — Manage custom domains for tenant instances.
 
 Handles DNS verification, SSL provisioning, and domain lifecycle.
 """
+
 from __future__ import annotations
 
 import logging
 import re
 import secrets
 import shlex
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -28,7 +29,7 @@ def _validate_domain(domain: str) -> str:
     domain = domain.strip().lower()
     if len(domain) > 253:
         raise ValueError("Domain too long (max 253 characters)")
-    if not re.match(r'^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$', domain):
+    if not re.match(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$", domain):
         raise ValueError(f"Invalid domain format: {domain}")
     return domain
 
@@ -64,9 +65,7 @@ class DomainService:
         domain = _validate_domain(domain)
 
         # Check for duplicates
-        existing = self.db.scalar(
-            select(InstanceDomain).where(InstanceDomain.domain == domain)
-        )
+        existing = self.db.scalar(select(InstanceDomain).where(InstanceDomain.domain == domain))
         if existing:
             raise ValueError(f"Domain {domain} is already registered")
 
@@ -112,7 +111,7 @@ class DomainService:
         expected = inst_domain.verification_token
         if expected in result.stdout:
             inst_domain.status = DomainStatus.verified
-            inst_domain.verified_at = datetime.now(timezone.utc)
+            inst_domain.verified_at = datetime.now(UTC)
             self.db.flush()
             logger.info("Domain verified: %s", inst_domain.domain)
             return {"verified": True}
@@ -141,7 +140,7 @@ class DomainService:
 
         if result.ok:
             inst_domain.status = DomainStatus.ssl_provisioned
-            inst_domain.ssl_provisioned_at = datetime.now(timezone.utc)
+            inst_domain.ssl_provisioned_at = datetime.now(UTC)
             self.db.flush()
             logger.info("SSL provisioned for %s", inst_domain.domain)
             return {"success": True}
@@ -183,7 +182,8 @@ class DomainService:
     def get_expiring_certs(self, days_until_expiry: int = 14) -> list[InstanceDomain]:
         """Find domains with SSL certificates expiring soon."""
         from datetime import timedelta
-        cutoff = datetime.now(timezone.utc) + timedelta(days=days_until_expiry)
+
+        cutoff = datetime.now(UTC) + timedelta(days=days_until_expiry)
         stmt = select(InstanceDomain).where(
             InstanceDomain.ssl_expires_at.isnot(None),
             InstanceDomain.ssl_expires_at <= cutoff,

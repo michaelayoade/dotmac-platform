@@ -32,9 +32,7 @@ def list_auth_settings(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
-    return settings_service.list_auth_settings_response(
-        db, is_active, order_by, order_dir, limit, offset
-    )
+    return settings_service.list_auth_settings_response(db, is_active, order_by, order_dir, limit, offset)
 
 
 @router.put(
@@ -44,9 +42,7 @@ def list_auth_settings(
     tags=["settings-auth"],
     dependencies=[Depends(require_role("admin"))],
 )
-def upsert_auth_setting(
-    key: str, payload: DomainSettingUpdate, db: Session = Depends(get_db)
-):
+def upsert_auth_setting(key: str, payload: DomainSettingUpdate, db: Session = Depends(get_db)):
     return settings_service.upsert_auth_setting(db, key, payload)
 
 
@@ -74,9 +70,7 @@ def list_audit_settings(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
-    return settings_service.list_audit_settings_response(
-        db, is_active, order_by, order_dir, limit, offset
-    )
+    return settings_service.list_audit_settings_response(db, is_active, order_by, order_dir, limit, offset)
 
 
 @router.put(
@@ -86,9 +80,7 @@ def list_audit_settings(
     tags=["settings-audit"],
     dependencies=[Depends(require_role("admin"))],
 )
-def upsert_audit_setting(
-    key: str, payload: DomainSettingUpdate, db: Session = Depends(get_db)
-):
+def upsert_audit_setting(key: str, payload: DomainSettingUpdate, db: Session = Depends(get_db)):
     return settings_service.upsert_audit_setting(db, key, payload)
 
 
@@ -116,9 +108,7 @@ def list_scheduler_settings(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
-    return settings_service.list_scheduler_settings_response(
-        db, is_active, order_by, order_dir, limit, offset
-    )
+    return settings_service.list_scheduler_settings_response(db, is_active, order_by, order_dir, limit, offset)
 
 
 @router.put(
@@ -128,9 +118,7 @@ def list_scheduler_settings(
     tags=["settings-scheduler"],
     dependencies=[Depends(require_role("admin"))],
 )
-def upsert_scheduler_setting(
-    key: str, payload: DomainSettingUpdate, db: Session = Depends(get_db)
-):
+def upsert_scheduler_setting(key: str, payload: DomainSettingUpdate, db: Session = Depends(get_db)):
     return settings_service.upsert_scheduler_setting(db, key, payload)
 
 

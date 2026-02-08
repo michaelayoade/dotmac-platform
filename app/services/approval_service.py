@@ -1,8 +1,9 @@
 """Deploy Approval Service — two-person approval workflow."""
+
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -61,7 +62,7 @@ class ApprovalService:
         approval.status = ApprovalStatus.approved
         approval.approved_by = approved_by
         approval.approved_by_name = approved_by_name
-        approval.resolved_at = datetime.now(timezone.utc)
+        approval.resolved_at = datetime.now(UTC)
         self.db.flush()
         return approval
 
@@ -83,22 +84,18 @@ class ApprovalService:
         approval.approved_by_name = rejected_by_name
         if reason:
             approval.reason = reason
-        approval.resolved_at = datetime.now(timezone.utc)
+        approval.resolved_at = datetime.now(UTC)
         self.db.flush()
         return approval
 
     def get_pending(self, instance_id: UUID | None = None) -> list[DeployApproval]:
-        stmt = select(DeployApproval).where(
-            DeployApproval.status == ApprovalStatus.pending
-        )
+        stmt = select(DeployApproval).where(DeployApproval.status == ApprovalStatus.pending)
         if instance_id:
             stmt = stmt.where(DeployApproval.instance_id == instance_id)
         stmt = stmt.order_by(DeployApproval.created_at.desc())
         return list(self.db.scalars(stmt).all())
 
-    def get_history(
-        self, instance_id: UUID, limit: int = 50
-    ) -> list[DeployApproval]:
+    def get_history(self, instance_id: UUID, limit: int = 50) -> list[DeployApproval]:
         stmt = (
             select(DeployApproval)
             .where(DeployApproval.instance_id == instance_id)

@@ -1,6 +1,7 @@
 """
 Clone — Web routes for cloning instances.
 """
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -68,6 +69,7 @@ def clone_create(
         db.rollback()
         instances = []
         from app.services.instance_service import InstanceService
+
         instances = InstanceService(db).list_all()
         return templates.TemplateResponse(
             "clone/index.html",
@@ -84,6 +86,7 @@ def clone_create(
         db.rollback()
         instances = []
         from app.services.instance_service import InstanceService
+
         instances = InstanceService(db).list_all()
         return templates.TemplateResponse(
             "clone/index.html",

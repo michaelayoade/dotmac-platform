@@ -1,6 +1,7 @@
 """
 Nginx Service — Generate and deploy nginx vhost configs for ERP instances.
 """
+
 from __future__ import annotations
 
 import logging
@@ -10,7 +11,7 @@ import textwrap
 
 logger = logging.getLogger(__name__)
 
-_DOMAIN_RE = re.compile(r'^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$')
+_DOMAIN_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$")
 
 
 def _validate_domain(domain: str) -> str:

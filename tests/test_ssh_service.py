@@ -1,18 +1,19 @@
 """Tests for SSHService -- exec, retry, circuit breaker."""
+
 import time
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.services.ssh_service import (
+    _CIRCUIT_FAILURE_THRESHOLD,
+    _CIRCUIT_LOCK,
+    _CIRCUIT_STATE,
     SSHResult,
     SSHService,
-    _CIRCUIT_STATE,
-    _CIRCUIT_LOCK,
     _circuit_check,
     _circuit_record_failure,
     _circuit_record_success,
-    _CIRCUIT_FAILURE_THRESHOLD,
 )
 
 
@@ -110,9 +111,7 @@ class TestCircuitBreaker:
 
 class TestSSHRetry:
     def test_retries_on_connection_failure(self):
-        svc = SSHService(
-            hostname="remote.test", is_local=False, server_id="retry-test"
-        )
+        svc = SSHService(hostname="remote.test", is_local=False, server_id="retry-test")
         mock_client = MagicMock()
         # Fail twice, succeed third time
         mock_client.connect.side_effect = [
@@ -130,9 +129,7 @@ class TestSSHRetry:
         assert mock_client.connect.call_count == 3
 
     def test_raises_after_all_retries_fail(self):
-        svc = SSHService(
-            hostname="remote.test", is_local=False, server_id="fail-all"
-        )
+        svc = SSHService(hostname="remote.test", is_local=False, server_id="fail-all")
         mock_client = MagicMock()
         mock_client.connect.side_effect = ConnectionError("always fail")
 

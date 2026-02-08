@@ -1,6 +1,7 @@
 """
 Audit — Web routes for viewing audit events.
 """
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request

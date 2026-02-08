@@ -6,7 +6,6 @@ from app.db import SessionLocal
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 
-
 DEFAULT_PERMISSIONS = [
     ("audit:read", "Read audit events"),
     ("auth:manage", "Manage authentication"),
@@ -79,12 +78,7 @@ def _ensure_role_permission(db, role_id, permission_id):
 
 
 def _ensure_person_role(db, person_id, role_id):
-    link = (
-        db.query(PersonRole)
-        .filter(PersonRole.person_id == person_id)
-        .filter(PersonRole.role_id == role_id)
-        .first()
-    )
+    link = db.query(PersonRole).filter(PersonRole.person_id == person_id).filter(PersonRole.role_id == role_id).first()
     if not link:
         link = PersonRole(person_id=person_id, role_id=role_id)
         db.add(link)

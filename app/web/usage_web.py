@@ -1,7 +1,8 @@
 """
 Usage — Web routes for usage and billing summaries.
 """
-from datetime import datetime, timedelta, timezone
+
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
@@ -33,7 +34,7 @@ def usage_page(
     if not instance_id and instances:
         instance_id = instances[0].instance_id
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     period_start = now - timedelta(days=max(days, 1))
     period_end = now
     summary = {}

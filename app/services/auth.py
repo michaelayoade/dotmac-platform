@@ -4,7 +4,7 @@ import logging
 import os
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, Request
@@ -12,24 +12,22 @@ from fastapi import HTTPException, Request
 logger = logging.getLogger(__name__)
 import redis
 from sqlalchemy import select, update
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.models.auth import (
     ApiKey,
     AuthProvider,
     MFAMethod,
     MFAMethodType,
-    Session as AuthSession,
     SessionStatus,
     UserCredential,
 )
-from app.services.common import coerce_uuid
-from app.services.response import ListResponseMixin
+from app.models.auth import (
+    Session as AuthSession,
+)
 from app.models.domain_settings import DomainSetting, SettingDomain
 from app.models.person import Person
-from app.services import settings_spec
-from app.services.settings_crypto import resolve_setting_value
 from app.schemas.auth import (
     ApiKeyCreate,
     ApiKeyGenerateRequest,
@@ -41,7 +39,11 @@ from app.schemas.auth import (
     UserCredentialCreate,
     UserCredentialUpdate,
 )
+from app.services import settings_spec
 from app.services.auth_flow import hash_password, hash_session_token
+from app.services.common import coerce_uuid
+from app.services.response import ListResponseMixin
+from app.services.settings_crypto import resolve_setting_value
 
 
 def _apply_ordering(stmt: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]) -> Any:
@@ -144,16 +146,12 @@ class UserCredentials(ListResponseMixin):
         data = payload.model_dump(exclude={"password"})
         if payload.password:
             data["password_hash"] = hash_password(payload.password)
-            data["password_updated_at"] = datetime.now(timezone.utc)
+            data["password_updated_at"] = datetime.now(UTC)
         fields_set = payload.model_fields_set
         if "provider" not in fields_set:
-            default_provider = settings_spec.resolve_value(
-                db, SettingDomain.auth, "default_auth_provider"
-            )
+            default_provider = settings_spec.resolve_value(db, SettingDomain.auth, "default_auth_provider")
             if default_provider:
-                data["provider"] = _validate_enum(
-                    default_provider, AuthProvider, "provider"
-                )
+                data["provider"] = _validate_enum(default_provider, AuthProvider, "provider")
         credential = UserCredential(**data)
         db.add(credential)
         db.commit()
@@ -182,10 +180,7 @@ class UserCredentials(ListResponseMixin):
         if person_id:
             stmt = stmt.where(UserCredential.person_id == coerce_uuid(person_id))
         if provider:
-            stmt = stmt.where(
-                UserCredential.provider
-                == _validate_enum(provider, AuthProvider, "provider")
-            )
+            stmt = stmt.where(UserCredential.provider == _validate_enum(provider, AuthProvider, "provider"))
         if is_active is None:
             stmt = stmt.where(UserCredential.is_active.is_(True))
         else:
@@ -211,7 +206,7 @@ class UserCredentials(ListResponseMixin):
         data = payload.model_dump(exclude_unset=True, exclude={"password"})
         if payload.password:
             data["password_hash"] = hash_password(payload.password)
-            data["password_updated_at"] = datetime.now(timezone.utc)
+            data["password_updated_at"] = datetime.now(UTC)
         if "person_id" in data:
             _ensure_person(db, str(data["person_id"]))
         for key, value in data.items():
@@ -277,10 +272,7 @@ class MFAMethods(ListResponseMixin):
         if person_id:
             stmt = stmt.where(MFAMethod.person_id == coerce_uuid(person_id))
         if method_type:
-            stmt = stmt.where(
-                MFAMethod.method_type
-                == _validate_enum(method_type, MFAMethodType, "method_type")
-            )
+            stmt = stmt.where(MFAMethod.method_type == _validate_enum(method_type, MFAMethodType, "method_type"))
         if is_primary is not None:
             stmt = stmt.where(MFAMethod.is_primary == is_primary)
         if enabled is not None:
@@ -376,10 +368,7 @@ class Sessions(ListResponseMixin):
         if person_id:
             stmt = stmt.where(AuthSession.person_id == coerce_uuid(person_id))
         if status:
-            stmt = stmt.where(
-                AuthSession.status
-                == _validate_enum(status, SessionStatus, "status")
-            )
+            stmt = stmt.where(AuthSession.status == _validate_enum(status, SessionStatus, "status"))
         stmt = _apply_ordering(
             stmt,
             order_by,
@@ -413,21 +402,17 @@ class Sessions(ListResponseMixin):
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
         session.status = SessionStatus.revoked
-        session.revoked_at = datetime.now(timezone.utc)
+        session.revoked_at = datetime.now(UTC)
         db.commit()
 
 
 class ApiKeys(ListResponseMixin):
     @staticmethod
-    def generate_with_rate_limit(
-        db: Session, payload: ApiKeyGenerateRequest, request: Request | None
-    ):
+    def generate_with_rate_limit(db: Session, payload: ApiKeyGenerateRequest, request: Request | None):
         client_ip = "unknown"
         if request is not None and request.client:
             client_ip = request.client.host
-        window_seconds = _auth_int_setting(
-            db, "api_key_rate_window_seconds", _API_KEY_WINDOW_SECONDS
-        )
+        window_seconds = _auth_int_setting(db, "api_key_rate_window_seconds", _API_KEY_WINDOW_SECONDS)
         max_per_window = _auth_int_setting(db, "api_key_rate_max", _API_KEY_MAX_PER_WINDOW)
         redis_client = _get_redis_client()
         if not redis_client:
@@ -530,7 +515,7 @@ class ApiKeys(ListResponseMixin):
         if not api_key:
             raise HTTPException(status_code=404, detail="API key not found")
         api_key.is_active = False
-        api_key.revoked_at = datetime.now(timezone.utc)
+        api_key.revoked_at = datetime.now(UTC)
         db.commit()
 
     @staticmethod

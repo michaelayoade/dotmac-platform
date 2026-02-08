@@ -69,17 +69,13 @@ class TestRolesAPI:
 
     def test_list_roles_with_ordering(self, client, auth_headers):
         """Test listing roles with custom ordering."""
-        response = client.get(
-            "/rbac/roles?order_by=name&order_dir=desc", headers=auth_headers
-        )
+        response = client.get("/rbac/roles?order_by=name&order_dir=desc", headers=auth_headers)
         assert response.status_code == 200
 
     def test_update_role(self, client, admin_headers, role):
         """Test updating a role."""
         payload = {"description": "Updated description"}
-        response = client.patch(
-            f"/rbac/roles/{role.id}", json=payload, headers=admin_headers
-        )
+        response = client.patch(f"/rbac/roles/{role.id}", json=payload, headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["description"] == "Updated description"
@@ -88,9 +84,7 @@ class TestRolesAPI:
         """Test updating a non-existent role."""
         fake_id = str(uuid.uuid4())
         payload = {"description": "Updated"}
-        response = client.patch(
-            f"/rbac/roles/{fake_id}", json=payload, headers=admin_headers
-        )
+        response = client.patch(f"/rbac/roles/{fake_id}", json=payload, headers=admin_headers)
         assert response.status_code == 404
 
     def test_delete_role(self, client, admin_headers, db_session):
@@ -133,9 +127,7 @@ class TestPermissionsAPI:
 
     def test_get_permission(self, client, auth_headers, permission):
         """Test getting a permission by ID."""
-        response = client.get(
-            f"/rbac/permissions/{permission.id}", headers=auth_headers
-        )
+        response = client.get(f"/rbac/permissions/{permission.id}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == str(permission.id)
@@ -165,9 +157,7 @@ class TestPermissionsAPI:
             db_session.add(p)
         db_session.commit()
 
-        response = client.get(
-            "/rbac/permissions?limit=2&offset=0", headers=auth_headers
-        )
+        response = client.get("/rbac/permissions?limit=2&offset=0", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) <= 2
@@ -175,9 +165,7 @@ class TestPermissionsAPI:
     def test_update_permission(self, client, admin_headers, permission):
         """Test updating a permission."""
         payload = {"description": "Updated permission description"}
-        response = client.patch(
-            f"/rbac/permissions/{permission.id}", json=payload, headers=admin_headers
-        )
+        response = client.patch(f"/rbac/permissions/{permission.id}", json=payload, headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["description"] == "Updated permission description"
@@ -192,9 +180,7 @@ class TestPermissionsAPI:
         db_session.commit()
         db_session.refresh(perm)
 
-        response = client.delete(
-            f"/rbac/permissions/{perm.id}", headers=admin_headers
-        )
+        response = client.delete(f"/rbac/permissions/{perm.id}", headers=admin_headers)
         assert response.status_code == 204
 
 
@@ -207,9 +193,7 @@ class TestRolePermissionsAPI:
             "role_id": str(role.id),
             "permission_id": str(permission.id),
         }
-        response = client.post(
-            "/rbac/role-permissions", json=payload, headers=admin_headers
-        )
+        response = client.post("/rbac/role-permissions", json=payload, headers=admin_headers)
         assert response.status_code == 201
         data = response.json()
         assert data["role_id"] == str(role.id)
@@ -222,9 +206,7 @@ class TestRolePermissionsAPI:
         db_session.commit()
         db_session.refresh(link)
 
-        response = client.get(
-            f"/rbac/role-permissions/{link.id}", headers=auth_headers
-        )
+        response = client.get(f"/rbac/role-permissions/{link.id}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == str(link.id)
@@ -243,9 +225,7 @@ class TestRolePermissionsAPI:
         db_session.add(link)
         db_session.commit()
 
-        response = client.get(
-            f"/rbac/role-permissions?role_id={role.id}", headers=auth_headers
-        )
+        response = client.get(f"/rbac/role-permissions?role_id={role.id}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) >= 1
@@ -257,9 +237,7 @@ class TestRolePermissionsAPI:
         db_session.commit()
         db_session.refresh(link)
 
-        response = client.delete(
-            f"/rbac/role-permissions/{link.id}", headers=admin_headers
-        )
+        response = client.delete(f"/rbac/role-permissions/{link.id}", headers=admin_headers)
         assert response.status_code == 204
 
 
@@ -272,9 +250,7 @@ class TestPersonRolesAPI:
             "person_id": str(person.id),
             "role_id": str(role.id),
         }
-        response = client.post(
-            "/rbac/person-roles", json=payload, headers=admin_headers
-        )
+        response = client.post("/rbac/person-roles", json=payload, headers=admin_headers)
         assert response.status_code == 201
         data = response.json()
         assert data["person_id"] == str(person.id)
@@ -287,9 +263,7 @@ class TestPersonRolesAPI:
         db_session.commit()
         db_session.refresh(link)
 
-        response = client.get(
-            f"/rbac/person-roles/{link.id}", headers=auth_headers
-        )
+        response = client.get(f"/rbac/person-roles/{link.id}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == str(link.id)
@@ -308,9 +282,7 @@ class TestPersonRolesAPI:
         db_session.add(link)
         db_session.commit()
 
-        response = client.get(
-            f"/rbac/person-roles?person_id={person.id}", headers=auth_headers
-        )
+        response = client.get(f"/rbac/person-roles?person_id={person.id}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) >= 1
@@ -322,9 +294,7 @@ class TestPersonRolesAPI:
         db_session.commit()
         db_session.refresh(link)
 
-        response = client.delete(
-            f"/rbac/person-roles/{link.id}", headers=admin_headers
-        )
+        response = client.delete(f"/rbac/person-roles/{link.id}", headers=admin_headers)
         assert response.status_code == 204
 
 

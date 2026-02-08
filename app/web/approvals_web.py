@@ -1,6 +1,7 @@
 """
 Approvals — Web routes for deployment approvals.
 """
+
 import logging
 from uuid import UUID
 
@@ -32,11 +33,7 @@ def approvals_list(
 
     svc = ApprovalService(db)
     pending = svc.get_pending()
-    history = list(
-        db.scalars(
-            select(DeployApproval).order_by(DeployApproval.created_at.desc()).limit(100)
-        ).all()
-    )
+    history = list(db.scalars(select(DeployApproval).order_by(DeployApproval.created_at.desc()).limit(100)).all())
 
     instances = InstanceService(db).list_all()
     inst_map = {i.instance_id: i for i in instances}

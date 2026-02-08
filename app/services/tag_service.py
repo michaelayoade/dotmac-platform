@@ -1,4 +1,5 @@
 """Instance Tag Service — manage key-value labels on instances."""
+
 from __future__ import annotations
 
 import logging
@@ -17,11 +18,7 @@ class TagService:
         self.db = db
 
     def get_tags(self, instance_id: UUID) -> list[InstanceTag]:
-        stmt = (
-            select(InstanceTag)
-            .where(InstanceTag.instance_id == instance_id)
-            .order_by(InstanceTag.key)
-        )
+        stmt = select(InstanceTag).where(InstanceTag.instance_id == instance_id).order_by(InstanceTag.key)
         return list(self.db.scalars(stmt).all())
 
     def set_tag(self, instance_id: UUID, key: str, value: str) -> InstanceTag:

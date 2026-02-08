@@ -3,15 +3,15 @@ from datetime import time
 
 import pytest
 
-from tests.conftest import _test_engine, TestBase
-from app.models.server import Server
-from app.models.instance import Instance, InstanceStatus
 from app.models.backup import Backup, BackupStatus, BackupType
-from app.models.instance_domain import InstanceDomain, DomainStatus
+from app.models.instance import Instance, InstanceStatus
+from app.models.instance_domain import DomainStatus, InstanceDomain
 from app.models.maintenance_window import MaintenanceWindow
+from app.models.server import Server
 from app.services.backup_service import BackupService
 from app.services.domain_service import DomainService
 from app.services.maintenance_service import MaintenanceService
+from tests.conftest import TestBase, _test_engine
 
 TestBase.metadata.create_all(_test_engine)
 
@@ -102,7 +102,8 @@ def test_maintenance_delete_requires_instance_match(db_session):
     db_session.commit()
 
     svc = MaintenanceService(db_session)
-    svc.delete_window(instance_b.instance_id, window.window_id)
+    with pytest.raises(ValueError):
+        svc.delete_window(instance_b.instance_id, window.window_id)
     db_session.refresh(window)
     assert window.is_active is True
 

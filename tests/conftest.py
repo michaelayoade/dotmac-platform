@@ -1,17 +1,15 @@
 import os
 import sys
 import uuid
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime, timedelta
 from types import ModuleType
 
 import pytest
 from fastapi.testclient import TestClient
 from jose import jwt
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
-
 
 # Create a test engine BEFORE any app imports
 _test_engine = create_engine(
@@ -30,13 +28,13 @@ _TestSessionLocal = sessionmaker(bind=_test_engine, autoflush=False, autocommit=
 
 
 # Create a mock db module
-mock_db_module = ModuleType('app.db')
+mock_db_module = ModuleType("app.db")
 mock_db_module.Base = TestBase
 mock_db_module.SessionLocal = _TestSessionLocal
 mock_db_module.get_engine = lambda: _test_engine
 
 # Also mock app.config to prevent .env loading
-mock_config_module = ModuleType('app.config')
+mock_config_module = ModuleType("app.config")
 
 
 class MockSettings:
@@ -61,8 +59,8 @@ mock_config_module.settings = MockSettings()
 mock_config_module.Settings = MockSettings
 
 # Insert mocks before any app imports
-sys.modules['app.config'] = mock_config_module
-sys.modules['app.db'] = mock_db_module
+sys.modules["app.config"] = mock_config_module
+sys.modules["app.db"] = mock_db_module
 
 # Set environment variables
 os.environ["JWT_SECRET"] = "test-secret"
@@ -71,17 +69,17 @@ os.environ["TOTP_ENCRYPTION_KEY"] = "QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g
 os.environ["TOTP_ISSUER"] = "StarterTemplate"
 
 # Now import the models - they'll use our mocked db module
-from app.models.person import Person
+from app.models.audit import AuditActorType, AuditEvent
 from app.models.auth import (
-    PasswordResetToken,
-    SessionRefreshToken,
-    UserCredential,
     Session as AuthSession,
-    SessionStatus,
 )
-from app.models.rbac import Role, Permission, RolePermission, PersonRole
-from app.models.audit import AuditEvent, AuditActorType
+from app.models.auth import (
+    SessionStatus,
+    UserCredential,
+)
 from app.models.domain_settings import DomainSetting, SettingDomain
+from app.models.person import Person
+from app.models.rbac import Permission, PersonRole, Role
 from app.models.scheduler import ScheduledTask, ScheduleType
 
 # Create all tables
@@ -135,19 +133,28 @@ def auth_env():
     pass
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiters():
+    """Reset in-memory rate limiter state between tests."""
+    from app.rate_limit import login_limiter, password_reset_limiter
+
+    login_limiter._requests.clear()
+    password_reset_limiter._requests.clear()
+
+
 # ============ FastAPI Test Client Fixtures ============
 
 
 @pytest.fixture()
 def client(db_session):
     """Create a test client with database dependency override."""
-    from app.main import app
-    from app.api.persons import get_db as persons_get_db
-    from app.api.auth_flow import get_db as auth_flow_get_db
-    from app.api.rbac import get_db as rbac_get_db
     from app.api.audit import get_db as audit_get_db
-    from app.api.settings import get_db as settings_get_db
+    from app.api.auth_flow import get_db as auth_flow_get_db
+    from app.api.persons import get_db as persons_get_db
+    from app.api.rbac import get_db as rbac_get_db
     from app.api.scheduler import get_db as scheduler_get_db
+    from app.api.settings import get_db as settings_get_db
+    from app.main import app
     from app.services.auth_dependencies import _get_db as auth_deps_get_db
 
     Session = sessionmaker(bind=db_session.bind, autoflush=False, autocommit=False)
@@ -178,7 +185,7 @@ def _create_access_token(person_id: str, session_id: str, roles: list[str] = Non
     """Create a JWT access token for testing."""
     secret = os.getenv("JWT_SECRET", "test-secret")
     algorithm = os.getenv("JWT_ALGORITHM", "HS256")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire = now + timedelta(minutes=15)
     payload = {
         "sub": person_id,
@@ -201,7 +208,7 @@ def auth_session(db_session, person):
         status=SessionStatus.active,
         ip_address="127.0.0.1",
         user_agent="pytest",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+        expires_at=datetime.now(UTC) + timedelta(days=30),
     )
     db_session.add(session)
     db_session.commit()
@@ -263,7 +270,7 @@ def admin_session(db_session, admin_person):
         status=SessionStatus.active,
         ip_address="127.0.0.1",
         user_agent="pytest",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+        expires_at=datetime.now(UTC) + timedelta(days=30),
     )
     db_session.add(session)
     db_session.commit()

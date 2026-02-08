@@ -1,8 +1,10 @@
 """
 Dashboard — Main landing page showing instance grid and health summary.
 """
+
 import hashlib
 import logging
+from datetime import UTC
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -28,7 +30,7 @@ def dashboard(
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
 ) -> Response:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from app.services.health_service import HealthService
     from app.services.instance_service import InstanceService
@@ -45,7 +47,7 @@ def dashboard(
     # Batch-fetch latest health checks to avoid N+1
     instance_ids = [inst.instance_id for inst in instances]
     health_map = health_svc.get_latest_checks_batch(instance_ids)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     instance_data = []
     etag_parts: list[str] = []
     for inst in instances:
@@ -58,10 +60,7 @@ def dashboard(
                 "health_state": health_state,
             }
         )
-        etag_parts.append(
-            f"{inst.instance_id}:{inst.status.value}:{health_state}"
-            f":{check.response_ms if check else ''}"
-        )
+        etag_parts.append(f"{inst.instance_id}:{inst.status.value}:{health_state}:{check.response_ms if check else ''}")
 
     # ETag for HTMX polling — skip re-render if nothing changed
     is_htmx = request.headers.get("hx-request") == "true"
@@ -75,7 +74,10 @@ def dashboard(
     response = templates.TemplateResponse(
         "dashboard.html",
         ctx(
-            request, auth, "Dashboard", active_page="dashboard",
+            request,
+            auth,
+            "Dashboard",
+            active_page="dashboard",
             stats=stats,
             instances=instance_data,
             servers=servers,

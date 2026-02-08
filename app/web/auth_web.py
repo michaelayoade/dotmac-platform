@@ -1,17 +1,18 @@
 """
 Auth Web Routes — Login/logout pages for the platform.
 """
+
 import logging
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.config import settings as platform_settings
 from app.rate_limit import login_limiter, password_reset_limiter
-from app.web.deps import get_db, optional_web_auth, WebAuthContext
-from app.web.helpers import brand, ctx, validate_csrf_token
+from app.web.deps import WebAuthContext, get_db, optional_web_auth
+from app.web.helpers import ctx, validate_csrf_token
 
 logger = logging.getLogger(__name__)
 
@@ -238,7 +239,8 @@ def logout(
 
     # Best-effort session revocation
     try:
-        from app.models.auth import Session as AuthSession, SessionStatus
+        from app.models.auth import Session as AuthSession
+        from app.models.auth import SessionStatus
         from app.services.auth_flow import decode_access_token
         from app.services.common import coerce_uuid
 

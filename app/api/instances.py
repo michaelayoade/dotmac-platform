@@ -1,9 +1,11 @@
 """
 Instance API — Modules, feature flags, plans, backups, domains, lifecycle, and batch deploys.
 """
+
 from __future__ import annotations
 
 import re
+from datetime import UTC
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -22,8 +24,8 @@ def _validate_git_ref(value: str, label: str) -> str:
     return value
 
 
-def _paginate_list(items: list, limit: int, offset: int):
-    return items[offset: offset + limit]
+def _paginate_list(items: list, limit: int, offset: int) -> list:
+    return items[offset : offset + limit]
 
 
 # ──────────────────────────── Modules ────────────────────────────
@@ -38,6 +40,7 @@ def list_instance_modules(
     auth=Depends(require_user_auth),
 ):
     from app.services.module_service import ModuleService
+
     svc = ModuleService(db)
     modules = svc.get_instance_modules(instance_id)
     return _paginate_list(modules, limit, offset)
@@ -52,6 +55,7 @@ def set_module_enabled(
     auth=Depends(require_role("admin")),
 ):
     from app.services.module_service import ModuleService
+
     svc = ModuleService(db)
     try:
         im = svc.set_module_enabled(instance_id, module_id, enabled)
@@ -69,6 +73,7 @@ def list_all_modules(
     auth=Depends(require_user_auth),
 ):
     from app.services.module_service import ModuleService
+
     svc = ModuleService(db)
     modules = svc.list_all()
     return [
@@ -97,6 +102,7 @@ def list_instance_flags(
     auth=Depends(require_user_auth),
 ):
     from app.services.feature_flag_service import FeatureFlagService
+
     svc = FeatureFlagService(db)
     flags = svc.list_for_instance(instance_id)
     return _paginate_list(flags, limit, offset)
@@ -111,6 +117,7 @@ def set_flag(
     auth=Depends(require_role("admin")),
 ):
     from app.services.feature_flag_service import FeatureFlagService
+
     svc = FeatureFlagService(db)
     flag = svc.set_flag(instance_id, flag_key, value)
     db.commit()
@@ -125,6 +132,7 @@ def delete_flag(
     auth=Depends(require_role("admin")),
 ):
     from app.services.feature_flag_service import FeatureFlagService
+
     svc = FeatureFlagService(db)
     svc.delete_flag(instance_id, flag_key)
     db.commit()
@@ -142,6 +150,7 @@ def list_plans(
     auth=Depends(require_user_auth),
 ):
     from app.services.plan_service import PlanService
+
     svc = PlanService(db)
     plans = svc.list_all()
     return [
@@ -166,6 +175,7 @@ def assign_plan(
     auth=Depends(require_role("admin")),
 ):
     from app.models.instance import Instance
+
     instance = db.get(Instance, instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
@@ -186,6 +196,7 @@ def list_backups(
     auth=Depends(require_user_auth),
 ):
     from app.services.backup_service import BackupService
+
     svc = BackupService(db)
     backups = svc.list_for_instance(instance_id)
     return [
@@ -208,6 +219,7 @@ def create_backup(
     auth=Depends(require_role("admin")),
 ):
     from app.services.backup_service import BackupService
+
     svc = BackupService(db)
     try:
         backup = svc.create_backup(instance_id)
@@ -229,6 +241,7 @@ def restore_backup(
     auth=Depends(require_role("admin")),
 ):
     from app.services.backup_service import BackupService
+
     svc = BackupService(db)
     try:
         result = svc.restore_backup(instance_id, backup_id)
@@ -245,6 +258,7 @@ def delete_backup(
     auth=Depends(require_role("admin")),
 ):
     from app.services.backup_service import BackupService
+
     svc = BackupService(db)
     try:
         svc.delete_backup(instance_id, backup_id)
@@ -266,6 +280,7 @@ def list_domains(
     auth=Depends(require_user_auth),
 ):
     from app.services.domain_service import DomainService
+
     svc = DomainService(db)
     domains = svc.list_for_instance(instance_id)
     return [
@@ -290,6 +305,7 @@ def add_domain(
     auth=Depends(require_role("admin")),
 ):
     from app.services.domain_service import DomainService
+
     svc = DomainService(db)
     try:
         d = svc.add_domain(instance_id, domain, is_primary)
@@ -312,6 +328,7 @@ def verify_domain(
     auth=Depends(require_role("admin")),
 ):
     from app.services.domain_service import DomainService
+
     svc = DomainService(db)
     try:
         result = svc.verify_domain(instance_id, domain_id)
@@ -329,6 +346,7 @@ def provision_ssl(
     auth=Depends(require_role("admin")),
 ):
     from app.services.domain_service import DomainService
+
     svc = DomainService(db)
     try:
         result = svc.provision_ssl(instance_id, domain_id)
@@ -346,6 +364,7 @@ def remove_domain(
     auth=Depends(require_role("admin")),
 ):
     from app.services.domain_service import DomainService
+
     svc = DomainService(db)
     try:
         svc.remove_domain(instance_id, domain_id)
@@ -366,6 +385,7 @@ def start_trial(
     auth=Depends(require_role("admin")),
 ):
     from app.services.lifecycle_service import LifecycleService
+
     svc = LifecycleService(db)
     try:
         instance = svc.start_trial(instance_id, days)
@@ -386,6 +406,7 @@ def suspend_instance(
     auth=Depends(require_role("admin")),
 ):
     from app.services.lifecycle_service import LifecycleService
+
     svc = LifecycleService(db)
     try:
         instance = svc.suspend_instance(instance_id, reason)
@@ -402,6 +423,7 @@ def reactivate_instance(
     auth=Depends(require_role("admin")),
 ):
     from app.services.lifecycle_service import LifecycleService
+
     svc = LifecycleService(db)
     try:
         instance = svc.reactivate_instance(instance_id)
@@ -418,6 +440,7 @@ def archive_instance(
     auth=Depends(require_role("admin")),
 ):
     from app.services.lifecycle_service import LifecycleService
+
     svc = LifecycleService(db)
     try:
         instance = svc.archive_instance(instance_id)
@@ -442,13 +465,9 @@ def reconfigure_instance(
 
     svc = DeployService(db)
     try:
-        deployment_id = svc.create_deployment(
-            instance_id, deployment_type="reconfigure"
-        )
+        deployment_id = svc.create_deployment(instance_id, deployment_type="reconfigure")
         db.commit()
-        deploy_instance.delay(
-            str(instance_id), deployment_id, deployment_type="reconfigure"
-        )
+        deploy_instance.delay(str(instance_id), deployment_id, deployment_type="reconfigure")
         return {"deployment_id": deployment_id, "type": "reconfigure"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -466,6 +485,7 @@ def set_version(
     auth=Depends(require_role("admin")),
 ):
     from app.models.instance import Instance
+
     instance = db.get(Instance, instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
@@ -513,6 +533,7 @@ def list_batch_deploys(
     auth=Depends(require_user_auth),
 ):
     from app.services.batch_deploy_service import BatchDeployService
+
     svc = BatchDeployService(db)
     batches = svc.list_batches(limit=limit, offset=offset)
     return [
@@ -540,6 +561,7 @@ def get_resource_stats(
     auth=Depends(require_user_auth),
 ):
     from app.services.health_service import HealthService
+
     svc = HealthService(db)
     consumers = svc.get_top_resource_consumers()
     consumers = _paginate_list(consumers, limit, offset)
@@ -567,6 +589,7 @@ def list_webhooks(
     auth=Depends(require_user_auth),
 ):
     from app.services.webhook_service import WebhookService
+
     svc = WebhookService(db)
     endpoints = svc.list_endpoints()
     return [
@@ -593,6 +616,7 @@ def create_webhook(
     auth=Depends(require_role("admin")),
 ):
     from app.services.webhook_service import WebhookService
+
     svc = WebhookService(db)
     ep = svc.create_endpoint(url, events, secret, description, instance_id)
     db.commit()
@@ -606,6 +630,7 @@ def delete_webhook(
     auth=Depends(require_role("admin")),
 ):
     from app.services.webhook_service import WebhookService
+
     svc = WebhookService(db)
     svc.delete_endpoint(endpoint_id)
     db.commit()
@@ -621,6 +646,7 @@ def list_webhook_deliveries(
     auth=Depends(require_user_auth),
 ):
     from app.services.webhook_service import WebhookService
+
     svc = WebhookService(db)
     deliveries = svc.get_deliveries(endpoint_id, limit=limit, offset=offset)
     return [
@@ -649,6 +675,7 @@ def get_tenant_audit_log(
     auth=Depends(require_user_auth),
 ):
     from app.services.tenant_audit_service import TenantAuditService
+
     svc = TenantAuditService(db)
     logs = svc.get_logs(instance_id, action=action, limit=limit, offset=offset)
     return [
@@ -676,11 +703,10 @@ def clone_instance(
     auth=Depends(require_role("admin")),
 ):
     from app.services.clone_service import CloneService
+
     svc = CloneService(db)
     try:
-        clone = svc.clone_instance(
-            instance_id, new_org_code, new_org_name, include_data=include_data
-        )
+        clone = svc.clone_instance(instance_id, new_org_code, new_org_name, include_data=include_data)
         db.commit()
         return {
             "instance_id": str(clone.instance_id),
@@ -703,6 +729,7 @@ def list_maintenance_windows(
     auth=Depends(require_user_auth),
 ):
     from app.services.maintenance_service import MaintenanceService
+
     svc = MaintenanceService(db)
     windows = svc.get_windows(instance_id)
     return [
@@ -730,7 +757,9 @@ def set_maintenance_window(
     auth=Depends(require_role("admin")),
 ):
     from datetime import time
+
     from app.services.maintenance_service import MaintenanceService
+
     svc = MaintenanceService(db)
     try:
         window = svc.set_window(
@@ -754,6 +783,7 @@ def delete_maintenance_window(
     auth=Depends(require_role("admin")),
 ):
     from app.services.maintenance_service import MaintenanceService
+
     svc = MaintenanceService(db)
     svc.delete_window(instance_id, window_id)
     db.commit()
@@ -772,8 +802,9 @@ def get_instance_usage(
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
-    from app.services.usage_service import UsageService
     from app.models.usage_record import UsageMetric
+    from app.services.usage_service import UsageService
+
     svc = UsageService(db)
     m = UsageMetric(metric) if metric else None
     records = svc.get_usage(instance_id, metric=m)
@@ -794,10 +825,12 @@ def get_billing_summary(
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from app.services.usage_service import UsageService
+
     svc = UsageService(db)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     return svc.get_billing_summary(instance_id, period_start, now)
 
@@ -814,12 +847,16 @@ def list_tags(
     auth=Depends(require_user_auth),
 ):
     from app.services.tag_service import TagService
+
     svc = TagService(db)
     tags = svc.get_tags(instance_id)
-    return [{
-        "key": t.key,
-        "value": t.value,
-    } for t in _paginate_list(tags, limit, offset)]
+    return [
+        {
+            "key": t.key,
+            "value": t.value,
+        }
+        for t in _paginate_list(tags, limit, offset)
+    ]
 
 
 @router.put("/{instance_id}/tags/{key}")
@@ -831,6 +868,7 @@ def set_tag(
     auth=Depends(require_role("admin")),
 ):
     from app.services.tag_service import TagService
+
     svc = TagService(db)
     try:
         tag = svc.set_tag(instance_id, key, value)
@@ -848,6 +886,7 @@ def delete_tag(
     auth=Depends(require_role("admin")),
 ):
     from app.services.tag_service import TagService
+
     svc = TagService(db)
     svc.delete_tag(instance_id, key)
     db.commit()
@@ -865,6 +904,7 @@ def list_pending_approvals(
     auth=Depends(require_user_auth),
 ):
     from app.services.approval_service import ApprovalService
+
     svc = ApprovalService(db)
     approvals = svc.get_pending()
     return [
@@ -892,6 +932,7 @@ def request_deploy_approval(
     auth=Depends(require_role("admin")),
 ):
     from app.services.approval_service import ApprovalService
+
     svc = ApprovalService(db)
     try:
         approval = svc.request_approval(
@@ -914,6 +955,7 @@ def approve_deploy(
     auth=Depends(require_role("admin")),
 ):
     from app.services.approval_service import ApprovalService
+
     svc = ApprovalService(db)
     try:
         approval = svc.approve(
@@ -934,6 +976,7 @@ def reject_deploy(
     auth=Depends(require_role("admin")),
 ):
     from app.services.approval_service import ApprovalService
+
     svc = ApprovalService(db)
     try:
         approval = svc.reject(
@@ -957,6 +1000,7 @@ def get_drift_report(
     auth=Depends(require_user_auth),
 ):
     from app.services.drift_service import DriftService
+
     svc = DriftService(db)
     report = svc.get_latest_report(instance_id)
     if not report:
@@ -975,6 +1019,7 @@ def detect_drift(
     auth=Depends(require_role("admin")),
 ):
     from app.services.drift_service import DriftService
+
     svc = DriftService(db)
     try:
         report = svc.detect_drift(instance_id)
@@ -999,6 +1044,7 @@ def list_alert_rules(
     auth=Depends(require_user_auth),
 ):
     from app.services.alert_service import AlertService
+
     svc = AlertService(db)
     rules = svc.list_rules()
     return [
@@ -1029,8 +1075,9 @@ def create_alert_rule(
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
+    from app.models.alert_rule import AlertChannel, AlertMetric, AlertOperator
     from app.services.alert_service import AlertService
-    from app.models.alert_rule import AlertMetric, AlertOperator, AlertChannel
+
     svc = AlertService(db)
     rule = svc.create_rule(
         name,
@@ -1052,6 +1099,7 @@ def delete_alert_rule(
     auth=Depends(require_role("admin")),
 ):
     from app.services.alert_service import AlertService
+
     svc = AlertService(db)
     svc.delete_rule(rule_id)
     db.commit()
@@ -1067,6 +1115,7 @@ def list_alert_events(
     auth=Depends(require_user_auth),
 ):
     from app.services.alert_service import AlertService
+
     svc = AlertService(db)
     events = svc.get_events(instance_id=instance_id, limit=limit, offset=offset)
     return [
@@ -1096,6 +1145,7 @@ def tenant_health(
 ):
     """Tenant self-service: view instance health (read-only)."""
     from app.services.health_service import HealthService
+
     svc = HealthService(db)
     checks = svc.get_recent_checks(instance_id, limit=limit)
     return [
@@ -1120,6 +1170,7 @@ def tenant_flags(
 ):
     """Tenant self-service: view feature flags (read-only)."""
     from app.services.feature_flag_service import FeatureFlagService
+
     svc = FeatureFlagService(db)
     flags = svc.list_for_instance(instance_id)
     return _paginate_list(flags, limit, offset)
@@ -1135,6 +1186,7 @@ def tenant_backups(
 ):
     """Tenant self-service: view backups (read-only)."""
     from app.services.backup_service import BackupService
+
     svc = BackupService(db)
     backups = svc.list_for_instance(instance_id)
     return [

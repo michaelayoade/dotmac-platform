@@ -3,17 +3,17 @@ Batch Deploy Service — Schedule and execute deployments across multiple instan
 
 Supports rolling (one-at-a-time), parallel, and canary strategies.
 """
+
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.deployment_batch import BatchStatus, BatchStrategy, DeploymentBatch
-from app.models.instance import Instance
 
 logger = logging.getLogger(__name__)
 
@@ -44,17 +44,14 @@ class BatchDeployService:
         self.db.flush()
         logger.info(
             "Created batch %s: %d instances, strategy=%s",
-            batch.batch_id, len(instance_ids), strategy,
+            batch.batch_id,
+            len(instance_ids),
+            strategy,
         )
         return batch
 
     def list_batches(self, limit: int = 20, offset: int = 0) -> list[DeploymentBatch]:
-        stmt = (
-            select(DeploymentBatch)
-            .order_by(DeploymentBatch.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
+        stmt = select(DeploymentBatch).order_by(DeploymentBatch.created_at.desc()).limit(limit).offset(offset)
         return list(self.db.scalars(stmt).all())
 
     def get_by_id(self, batch_id: UUID) -> DeploymentBatch | None:
@@ -83,11 +80,8 @@ class BatchDeployService:
         # Check if batch is complete
         total_done = batch.completed_count + batch.failed_count
         if total_done >= batch.total_instances:
-            batch.status = (
-                BatchStatus.completed if batch.failed_count == 0
-                else BatchStatus.failed
-            )
-            batch.completed_at = datetime.now(timezone.utc)
+            batch.status = BatchStatus.completed if batch.failed_count == 0 else BatchStatus.failed
+            batch.completed_at = datetime.now(UTC)
 
         self.db.flush()
 
@@ -97,7 +91,7 @@ class BatchDeployService:
         if not batch:
             return
         batch.status = BatchStatus.running
-        batch.started_at = datetime.now(timezone.utc)
+        batch.started_at = datetime.now(UTC)
         self.db.flush()
 
     def cancel_batch(self, batch_id: UUID) -> None:
@@ -107,12 +101,12 @@ class BatchDeployService:
             return
         if batch.status in (BatchStatus.scheduled, BatchStatus.running):
             batch.status = BatchStatus.cancelled
-            batch.completed_at = datetime.now(timezone.utc)
+            batch.completed_at = datetime.now(UTC)
             self.db.flush()
 
     def get_pending_batches(self) -> list[DeploymentBatch]:
         """Get batches that are scheduled and past their scheduled time."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = select(DeploymentBatch).where(
             DeploymentBatch.status == BatchStatus.scheduled,
             DeploymentBatch.scheduled_at <= now,

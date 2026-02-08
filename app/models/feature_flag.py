@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
@@ -10,9 +10,7 @@ from app.db import Base
 
 class InstanceFlag(Base):
     __tablename__ = "instance_flags"
-    __table_args__ = (
-        UniqueConstraint("instance_id", "flag_key", name="uq_instance_flag"),
-    )
+    __table_args__ = (UniqueConstraint("instance_id", "flag_key", name="uq_instance_flag"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     instance_id: Mapped[uuid.UUID] = mapped_column(
@@ -22,8 +20,8 @@ class InstanceFlag(Base):
     flag_value: Mapped[str] = mapped_column(String(255), nullable=False, default="true")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     instance = relationship("Instance")

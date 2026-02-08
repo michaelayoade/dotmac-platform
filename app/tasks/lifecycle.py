@@ -1,6 +1,7 @@
 """
 Lifecycle Tasks — Celery tasks for trial expiry and domain cert monitoring.
 """
+
 import logging
 
 from celery import shared_task

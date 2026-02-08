@@ -1,6 +1,7 @@
 """
 Maintenance — Web routes for maintenance windows.
 """
+
 import logging
 from datetime import time
 from uuid import UUID

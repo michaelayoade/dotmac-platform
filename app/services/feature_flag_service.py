@@ -4,6 +4,7 @@ Feature Flag Service — Manage per-instance feature flags.
 Flags are injected into the instance .env file as FEATURE_* environment
 variables so the ERP application can read them at startup.
 """
+
 from __future__ import annotations
 
 import logging
@@ -67,19 +68,19 @@ class FeatureFlagService:
 
     def list_for_instance(self, instance_id: UUID) -> list[dict]:
         """List all available flags with their current values for an instance."""
-        stmt = select(InstanceFlag).where(
-            InstanceFlag.instance_id == instance_id
-        )
+        stmt = select(InstanceFlag).where(InstanceFlag.instance_id == instance_id)
         set_flags = {f.flag_key: f.flag_value for f in self.db.scalars(stmt).all()}
 
         result = []
         for key, meta in AVAILABLE_FLAGS.items():
-            result.append({
-                "key": key,
-                "description": meta["description"],
-                "value": set_flags.get(key, meta["default"]),
-                "is_custom": key in set_flags,
-            })
+            result.append(
+                {
+                    "key": key,
+                    "description": meta["description"],
+                    "value": set_flags.get(key, meta["default"]),
+                    "is_custom": key in set_flags,
+                }
+            )
         return result
 
     def get_flag(self, instance_id: UUID, flag_key: str) -> str:

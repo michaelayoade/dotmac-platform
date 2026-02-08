@@ -1,8 +1,7 @@
 import argparse
 import os
 import sys
-from urllib.request import urlopen, Request
-
+from urllib.request import Request, urlopen
 
 ASSETS = {
     "tailwind.js": "https://cdn.tailwindcss.com",

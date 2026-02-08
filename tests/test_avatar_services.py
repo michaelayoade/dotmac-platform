@@ -1,9 +1,5 @@
 """Tests for avatar service - type validation, size limits, and file cleanup."""
 
-import os
-import uuid
-from io import BytesIO
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -130,7 +126,7 @@ class TestAvatarFileCleanup:
         avatar_file.write_bytes(b"fake image content")
         assert avatar_file.exists()
 
-        avatar_url = f"/static/avatars/test_avatar.jpg"
+        avatar_url = "/static/avatars/test_avatar.jpg"
 
         with patch.object(avatar_service.settings, "avatar_url_prefix", "/static/avatars"):
             with patch.object(avatar_service.settings, "avatar_upload_dir", str(tmp_path)):
@@ -139,7 +135,7 @@ class TestAvatarFileCleanup:
 
     def test_delete_avatar_nonexistent_file(self, tmp_path):
         """Test deleting a non-existent avatar file doesn't raise."""
-        avatar_url = f"/static/avatars/nonexistent.jpg"
+        avatar_url = "/static/avatars/nonexistent.jpg"
 
         with patch.object(avatar_service.settings, "avatar_url_prefix", "/static/avatars"):
             with patch.object(avatar_service.settings, "avatar_upload_dir", str(tmp_path)):

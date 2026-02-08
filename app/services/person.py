@@ -9,8 +9,7 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-from app.models.person import Person
-from app.models.person import PersonStatus
+from app.models.person import Person, PersonStatus
 from app.schemas.person import PersonCreate, PersonUpdate
 from app.services.common import apply_ordering, apply_pagination, coerce_uuid
 from app.services.response import ListResponseMixin
@@ -56,9 +55,7 @@ class People(ListResponseMixin):
         if email:
             stmt = stmt.where(Person.email.ilike(f"%{email}%"))
         if status:
-            stmt = stmt.where(
-                Person.status == _validate_enum(status, PersonStatus, "status")
-            )
+            stmt = stmt.where(Person.status == _validate_enum(status, PersonStatus, "status"))
         if is_active is not None:
             stmt = stmt.where(Person.is_active == is_active)
         stmt = apply_ordering(
@@ -75,12 +72,30 @@ class People(ListResponseMixin):
         return list(db.scalars(stmt).all())
 
     _UPDATABLE_FIELDS = {
-        "first_name", "last_name", "display_name", "avatar_url", "bio",
-        "email", "email_verified", "phone", "date_of_birth", "gender",
-        "preferred_contact_method", "locale", "timezone",
-        "address_line1", "address_line2", "city", "region",
-        "postal_code", "country_code", "status", "is_active",
-        "marketing_opt_in", "notes", "metadata_",
+        "first_name",
+        "last_name",
+        "display_name",
+        "avatar_url",
+        "bio",
+        "email",
+        "email_verified",
+        "phone",
+        "date_of_birth",
+        "gender",
+        "preferred_contact_method",
+        "locale",
+        "timezone",
+        "address_line1",
+        "address_line2",
+        "city",
+        "region",
+        "postal_code",
+        "country_code",
+        "status",
+        "is_active",
+        "marketing_opt_in",
+        "notes",
+        "metadata_",
     }
 
     @staticmethod

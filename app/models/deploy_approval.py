@@ -1,7 +1,8 @@
 """Deploy Approval — two-person approval workflow for deployments."""
+
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
@@ -20,9 +21,7 @@ class ApprovalStatus(str, enum.Enum):
 class DeployApproval(Base):
     __tablename__ = "deploy_approvals"
 
-    approval_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    approval_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     instance_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("instances.instance_id"), nullable=False, index=True
     )
@@ -31,13 +30,9 @@ class DeployApproval(Base):
     requested_by_name: Mapped[str | None] = mapped_column(String(200))
     approved_by: Mapped[str | None] = mapped_column(String(36))
     approved_by_name: Mapped[str | None] = mapped_column(String(200))
-    status: Mapped[ApprovalStatus] = mapped_column(
-        Enum(ApprovalStatus), default=ApprovalStatus.pending
-    )
+    status: Mapped[ApprovalStatus] = mapped_column(Enum(ApprovalStatus), default=ApprovalStatus.pending)
     reason: Mapped[str | None] = mapped_column(Text)
     deployment_type: Mapped[str] = mapped_column(String(30), default="full")
     git_ref: Mapped[str | None] = mapped_column(String(120))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

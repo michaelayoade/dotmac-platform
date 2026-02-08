@@ -1,7 +1,5 @@
 import uuid
 
-import pytest
-
 
 class TestPersonsAPI:
     """Tests for the /people API endpoints."""
@@ -92,26 +90,20 @@ class TestPersonsAPI:
 
     def test_list_people_with_filters(self, client, auth_headers, person):
         """Test listing people with email filter."""
-        response = client.get(
-            f"/people?email={person.email}", headers=auth_headers
-        )
+        response = client.get(f"/people?email={person.email}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) >= 1
 
     def test_list_people_with_ordering(self, client, auth_headers):
         """Test listing people with custom ordering."""
-        response = client.get(
-            "/people?order_by=last_name&order_dir=asc", headers=auth_headers
-        )
+        response = client.get("/people?order_by=last_name&order_dir=asc", headers=auth_headers)
         assert response.status_code == 200
 
     def test_update_person(self, client, admin_headers, person):
         """Test updating a person (admin only)."""
         payload = {"first_name": "Updated"}
-        response = client.patch(
-            f"/people/{person.id}", json=payload, headers=admin_headers
-        )
+        response = client.patch(f"/people/{person.id}", json=payload, headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["first_name"] == "Updated"
@@ -123,9 +115,7 @@ class TestPersonsAPI:
             "last_name": "UpdatedLast",
             "phone": "+9876543210",
         }
-        response = client.patch(
-            f"/people/{person.id}", json=payload, headers=admin_headers
-        )
+        response = client.patch(f"/people/{person.id}", json=payload, headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["first_name"] == "UpdatedFirst"
@@ -136,9 +126,7 @@ class TestPersonsAPI:
         """Test updating a non-existent person."""
         fake_id = str(uuid.uuid4())
         payload = {"first_name": "Updated"}
-        response = client.patch(
-            f"/people/{fake_id}", json=payload, headers=admin_headers
-        )
+        response = client.patch(f"/people/{fake_id}", json=payload, headers=admin_headers)
         assert response.status_code == 404
 
     def test_delete_person(self, client, admin_headers, db_session):
@@ -177,9 +165,7 @@ class TestPersonsAPI:
     def test_update_person_forbidden_non_admin(self, client, auth_headers, person):
         """Test that non-admin cannot update a person."""
         payload = {"first_name": "Forbidden"}
-        response = client.patch(
-            f"/people/{person.id}", json=payload, headers=auth_headers
-        )
+        response = client.patch(f"/people/{person.id}", json=payload, headers=auth_headers)
         assert response.status_code == 403
 
     def test_delete_person_forbidden_non_admin(self, client, auth_headers, person):

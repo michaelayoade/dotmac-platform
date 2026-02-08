@@ -1,4 +1,5 @@
 """Config Drift Detection Service — compare expected vs running config."""
+
 from __future__ import annotations
 
 import json
@@ -16,8 +17,15 @@ from app.models.server import Server
 logger = logging.getLogger(__name__)
 
 SENSITIVE_PATTERNS = (
-    "password", "secret", "key", "token", "pass", "cert",
-    "database_url", "redis_url", "broker_url",
+    "password",
+    "secret",
+    "key",
+    "token",
+    "pass",
+    "cert",
+    "database_url",
+    "redis_url",
+    "broker_url",
 )
 
 
@@ -135,9 +143,7 @@ class DriftService:
                 env_dict[key] = value
         return env_dict
 
-    def _compute_diffs(
-        self, expected: dict[str, str], running: dict[str, str]
-    ) -> dict:
+    def _compute_diffs(self, expected: dict[str, str], running: dict[str, str]) -> dict:
         added = {k: v for k, v in running.items() if k not in expected}
         removed = {k: v for k, v in expected.items() if k not in running}
         changed = {}

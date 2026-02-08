@@ -6,13 +6,13 @@ Create Date: 2026-02-04 15:16:00.657160
 
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
+from alembic import op
 
-revision = '15dbba693b0f'
-down_revision = '799a0ecebdd4'
+revision = "15dbba693b0f"
+down_revision = "799a0ecebdd4"
 branch_labels = None
 depends_on = None
 
@@ -57,7 +57,11 @@ def upgrade() -> None:
             sa.Column("ssh_key_path", sa.String(512), server_default="'/root/.ssh/id_rsa'"),
             sa.Column("base_domain", sa.String(255), nullable=True),
             sa.Column("is_local", sa.Boolean, server_default="false"),
-            sa.Column("status", sa.Enum("connected", "unreachable", "unknown", name="serverstatus", create_type=False), server_default="'unknown'"),
+            sa.Column(
+                "status",
+                sa.Enum("connected", "unreachable", "unknown", name="serverstatus", create_type=False),
+                server_default="'unknown'",
+            ),
             sa.Column("last_connected", sa.DateTime(timezone=True), nullable=True),
             sa.Column("notes", sa.Text, nullable=True),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
@@ -73,8 +77,16 @@ def upgrade() -> None:
             sa.Column("org_code", sa.String(40), unique=True, nullable=False),
             sa.Column("org_name", sa.String(200), nullable=False),
             sa.Column("org_uuid", sa.String(36), nullable=True),
-            sa.Column("sector_type", sa.Enum("PRIVATE", "PUBLIC", "NGO", name="sectortype", create_type=False), server_default="'PRIVATE'"),
-            sa.Column("framework", sa.Enum("IFRS", "IPSAS", "BOTH", name="accountingframework", create_type=False), server_default="'IFRS'"),
+            sa.Column(
+                "sector_type",
+                sa.Enum("PRIVATE", "PUBLIC", "NGO", name="sectortype", create_type=False),
+                server_default="'PRIVATE'",
+            ),
+            sa.Column(
+                "framework",
+                sa.Enum("IFRS", "IPSAS", "BOTH", name="accountingframework", create_type=False),
+                server_default="'IFRS'",
+            ),
             sa.Column("currency", sa.String(3), server_default="'NGN'"),
             sa.Column("app_port", sa.Integer, nullable=False),
             sa.Column("db_port", sa.Integer, nullable=False),
@@ -84,7 +96,13 @@ def upgrade() -> None:
             sa.Column("admin_email", sa.String(255), nullable=True),
             sa.Column("admin_username", sa.String(80), nullable=True),
             sa.Column("deploy_path", sa.String(512), nullable=True),
-            sa.Column("status", sa.Enum("provisioned", "deploying", "running", "stopped", "error", name="instancestatus", create_type=False), server_default="'provisioned'"),
+            sa.Column(
+                "status",
+                sa.Enum(
+                    "provisioned", "deploying", "running", "stopped", "error", name="instancestatus", create_type=False
+                ),
+                server_default="'provisioned'",
+            ),
             sa.Column("notes", sa.Text, nullable=True),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
@@ -95,9 +113,15 @@ def upgrade() -> None:
         op.create_table(
             "health_checks",
             sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-            sa.Column("instance_id", UUID(as_uuid=True), sa.ForeignKey("instances.instance_id"), nullable=False, index=True),
+            sa.Column(
+                "instance_id", UUID(as_uuid=True), sa.ForeignKey("instances.instance_id"), nullable=False, index=True
+            ),
             sa.Column("checked_at", sa.DateTime(timezone=True), nullable=False),
-            sa.Column("status", sa.Enum("healthy", "unhealthy", "unreachable", name="healthstatus", create_type=False), server_default="'unreachable'"),
+            sa.Column(
+                "status",
+                sa.Enum("healthy", "unhealthy", "unreachable", name="healthstatus", create_type=False),
+                server_default="'unreachable'",
+            ),
             sa.Column("response_ms", sa.Integer, nullable=True),
             sa.Column("db_healthy", sa.Boolean, nullable=True),
             sa.Column("redis_healthy", sa.Boolean, nullable=True),
@@ -109,10 +133,18 @@ def upgrade() -> None:
         op.create_table(
             "deployment_logs",
             sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-            sa.Column("instance_id", UUID(as_uuid=True), sa.ForeignKey("instances.instance_id"), nullable=False, index=True),
+            sa.Column(
+                "instance_id", UUID(as_uuid=True), sa.ForeignKey("instances.instance_id"), nullable=False, index=True
+            ),
             sa.Column("deployment_id", sa.String(36), nullable=False, index=True),
             sa.Column("step", sa.String(60), nullable=False),
-            sa.Column("status", sa.Enum("pending", "running", "success", "failed", "skipped", name="deploystepstatus", create_type=False), server_default="'pending'"),
+            sa.Column(
+                "status",
+                sa.Enum(
+                    "pending", "running", "success", "failed", "skipped", name="deploystepstatus", create_type=False
+                ),
+                server_default="'pending'",
+            ),
             sa.Column("message", sa.Text, nullable=True),
             sa.Column("output", sa.Text, nullable=True),
             sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),

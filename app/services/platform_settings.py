@@ -3,10 +3,10 @@ Platform Settings Service — Read/write platform-level configuration.
 
 Stores settings in the DomainSetting table under the 'platform' domain.
 """
+
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session

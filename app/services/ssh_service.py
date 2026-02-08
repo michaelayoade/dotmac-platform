@@ -4,15 +4,14 @@ SSH Service — Paramiko wrapper for remote server management.
 Provides connection pooling, command execution, SFTP operations,
 and circuit breaker for unreachable servers.
 """
+
 from __future__ import annotations
 
 import logging
 import os
 import shlex
-import stat
 import threading
 import time
-from typing import Optional
 
 import paramiko
 
@@ -36,8 +35,7 @@ def _circuit_check(server_id: str | None) -> None:
         if state and state["failures"] >= _CIRCUIT_FAILURE_THRESHOLD:
             if time.time() < state["open_until"]:
                 raise ConnectionError(
-                    f"Circuit breaker open for server {server_id}: "
-                    f"{state['failures']} consecutive failures"
+                    f"Circuit breaker open for server {server_id}: {state['failures']} consecutive failures"
                 )
             # Half-open: allow one attempt
             state["failures"] = _CIRCUIT_FAILURE_THRESHOLD - 1
@@ -60,8 +58,10 @@ def _circuit_record_failure(server_id: str | None) -> None:
             state["open_until"] = time.time() + _CIRCUIT_RESET_TIMEOUT
             logger.warning(
                 "Circuit breaker opened for server %s after %d failures",
-                server_id, state["failures"],
+                server_id,
+                state["failures"],
             )
+
 
 # Connection cache: server_id -> {"client": SSHClient, "ts": float, "lock": Lock}
 _SSH_POOL: dict[str, dict] = {}
@@ -152,7 +152,10 @@ class SSHService:
                     wait = (attempt + 1) * 2
                     logger.warning(
                         "SSH connect attempt %d/3 to %s failed: %s (retry in %ds)",
-                        attempt + 1, self.hostname, e, wait,
+                        attempt + 1,
+                        self.hostname,
+                        e,
+                        wait,
                     )
                     time.sleep(wait)
         else:
@@ -233,11 +236,7 @@ class SSHService:
                 return _run()
         return _run()
 
-        return SSHResult(exit_code, stdout, stderr)
-
-    def _exec_local(
-        self, command: str, timeout: int, cwd: str | None
-    ) -> SSHResult:
+    def _exec_local(self, command: str, timeout: int, cwd: str | None) -> SSHResult:
         """Execute a command locally (for is_local servers)."""
         import subprocess
 

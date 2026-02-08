@@ -1,14 +1,15 @@
 """Config Drift Report — detected differences between expected and running config."""
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.types import JSON
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import JSON
 
 from app.db import Base
 
@@ -22,6 +23,4 @@ class DriftReport(Base):
     )
     diffs: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     has_drift: Mapped[bool] = mapped_column(Boolean, default=False)
-    detected_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

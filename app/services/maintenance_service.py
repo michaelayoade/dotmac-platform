@@ -1,8 +1,9 @@
 """Maintenance Window Service — manage and check deploy windows."""
+
 from __future__ import annotations
 
 import logging
-from datetime import datetime, time, timezone
+from datetime import UTC, datetime, time
 from uuid import UUID
 
 from sqlalchemy import select
@@ -72,9 +73,10 @@ class MaintenanceService:
 
     def delete_window(self, instance_id: UUID, window_id: UUID) -> None:
         window = self._get_for_instance(instance_id, window_id)
-        if window:
-            window.is_active = False
-            self.db.flush()
+        if not window:
+            raise ValueError(f"Maintenance window {window_id} not found for instance {instance_id}")
+        window.is_active = False
+        self.db.flush()
 
     def is_deploy_allowed(self, instance_id: UUID, now: datetime | None = None) -> bool:
         """Check if deployment is allowed for this instance right now.
@@ -87,7 +89,7 @@ class MaintenanceService:
         if not windows:
             return True  # No restrictions
 
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         current_day = now.weekday()
         current_time = now.time()
 

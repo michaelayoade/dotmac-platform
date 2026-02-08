@@ -14,9 +14,7 @@ class TestAuthSettingsAPI:
 
     def test_list_auth_settings_with_pagination(self, client, admin_headers):
         """Test listing auth settings with pagination."""
-        response = client.get(
-            "/settings/auth?limit=10&offset=0", headers=admin_headers
-        )
+        response = client.get("/settings/auth?limit=10&offset=0", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) <= 10
@@ -124,9 +122,7 @@ class TestAuditSettingsAPI:
 
     def test_list_audit_settings_with_pagination(self, client, auth_headers):
         """Test listing audit settings with pagination."""
-        response = client.get(
-            "/settings/audit?limit=10&offset=0", headers=auth_headers
-        )
+        response = client.get("/settings/audit?limit=10&offset=0", headers=auth_headers)
         assert response.status_code == 200
 
     def test_get_audit_setting(self, client, auth_headers, db_session):
@@ -164,9 +160,7 @@ class TestSchedulerSettingsAPI:
 
     def test_list_scheduler_settings_with_pagination(self, client, auth_headers):
         """Test listing scheduler settings with pagination."""
-        response = client.get(
-            "/settings/scheduler?limit=10&offset=0", headers=auth_headers
-        )
+        response = client.get("/settings/scheduler?limit=10&offset=0", headers=auth_headers)
         assert response.status_code == 200
 
     def test_get_scheduler_setting(self, client, auth_headers, db_session):
@@ -178,18 +172,14 @@ class TestSchedulerSettingsAPI:
 
     def test_get_scheduler_setting_not_found(self, client, auth_headers):
         """Test getting a non-existent scheduler setting."""
-        response = client.get(
-            "/settings/scheduler/nonexistent_key", headers=auth_headers
-        )
+        response = client.get("/settings/scheduler/nonexistent_key", headers=auth_headers)
         assert response.status_code == 400
 
     def test_upsert_scheduler_setting(self, client, admin_headers):
         """Test creating a scheduler setting via upsert (admin only)."""
         key = "beat_refresh_seconds"
         payload = {"value_text": "45"}
-        response = client.put(
-            f"/settings/scheduler/{key}", json=payload, headers=admin_headers
-        )
+        response = client.put(f"/settings/scheduler/{key}", json=payload, headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == key
@@ -217,9 +207,7 @@ class TestSettingsAPIV1:
         """Test upserting an auth setting via v1 API (admin only)."""
         key = "jwt_refresh_ttl_days"
         payload = {"value_text": "10"}
-        response = client.put(
-            f"/api/v1/settings/auth/{key}", json=payload, headers=admin_headers
-        )
+        response = client.put(f"/api/v1/settings/auth/{key}", json=payload, headers=admin_headers)
         assert response.status_code == 200
 
 
@@ -228,11 +216,7 @@ class TestSettingsFilters:
 
     def test_list_settings_filter_by_active(self, client, admin_headers, db_session):
         """Test filtering settings by is_active."""
-        setting = (
-            db_session.query(DomainSetting)
-            .filter(DomainSetting.domain == SettingDomain.auth)
-            .first()
-        )
+        setting = db_session.query(DomainSetting).filter(DomainSetting.domain == SettingDomain.auth).first()
         assert setting is not None
         setting.is_active = False
         db_session.commit()
@@ -250,7 +234,5 @@ class TestSettingsFilters:
 
     def test_list_settings_with_ordering(self, client, admin_headers):
         """Test listing settings with custom ordering."""
-        response = client.get(
-            "/settings/auth?order_by=key&order_dir=asc", headers=admin_headers
-        )
+        response = client.get("/settings/auth?order_by=key&order_dir=asc", headers=admin_headers)
         assert response.status_code == 200

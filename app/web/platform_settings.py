@@ -1,8 +1,9 @@
 """
 Platform Settings — Web routes for configuring deployment settings.
 """
+
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -49,12 +50,14 @@ def settings_save(
     from app.services.platform_settings import PlatformSettingsService
 
     svc = PlatformSettingsService(db)
-    svc.set_many({
-        "dotmac_git_repo_url": dotmac_git_repo_url.strip(),
-        "dotmac_git_branch": dotmac_git_branch.strip(),
-        "dotmac_source_path": dotmac_source_path.strip(),
-        "default_deploy_path": default_deploy_path.strip(),
-    })
+    svc.set_many(
+        {
+            "dotmac_git_repo_url": dotmac_git_repo_url.strip(),
+            "dotmac_git_branch": dotmac_git_branch.strip(),
+            "dotmac_source_path": dotmac_source_path.strip(),
+            "default_deploy_path": default_deploy_path.strip(),
+        }
+    )
     db.commit()
 
     platform_settings = svc.get_all()

@@ -35,9 +35,7 @@ def list_scheduled_tasks(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
-    return scheduler_service.scheduled_tasks.list_response(
-        db, enabled, order_by, order_dir, limit, offset
-    )
+    return scheduler_service.scheduled_tasks.list_response(db, enabled, order_by, order_dir, limit, offset)
 
 
 @router.post(
@@ -46,9 +44,7 @@ def list_scheduled_tasks(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_role("admin"))],
 )
-def create_scheduled_task(
-    payload: ScheduledTaskCreate, db: Session = Depends(get_db)
-):
+def create_scheduled_task(payload: ScheduledTaskCreate, db: Session = Depends(get_db)):
     return scheduler_service.scheduled_tasks.create(db, payload)
 
 
@@ -66,9 +62,7 @@ def get_scheduled_task(task_id: str, db: Session = Depends(get_db)):
     response_model=ScheduledTaskRead,
     dependencies=[Depends(require_role("admin"))],
 )
-def update_scheduled_task(
-    task_id: str, payload: ScheduledTaskUpdate, db: Session = Depends(get_db)
-):
+def update_scheduled_task(task_id: str, payload: ScheduledTaskUpdate, db: Session = Depends(get_db)):
     return scheduler_service.scheduled_tasks.update(db, task_id, payload)
 
 
@@ -97,6 +91,4 @@ def refresh_schedule():
 )
 def enqueue_scheduled_task(task_id: str, db: Session = Depends(get_db)):
     task = scheduler_service.scheduled_tasks.get(db, task_id)
-    return scheduler_service.enqueue_task(
-        task.task_name, task.args_json or [], task.kwargs_json or {}
-    )
+    return scheduler_service.enqueue_task(task.task_name, task.args_json or [], task.kwargs_json or {})

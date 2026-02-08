@@ -3,11 +3,11 @@ Lifecycle Service — Manage tenant instance lifecycle transitions.
 
 Handles trial expiry, suspension, archival, and associated container management.
 """
+
 from __future__ import annotations
 
 import logging
-import shlex
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -53,7 +53,7 @@ class LifecycleService:
         if instance.status not in {InstanceStatus.provisioned, InstanceStatus.trial}:
             raise ValueError("Instance is not eligible for trial")
         instance.status = InstanceStatus.trial
-        instance.trial_expires_at = datetime.now(timezone.utc) + timedelta(days=days)
+        instance.trial_expires_at = datetime.now(UTC) + timedelta(days=days)
         self.db.flush()
         logger.info("Started %d-day trial for %s", days, instance.org_code)
         return instance
@@ -72,7 +72,7 @@ class LifecycleService:
             raise
 
         instance.status = InstanceStatus.suspended
-        instance.suspended_at = datetime.now(timezone.utc)
+        instance.suspended_at = datetime.now(UTC)
         if reason:
             instance.notes = f"Suspended: {reason}\n{instance.notes or ''}"
         self.db.flush()
@@ -110,19 +110,23 @@ class LifecycleService:
             raise
 
         instance.status = InstanceStatus.archived
-        instance.archived_at = datetime.now(timezone.utc)
+        instance.archived_at = datetime.now(UTC)
         self.db.flush()
         logger.info("Archived instance %s", instance.org_code)
         return instance
 
     def check_expired_trials(self) -> list[Instance]:
         """Find and suspend instances whose trial has expired."""
-        now = datetime.now(timezone.utc)
-        stmt = select(Instance).where(
-            Instance.status == InstanceStatus.trial,
-            Instance.trial_expires_at.isnot(None),
-            Instance.trial_expires_at <= now,
-        ).with_for_update()
+        now = datetime.now(UTC)
+        stmt = (
+            select(Instance)
+            .where(
+                Instance.status == InstanceStatus.trial,
+                Instance.trial_expires_at.isnot(None),
+                Instance.trial_expires_at <= now,
+            )
+            .with_for_update()
+        )
         expired = list(self.db.scalars(stmt).all())
 
         for instance in expired:

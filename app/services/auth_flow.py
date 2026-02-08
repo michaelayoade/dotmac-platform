@@ -4,7 +4,7 @@ import hashlib
 import logging
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pyotp
 
@@ -14,8 +14,8 @@ from fastapi import HTTPException, Request, Response, status
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy import select, update
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.models.auth import (
     AuthProvider,
@@ -23,18 +23,20 @@ from app.models.auth import (
     MFAMethodType,
     PasswordResetToken,
     SessionRefreshToken,
-    Session as AuthSession,
     SessionStatus,
     UserCredential,
 )
-from app.services.common import coerce_uuid
-from app.services.response import ListResponseMixin
-from app.services.settings_crypto import resolve_setting_value
-from app.models.rbac import Permission, PersonRole, Role, RolePermission
+from app.models.auth import (
+    Session as AuthSession,
+)
 from app.models.domain_settings import DomainSetting, SettingDomain
 from app.models.person import Person
-from app.services.secrets import resolve_secret
+from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.schemas.auth_flow import LoginResponse, LogoutResponse, TokenResponse
+from app.services.common import coerce_uuid
+from app.services.response import ListResponseMixin
+from app.services.secrets import resolve_secret
+from app.services.settings_crypto import resolve_setting_value
 
 PASSWORD_CONTEXT = CryptContext(
     schemes=["pbkdf2_sha256", "bcrypt"],
@@ -61,14 +63,14 @@ def _env_int(name: str) -> int | None:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
+        return value.replace(tzinfo=UTC)
     return value
 
 
@@ -138,11 +140,7 @@ def _totp_issuer(db: Session | None) -> str:
 
 
 def _refresh_cookie_name(db: Session | None) -> str:
-    return (
-        _env_value("REFRESH_COOKIE_NAME")
-        or _setting_value(db, "refresh_cookie_name")
-        or "refresh_token"
-    )
+    return _env_value("REFRESH_COOKIE_NAME") or _setting_value(db, "refresh_cookie_name") or "refresh_token"
 
 
 def _refresh_cookie_secure(db: Session | None) -> bool:
@@ -156,25 +154,15 @@ def _refresh_cookie_secure(db: Session | None) -> bool:
 
 
 def _refresh_cookie_samesite(db: Session | None) -> str:
-    return (
-        _env_value("REFRESH_COOKIE_SAMESITE")
-        or _setting_value(db, "refresh_cookie_samesite")
-        or "lax"
-    )
+    return _env_value("REFRESH_COOKIE_SAMESITE") or _setting_value(db, "refresh_cookie_samesite") or "lax"
 
 
 def _refresh_cookie_domain(db: Session | None) -> str | None:
-    return _env_value("REFRESH_COOKIE_DOMAIN") or _setting_value(
-        db, "refresh_cookie_domain"
-    )
+    return _env_value("REFRESH_COOKIE_DOMAIN") or _setting_value(db, "refresh_cookie_domain")
 
 
 def _refresh_cookie_path(db: Session | None) -> str:
-    return (
-        _env_value("REFRESH_COOKIE_PATH")
-        or _setting_value(db, "refresh_cookie_path")
-        or "/"
-    )
+    return _env_value("REFRESH_COOKIE_PATH") or _setting_value(db, "refresh_cookie_path") or "/"
 
 
 def _mfa_key(db: Session | None) -> bytes:
@@ -411,20 +399,14 @@ class AuthFlow(ListResponseMixin):
         return response
 
     @staticmethod
-    def login_response(
-        db: Session, username: str, password: str, request: Request, provider: str | None
-    ):
+    def login_response(db: Session, username: str, password: str, request: Request, provider: str | None):
         result = AuthFlow.login(db, username, password, request, provider)
         if result.get("refresh_token"):
-            return AuthFlow._response_with_refresh_cookie(
-                db, result, LoginResponse, status.HTTP_200_OK
-            )
+            return AuthFlow._response_with_refresh_cookie(db, result, LoginResponse, status.HTTP_200_OK)
         return result
 
     @staticmethod
-    def login(
-        db: Session, username: str, password: str, request: Request, provider: str | None
-    ):
+    def login(db: Session, username: str, password: str, request: Request, provider: str | None):
         if isinstance(provider, AuthProvider):
             provider_value = provider.value
         else:
@@ -504,9 +486,7 @@ class AuthFlow(ListResponseMixin):
         db.refresh(method)
 
         totp = pyotp.TOTP(secret)
-        otpauth_uri = totp.provisioning_uri(
-            name=username, issuer_name=_totp_issuer(db)
-        )
+        otpauth_uri = totp.provisioning_uri(name=username, issuer_name=_totp_issuer(db))
         return {"method_id": method.id, "secret": secret, "otpauth_uri": otpauth_uri}
 
     @staticmethod
@@ -581,9 +561,7 @@ class AuthFlow(ListResponseMixin):
     @staticmethod
     def mfa_verify_response(db: Session, mfa_token: str, code: str, request: Request):
         result = AuthFlow.mfa_verify(db, mfa_token, code, request)
-        return AuthFlow._response_with_refresh_cookie(
-            db, result, TokenResponse, status.HTTP_200_OK
-        )
+        return AuthFlow._response_with_refresh_cookie(db, result, TokenResponse, status.HTTP_200_OK)
 
     @staticmethod
     def refresh(db: Session, refresh_token: str, request: Request):
@@ -597,9 +575,7 @@ class AuthFlow(ListResponseMixin):
         )
         session = db.scalar(session_stmt)
         if not session:
-            reused = db.scalar(
-                select(SessionRefreshToken).where(SessionRefreshToken.token_hash == token_hash)
-            )
+            reused = db.scalar(select(SessionRefreshToken).where(SessionRefreshToken.token_hash == token_hash))
             if reused:
                 reused_session = db.get(AuthSession, reused.session_id)
                 if reused_session and reused_session.status == SessionStatus.active:
@@ -641,9 +617,7 @@ class AuthFlow(ListResponseMixin):
         db.commit()
 
         roles, permissions = _load_rbac_claims(db, str(session.person_id))
-        access_token = _issue_access_token(
-            db, str(session.person_id), str(session.id), roles, permissions
-        )
+        access_token = _issue_access_token(db, str(session.person_id), str(session.id), roles, permissions)
         return {"access_token": access_token, "refresh_token": new_refresh}
 
     @staticmethod
@@ -652,17 +626,13 @@ class AuthFlow(ListResponseMixin):
         if not resolved:
             raise HTTPException(status_code=401, detail="Missing refresh token")
         result = AuthFlow.refresh(db, resolved, request)
-        return AuthFlow._response_with_refresh_cookie(
-            db, result, TokenResponse, status.HTTP_200_OK
-        )
+        return AuthFlow._response_with_refresh_cookie(db, result, TokenResponse, status.HTTP_200_OK)
 
     @staticmethod
     def logout(db: Session, refresh_token: str):
         token_hash = _hash_token(refresh_token)
         session = db.scalar(
-            select(AuthSession)
-            .where(AuthSession.token_hash == token_hash)
-            .where(AuthSession.revoked_at.is_(None))
+            select(AuthSession).where(AuthSession.token_hash == token_hash).where(AuthSession.revoked_at.is_(None))
         )
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -677,9 +647,7 @@ class AuthFlow(ListResponseMixin):
         if not resolved:
             raise HTTPException(status_code=404, detail="Session not found")
         result = AuthFlow.logout(db, resolved)
-        return AuthFlow._response_clear_refresh_cookie(
-            db, result, LogoutResponse, status.HTTP_200_OK
-        )
+        return AuthFlow._response_clear_refresh_cookie(db, result, LogoutResponse, status.HTTP_200_OK)
 
     @staticmethod
     def resolve_refresh_token(request: Request, refresh_token: str | None, db: Session | None = None):
@@ -715,8 +683,7 @@ class AuthFlow(ListResponseMixin):
             expires_at=expires_at,
         )
         db.add(session)
-        db.commit()
-        db.refresh(session)
+        db.flush()
         db.add(
             SessionRefreshToken(
                 session_id=session.id,
@@ -724,6 +691,7 @@ class AuthFlow(ListResponseMixin):
             )
         )
         db.commit()
+        db.refresh(session)
         roles, permissions = _load_rbac_claims(db, str(person_uuid))
         access_token = _issue_access_token(db, str(person_uuid), str(session.id), roles, permissions)
         return {"access_token": access_token, "refresh_token": refresh_token}
@@ -743,9 +711,7 @@ def request_password_reset(db: Session, email: str) -> dict | None:
         return None
 
     credential = db.scalar(
-        select(UserCredential)
-        .where(UserCredential.person_id == person.id)
-        .where(UserCredential.is_active.is_(True))
+        select(UserCredential).where(UserCredential.person_id == person.id).where(UserCredential.is_active.is_(True))
     )
     if not credential:
         return None
@@ -791,13 +757,12 @@ def reset_password(db: Session, token: str, new_password: str) -> datetime:
         .where(PasswordResetToken.used_at.is_(None))
     )
     now = _now()
-    if not reset_record or reset_record.expires_at <= now:
+    expires = _as_utc(reset_record.expires_at) if reset_record else None
+    if not reset_record or not expires or expires <= now:
         raise HTTPException(status_code=401, detail="Invalid reset token")
 
     credential = db.scalar(
-        select(UserCredential)
-        .where(UserCredential.person_id == person.id)
-        .where(UserCredential.is_active.is_(True))
+        select(UserCredential).where(UserCredential.person_id == person.id).where(UserCredential.is_active.is_(True))
     )
     if not credential:
         raise HTTPException(status_code=404, detail="No credentials found")

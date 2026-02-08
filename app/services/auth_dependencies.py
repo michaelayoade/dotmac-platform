@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import Depends, Header, HTTPException, Request
 from jose import JWTError, jwt
@@ -9,8 +9,9 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 from app.db import SessionLocal
-from app.models.auth import ApiKey, Session as AuthSession, SessionStatus
-from app.models.rbac import Permission, PersonRole, RolePermission, Role
+from app.models.auth import ApiKey, SessionStatus
+from app.models.auth import Session as AuthSession
+from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.services.auth import hash_api_key_candidates
 from app.services.auth_flow import decode_access_token, hash_session_token
 from app.services.common import coerce_uuid
@@ -21,7 +22,7 @@ def _make_aware(dt: datetime | None) -> datetime | None:
     if dt is None:
         return None
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
+        return dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -67,12 +68,7 @@ def _has_audit_scope(payload: dict) -> bool:
         roles.add(role_value)
     if isinstance(roles_value, list):
         roles.update(str(item) for item in roles_value)
-    return (
-        "audit:read" in scopes
-        or "audit:*" in scopes
-        or "admin" in roles
-        or "auditor" in roles
-    )
+    return "audit:read" in scopes or "audit:*" in scopes or "admin" in roles or "auditor" in roles
 
 
 def require_audit_auth(
@@ -83,7 +79,7 @@ def require_audit_auth(
     db: Session = Depends(_get_db),
 ):
     token = _extract_bearer_token(authorization) or x_session_token
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if token:
         if _is_jwt(token):
             payload = decode_access_token(db, token)
@@ -148,7 +144,7 @@ def require_user_auth(
     if not person_id or not session_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     person_uuid = coerce_uuid(person_id)
     session_uuid = coerce_uuid(session_id)
     stmt = (
@@ -190,17 +186,11 @@ def require_role(role_name: str):
         roles = set(auth.get("roles") or [])
         if role_name in roles:
             return auth
-        role = db.scalar(
-            select(Role)
-            .where(Role.name == role_name)
-            .where(Role.is_active.is_(True))
-        )
+        role = db.scalar(select(Role).where(Role.name == role_name).where(Role.is_active.is_(True)))
         if not role:
             raise HTTPException(status_code=403, detail="Role not found")
         link = db.scalar(
-            select(PersonRole)
-            .where(PersonRole.person_id == person_id)
-            .where(PersonRole.role_id == role.id)
+            select(PersonRole).where(PersonRole.person_id == person_id).where(PersonRole.role_id == role.id)
         )
         if not link:
             raise HTTPException(status_code=403, detail="Forbidden")
@@ -220,9 +210,7 @@ def require_permission(permission_key: str):
         if "admin" in roles or permission_key in scopes:
             return auth
         permission = db.scalar(
-            select(Permission)
-            .where(Permission.key == permission_key)
-            .where(Permission.is_active.is_(True))
+            select(Permission).where(Permission.key == permission_key).where(Permission.is_active.is_(True))
         )
         if not permission:
             raise HTTPException(status_code=403, detail="Permission not found")

@@ -1,6 +1,7 @@
 """
 Alerts — Web routes for alert rules and recent alert events.
 """
+
 import logging
 from uuid import UUID
 

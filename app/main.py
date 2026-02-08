@@ -1,57 +1,57 @@
 import os
 import secrets
 from contextlib import asynccontextmanager
+from threading import Lock
+from time import monotonic
 
 from fastapi import Depends, FastAPI, Request
-from time import monotonic
-from threading import Lock
-from starlette.responses import Response
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from starlette.responses import Response
 
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.auth_flow import router as auth_flow_router
+from app.api.deps import require_role, require_user_auth
 from app.api.persons import router as people_router
 from app.api.rbac import router as rbac_router
 from app.api.scheduler import router as scheduler_router
 from app.api.settings import router as settings_router
-from app.web.auth_web import router as auth_web_router
-from app.web.dashboard import router as dashboard_router
-from app.web.servers import router as servers_router
-from app.web.instances import router as instances_router
-from app.web.platform_settings import router as platform_settings_router
-from app.web.people import router as people_web_router
-from app.web.rbac_web import router as rbac_web_router
-from app.web.audit_web import router as audit_web_router
-from app.web.approvals_web import router as approvals_web_router
-from app.web.alerts_web import router as alerts_web_router
-from app.web.scheduler_web import router as scheduler_web_router
-from app.web.maintenance_web import router as maintenance_web_router
-from app.web.usage_web import router as usage_web_router
-from app.web.webhooks_web import router as webhooks_web_router
-from app.web.secrets_web import router as secrets_web_router
-from app.web.domains_web import router as domains_web_router
-from app.web.drift_web import router as drift_web_router
-from app.web.clone_web import router as clone_web_router
-from app.web.helpers import CSRF_COOKIE_NAME
-from app.db import SessionLocal
 from app.config import settings
-from app.services import audit as audit_service
-from app.api.deps import require_role, require_user_auth
+from app.db import SessionLocal
+from app.errors import register_error_handlers
+from app.logging import configure_logging
 from app.models.domain_settings import DomainSetting, SettingDomain
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from app.observability import ObservabilityMiddleware
+from app.services import audit as audit_service
 from app.services.settings_seed import (
     seed_audit_settings,
     seed_auth_settings,
-    seed_scheduler_settings,
     seed_scheduled_tasks,
+    seed_scheduler_settings,
 )
-from app.logging import configure_logging
-from app.observability import ObservabilityMiddleware
 from app.telemetry import setup_otel
-from app.errors import register_error_handlers
+from app.web.alerts_web import router as alerts_web_router
+from app.web.approvals_web import router as approvals_web_router
+from app.web.audit_web import router as audit_web_router
+from app.web.auth_web import router as auth_web_router
+from app.web.clone_web import router as clone_web_router
+from app.web.dashboard import router as dashboard_router
+from app.web.domains_web import router as domains_web_router
+from app.web.drift_web import router as drift_web_router
+from app.web.helpers import CSRF_COOKIE_NAME
+from app.web.instances import router as instances_router
+from app.web.maintenance_web import router as maintenance_web_router
+from app.web.people import router as people_web_router
+from app.web.platform_settings import router as platform_settings_router
+from app.web.rbac_web import router as rbac_web_router
+from app.web.scheduler_web import router as scheduler_web_router
+from app.web.secrets_web import router as secrets_web_router
+from app.web.servers import router as servers_router
+from app.web.usage_web import router as usage_web_router
+from app.web.webhooks_web import router as webhooks_web_router
 
 
 @asynccontextmanager
@@ -65,6 +65,7 @@ async def lifespan(app: FastAPI):
         # Seed modules and plans
         from app.services.module_service import ModuleService
         from app.services.plan_service import PlanService
+
         ModuleService(db).seed_modules()
         PlanService(db).seed_plans()
         db.commit()
@@ -127,9 +128,7 @@ async def audit_middleware(request: Request, call_next):
             response = await call_next(request)
         except Exception:
             if should_log:
-                audit_service.audit_events.log_request(
-                    db, request, Response(status_code=500)
-                )
+                audit_service.audit_events.log_request(db, request, Response(status_code=500))
             raise
         if should_log:
             audit_service.audit_events.log_request(db, request, response)
@@ -212,6 +211,7 @@ def _to_list(setting: DomainSetting, upper: bool) -> set[str] | list[str]:
 def _is_audit_path_skipped(path: str, skip_paths: list[str]) -> bool:
     return any(path.startswith(prefix) for prefix in skip_paths)
 
+
 def _include_api_router(router, dependencies=None):
     app.include_router(router, dependencies=dependencies)
     app.include_router(router, prefix="/api/v1", dependencies=dependencies)
@@ -226,6 +226,7 @@ _include_api_router(settings_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(scheduler_router, dependencies=[Depends(require_user_auth)])
 
 from app.api.instances import router as instances_api_router
+
 _include_api_router(instances_api_router, dependencies=[Depends(require_user_auth)])
 
 app.include_router(auth_web_router)

@@ -1,6 +1,7 @@
 """
 Shared web helpers — brand context, template context builder, and CSRF protection.
 """
+
 from __future__ import annotations
 
 import hashlib

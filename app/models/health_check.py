@@ -1,6 +1,6 @@
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import BigInteger, Boolean, DateTime, Enum, Float, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import UUID
@@ -22,12 +22,8 @@ class HealthCheck(Base):
     instance_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("instances.instance_id"), nullable=False, index=True
     )
-    checked_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True
-    )
-    status: Mapped[HealthStatus] = mapped_column(
-        Enum(HealthStatus), default=HealthStatus.unreachable
-    )
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
+    status: Mapped[HealthStatus] = mapped_column(Enum(HealthStatus), default=HealthStatus.unreachable)
     response_ms: Mapped[int | None] = mapped_column(Integer)
     db_healthy: Mapped[bool | None] = mapped_column(Boolean)
     redis_healthy: Mapped[bool | None] = mapped_column(Boolean)

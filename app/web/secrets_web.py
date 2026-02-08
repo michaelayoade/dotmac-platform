@@ -1,6 +1,7 @@
 """
 Secrets — Web routes for secret resolution status.
 """
+
 import os
 
 from fastapi import APIRouter, Depends, Request

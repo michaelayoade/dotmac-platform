@@ -41,9 +41,7 @@ def register_error_handlers(app) -> None:
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         return JSONResponse(
             status_code=422,
-            content=_error_payload(
-                "validation_error", "Validation error", exc.errors()
-            ),
+            content=_error_payload("validation_error", "Validation error", exc.errors()),
         )
 
     @app.exception_handler(Exception)
@@ -51,7 +49,5 @@ def register_error_handlers(app) -> None:
         logger.exception("Unhandled exception")
         return JSONResponse(
             status_code=500,
-            content=_error_payload(
-                "internal_error", "Internal server error", None
-            ),
+            content=_error_payload("internal_error", "Internal server error", None),
         )

@@ -1,18 +1,18 @@
 """
 Server Service — CRUD and connectivity management for VPS servers.
 """
+
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.server import Server, ServerStatus
-from app.services.ssh_service import SSHService, get_ssh_for_server
+from app.services.ssh_service import get_ssh_for_server
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ class ServerService:
             result = ssh.test_connection()
             if result.ok:
                 server.status = ServerStatus.connected
-                server.last_connected = datetime.now(timezone.utc)
+                server.last_connected = datetime.now(UTC)
                 self.db.flush()
                 return {
                     "success": True,
@@ -135,17 +135,17 @@ class ServerService:
     def instance_count(self, server_id: UUID) -> int:
         """Count instances on a server."""
         from sqlalchemy import func
+
         from app.models.instance import Instance
 
-        return self.db.scalar(
-            select(func.count(Instance.instance_id)).where(Instance.server_id == server_id)
-        ) or 0
+        return self.db.scalar(select(func.count(Instance.instance_id)).where(Instance.server_id == server_id)) or 0
 
     def instance_counts_batch(self, server_ids: list[UUID]) -> dict[UUID, int]:
         """Count instances for multiple servers in a single query."""
         if not server_ids:
             return {}
         from sqlalchemy import func
+
         from app.models.instance import Instance
 
         rows = self.db.execute(

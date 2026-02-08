@@ -3,6 +3,7 @@ Plan Service — Manage tenant subscription plans/tiers.
 
 Plans define resource limits, allowed modules, and available feature flags.
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,9 +35,20 @@ DEFAULT_PLANS: list[dict] = [
         "max_users": 50,
         "max_storage_gb": 25,
         "allowed_modules": [
-            "core", "gl", "ap", "ar", "banking", "tax", "reporting",
-            "inventory", "procurement", "fixed_assets", "budgeting",
-            "hr", "projects", "automation",
+            "core",
+            "gl",
+            "ap",
+            "ar",
+            "banking",
+            "tax",
+            "reporting",
+            "inventory",
+            "procurement",
+            "fixed_assets",
+            "budgeting",
+            "hr",
+            "projects",
+            "automation",
         ],
         "allowed_flags": [
             "FEATURE_API_ACCESS",
@@ -66,9 +78,7 @@ class PlanService:
         """Seed default plans if they don't exist."""
         created = 0
         for plan_data in DEFAULT_PLANS:
-            existing = self.db.scalar(
-                select(Plan).where(Plan.name == plan_data["name"])
-            )
+            existing = self.db.scalar(select(Plan).where(Plan.name == plan_data["name"]))
             if not existing:
                 plan = Plan(**plan_data)
                 self.db.add(plan)
@@ -79,11 +89,7 @@ class PlanService:
         return created
 
     def list_all(self) -> list[Plan]:
-        return list(
-            self.db.scalars(
-                select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.name)
-            ).all()
-        )
+        return list(self.db.scalars(select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.name)).all())
 
     def get_by_id(self, plan_id: UUID) -> Plan | None:
         return self.db.get(Plan, plan_id)

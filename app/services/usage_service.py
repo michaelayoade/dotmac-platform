@@ -1,15 +1,16 @@
 """Usage Metering Service — record and query per-tenant usage for billing."""
+
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.instance import Instance, InstanceStatus
 from app.models.health_check import HealthCheck
+from app.models.instance import Instance, InstanceStatus
 from app.models.usage_record import UsageMetric, UsageRecord
 
 logger = logging.getLogger(__name__)
@@ -73,13 +74,10 @@ class UsageService:
         metric: UsageMetric,
         period_start: datetime,
     ) -> float:
-        stmt = (
-            select(func.coalesce(func.sum(UsageRecord.value), 0.0))
-            .where(
-                UsageRecord.instance_id == instance_id,
-                UsageRecord.metric == metric,
-                UsageRecord.period_start >= period_start,
-            )
+        stmt = select(func.coalesce(func.sum(UsageRecord.value), 0.0)).where(
+            UsageRecord.instance_id == instance_id,
+            UsageRecord.metric == metric,
+            UsageRecord.period_start >= period_start,
         )
         return self.db.scalar(stmt) or 0.0
 
@@ -87,7 +85,7 @@ class UsageService:
         """Collect usage metrics for all running instances. Called by Celery task."""
         stmt = select(Instance).where(Instance.status == InstanceStatus.running)
         instances = list(self.db.scalars(stmt).all())
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         period_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         period_end = now
         count = 0
@@ -103,9 +101,7 @@ class UsageService:
             self.db.commit()
         return count
 
-    def _collect_for_instance(
-        self, instance: Instance, period_start: datetime, period_end: datetime
-    ) -> None:
+    def _collect_for_instance(self, instance: Instance, period_start: datetime, period_end: datetime) -> None:
         """Collect storage usage from latest health check data."""
         # DB size from latest health check
         stmt = (
@@ -124,17 +120,12 @@ class UsageService:
                 period_end,
             )
 
-    def get_billing_summary(
-        self, instance_id: UUID, period_start: datetime, period_end: datetime
-    ) -> dict:
+    def get_billing_summary(self, instance_id: UUID, period_start: datetime, period_end: datetime) -> dict:
         """Get a billing summary for a period."""
-        stmt = (
-            select(UsageRecord)
-            .where(
-                UsageRecord.instance_id == instance_id,
-                UsageRecord.period_start >= period_start,
-                UsageRecord.period_end <= period_end,
-            )
+        stmt = select(UsageRecord).where(
+            UsageRecord.instance_id == instance_id,
+            UsageRecord.period_start >= period_start,
+            UsageRecord.period_end <= period_end,
         )
         records = list(self.db.scalars(stmt).all())
         summary: dict[str, float] = {}

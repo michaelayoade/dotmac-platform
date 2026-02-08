@@ -1,14 +1,15 @@
 """Alert Rules and Events — configurable threshold-based alerting."""
+
 from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.types import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import JSON
 
 from app.db import Base
 
@@ -40,9 +41,7 @@ class AlertChannel(str, enum.Enum):
 class AlertRule(Base):
     __tablename__ = "alert_rules"
 
-    rule_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    rule_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     metric: Mapped[AlertMetric] = mapped_column(Enum(AlertMetric), nullable=False)
     operator: Mapped[AlertOperator] = mapped_column(Enum(AlertOperator), nullable=False)
@@ -56,21 +55,15 @@ class AlertRule(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Cooldown: don't re-trigger for N minutes after firing
     cooldown_minutes: Mapped[int] = mapped_column(Integer, default=15)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
-    events: Mapped[list[AlertEvent]] = relationship(
-        "AlertEvent", back_populates="rule"
-    )
+    events: Mapped[list[AlertEvent]] = relationship("AlertEvent", back_populates="rule")
 
 
 class AlertEvent(Base):
     __tablename__ = "alert_events"
 
-    event_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     rule_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("alert_rules.rule_id"), nullable=False, index=True
     )
@@ -79,9 +72,7 @@ class AlertEvent(Base):
     )
     metric_value: Mapped[float] = mapped_column(Float, nullable=False)
     threshold: Mapped[float] = mapped_column(Float, nullable=False)
-    triggered_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    triggered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notified: Mapped[bool] = mapped_column(Boolean, default=False)
 

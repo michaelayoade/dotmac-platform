@@ -5,13 +5,13 @@ from dotenv import load_dotenv
 
 from app.db import SessionLocal
 from app.schemas.settings import DomainSettingUpdate
+from app.services.secrets import is_openbao_ref
 from app.services.settings_spec import (
     DOMAIN_SETTINGS_SERVICE,
     SETTINGS_SPECS,
     coerce_value,
     normalize_for_db,
 )
-from app.services.secrets import is_openbao_ref
 
 
 def _env_value(name: str) -> str | None:
@@ -22,9 +22,7 @@ def _env_value(name: str) -> str | None:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Sync settings from env to DB (one-way)."
-    )
+    parser = argparse.ArgumentParser(description="Sync settings from env to DB (one-way).")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--allow-plaintext", action="store_true")
     return parser.parse_args()
@@ -64,9 +62,7 @@ def main():
                 is_active=True,
             )
             if args.dry_run:
-                print(
-                    f"dry-run: {spec.domain.value}.{spec.key} <= {spec.env_var}={env_raw}"
-                )
+                print(f"dry-run: {spec.domain.value}.{spec.key} <= {spec.env_var}={env_raw}")
                 updated += 1
                 continue
             service = DOMAIN_SETTINGS_SERVICE.get(spec.domain)

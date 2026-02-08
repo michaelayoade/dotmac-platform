@@ -1,10 +1,13 @@
 """
 Instance Management — Web routes for ERP instance CRUD, deployment, and operations.
 """
+
 import logging
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
+
+from datetime import UTC
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -34,8 +37,9 @@ def instance_list(
     # Batch-fetch latest health checks to avoid N+1
     instance_ids = [inst.instance_id for inst in instances]
     health_map = health_svc.get_latest_checks_batch(instance_ids)
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc)
+    from datetime import datetime
+
+    now = datetime.now(UTC)
     instance_data = []
     for inst in instances:
         check = health_map.get(inst.instance_id)
@@ -60,22 +64,18 @@ def instance_list(
 
     if q:
         instance_data = [
-            item for item in instance_data
+            item
+            for item in instance_data
             if q in item["instance"].org_code.lower() or q in item["instance"].org_name.lower()
         ]
     if status_filter:
-        instance_data = [
-            item for item in instance_data
-            if item["instance"].status.value.lower() == status_filter
-        ]
+        instance_data = [item for item in instance_data if item["instance"].status.value.lower() == status_filter]
     if health_filter:
-        instance_data = [
-            item for item in instance_data
-            if item["health_state"] == health_filter
-        ]
+        instance_data = [item for item in instance_data if item["health_state"] == health_filter]
 
     # Sorting
     health_rank = {"healthy": 0, "unhealthy": 1, "unknown": 2, "n/a": 3}
+
     def _sort_value(item):
         inst = item["instance"]
         if sort_key == "status":
@@ -83,7 +83,7 @@ def instance_list(
         if sort_key == "health":
             return health_rank.get(item["health_state"], 99)
         if sort_key == "last_check":
-            return item["health_checked_at"] or datetime.min.replace(tzinfo=timezone.utc)
+            return item["health_checked_at"] or datetime.min.replace(tzinfo=UTC)
         if sort_key == "port":
             return inst.app_port or 0
         return inst.org_code
@@ -179,9 +179,7 @@ def instance_create(
             domain=domain or None,
         )
         db.commit()
-        return RedirectResponse(
-            f"/instances/{instance.instance_id}", status_code=302
-        )
+        return RedirectResponse(f"/instances/{instance.instance_id}", status_code=302)
     except ValueError as e:
         db.rollback()
         servers = ServerService(db).list_all()
@@ -195,7 +193,14 @@ def instance_create(
         servers = ServerService(db).list_all()
         return templates.TemplateResponse(
             "instances/form.html",
-            ctx(request, auth, "New Instance", active_page="instances", servers=servers, errors=["An unexpected error occurred. Please try again."]),
+            ctx(
+                request,
+                auth,
+                "New Instance",
+                active_page="instances",
+                servers=servers,
+                errors=["An unexpected error occurred. Please try again."],
+            ),
         )
 
 
@@ -240,7 +245,10 @@ def instance_detail(
     return templates.TemplateResponse(
         "instances/detail.html",
         ctx(
-            request, auth, instance.org_code, active_page="instances",
+            request,
+            auth,
+            instance.org_code,
+            active_page="instances",
             instance=instance,
             latest_health=latest_health,
             recent_checks=recent_checks,
@@ -273,14 +281,16 @@ def instance_deploy(
 
     deploy_svc = DeployService(db)
     deployment_id = deploy_svc.create_deployment(
-        instance_id, admin_password,
+        instance_id,
+        admin_password,
         git_ref=request.query_params.get("git_ref"),
     )
     db.commit()
 
     # Kick off async deployment via Celery (password stored in DB, not task args)
     deploy_instance.delay(
-        str(instance_id), deployment_id,
+        str(instance_id),
+        deployment_id,
         git_ref=request.query_params.get("git_ref"),
     )
 
@@ -312,14 +322,15 @@ def instance_deploy_log(
         logs = deploy_svc.get_deployment_logs(instance_id, deployment_id)
 
     # Check if deployment is still running
-    is_running = any(
-        log.status in ("pending", "running") for log in logs
-    )
+    is_running = any(log.status in ("pending", "running") for log in logs)
 
     return templates.TemplateResponse(
         "instances/deploy_log.html",
         ctx(
-            request, auth, f"Deploy - {instance.org_code}", active_page="instances",
+            request,
+            auth,
+            f"Deploy - {instance.org_code}",
+            active_page="instances",
             instance=instance,
             logs=logs,
             deployment_id=deployment_id,
@@ -409,6 +420,7 @@ def instance_migrate(
     validate_csrf_token(request, csrf_token)
 
     import re
+
     from app.models.server import Server
     from app.services.instance_service import InstanceService
     from app.services.ssh_service import get_ssh_for_server
@@ -416,7 +428,7 @@ def instance_migrate(
     svc = InstanceService(db)
     instance = svc.get_or_404(instance_id)
     slug = instance.org_code.lower()
-    if not re.match(r'^[a-zA-Z0-9_-]+$', slug):
+    if not re.match(r"^[a-zA-Z0-9_-]+$", slug):
         raise ValueError(f"Invalid org_code slug: {slug!r}")
     server = db.get(Server, instance.server_id)
     ssh = get_ssh_for_server(server)
@@ -462,7 +474,7 @@ def instance_health_badge(
 ):
     """HTMX partial: health status badge with ETag caching."""
     import hashlib
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from fastapi.responses import Response
 
@@ -474,7 +486,7 @@ def instance_health_badge(
 
     is_stale = False
     if check and check.checked_at:
-        age = (datetime.now(timezone.utc) - check.checked_at).total_seconds()
+        age = (datetime.now(UTC) - check.checked_at).total_seconds()
         is_stale = age > platform_settings.health_stale_seconds
 
     # Build a content fingerprint for ETag
@@ -515,13 +527,9 @@ def instance_reconfigure(
     from app.tasks.deploy import deploy_instance
 
     deploy_svc = DeployService(db)
-    deployment_id = deploy_svc.create_deployment(
-        instance_id, deployment_type="reconfigure"
-    )
+    deployment_id = deploy_svc.create_deployment(instance_id, deployment_type="reconfigure")
     db.commit()
-    deploy_instance.delay(
-        str(instance_id), deployment_id, deployment_type="reconfigure"
-    )
+    deploy_instance.delay(str(instance_id), deployment_id, deployment_type="reconfigure")
     return RedirectResponse(
         f"/instances/{instance_id}/deploy-log?deployment_id={deployment_id}",
         status_code=302,
@@ -545,6 +553,7 @@ def toggle_module(
     validate_csrf_token(request, csrf_token)
 
     from app.services.module_service import ModuleService
+
     svc = ModuleService(db)
     try:
         svc.set_module_enabled(instance_id, module_id, enabled == "on")
@@ -571,6 +580,7 @@ def toggle_flag(
     validate_csrf_token(request, csrf_token)
 
     from app.services.feature_flag_service import FeatureFlagService
+
     svc = FeatureFlagService(db)
     svc.set_flag(instance_id, flag_key, value)
     db.commit()
@@ -593,6 +603,7 @@ def assign_plan(
     validate_csrf_token(request, csrf_token)
 
     from app.services.instance_service import InstanceService
+
     svc = InstanceService(db)
     instance = svc.get_or_404(instance_id)
     instance.plan_id = UUID(plan_id) if plan_id else None
@@ -615,6 +626,7 @@ def create_backup(
     validate_csrf_token(request, csrf_token)
 
     from app.services.backup_service import BackupService
+
     svc = BackupService(db)
     svc.create_backup(instance_id)
     db.commit()
@@ -637,6 +649,7 @@ def suspend_instance(
     validate_csrf_token(request, csrf_token)
 
     from app.services.lifecycle_service import LifecycleService
+
     svc = LifecycleService(db)
     svc.suspend_instance(instance_id, reason or None)
     db.commit()
@@ -655,6 +668,7 @@ def reactivate_instance(
     validate_csrf_token(request, csrf_token)
 
     from app.services.lifecycle_service import LifecycleService
+
     svc = LifecycleService(db)
     svc.reactivate_instance(instance_id)
     db.commit()
@@ -673,6 +687,7 @@ def archive_instance(
     validate_csrf_token(request, csrf_token)
 
     from app.services.lifecycle_service import LifecycleService
+
     svc = LifecycleService(db)
     svc.archive_instance(instance_id)
     db.commit()
@@ -696,6 +711,7 @@ def add_domain(
     validate_csrf_token(request, csrf_token)
 
     from app.services.domain_service import DomainService
+
     svc = DomainService(db)
     try:
         svc.add_domain(instance_id, domain, is_primary == "on")
@@ -718,6 +734,7 @@ def verify_domain(
     validate_csrf_token(request, csrf_token)
 
     from app.services.domain_service import DomainService
+
     svc = DomainService(db)
     svc.verify_domain(instance_id, domain_id)
     db.commit()
@@ -737,6 +754,7 @@ def delete_domain(
     validate_csrf_token(request, csrf_token)
 
     from app.services.domain_service import DomainService
+
     svc = DomainService(db)
     svc.remove_domain(instance_id, domain_id)
     db.commit()

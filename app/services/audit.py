@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-from app.models.audit import AuditEvent, AuditActorType
+from app.models.audit import AuditActorType, AuditEvent
 from app.schemas.audit import AuditEventCreate
 from app.services.common import apply_ordering, apply_pagination, coerce_uuid
 from app.services.response import ListResponseMixin
@@ -128,5 +128,6 @@ class AuditEvents(ListResponseMixin):
         event = AuditEvent(**payload.model_dump())
         db.add(event)
         db.commit()
+
 
 audit_events = AuditEvents()

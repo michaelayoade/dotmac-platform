@@ -1,6 +1,7 @@
 """
 Webhooks — Web routes for webhook endpoints and deliveries.
 """
+
 import logging
 from uuid import UUID
 
@@ -26,8 +27,8 @@ def webhooks_index(
     db: Session = Depends(get_db),
 ):
     require_admin(auth)
-    from app.services.webhook_service import WebhookService
     from app.services.instance_service import InstanceService
+    from app.services.webhook_service import WebhookService
 
     svc = WebhookService(db)
     endpoints = svc.list_endpoints()

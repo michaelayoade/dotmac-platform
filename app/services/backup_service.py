@@ -3,15 +3,16 @@ Backup Service — Create and manage database backups for tenant instances.
 
 Uses pg_dump via SSH to create backups of individual tenant databases.
 """
+
 from __future__ import annotations
 
 import logging
 import re
 import shlex
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.backup import Backup, BackupStatus, BackupType
@@ -37,11 +38,7 @@ class BackupService:
         self.db = db
 
     def list_for_instance(self, instance_id: UUID) -> list[Backup]:
-        stmt = (
-            select(Backup)
-            .where(Backup.instance_id == instance_id)
-            .order_by(Backup.created_at.desc())
-        )
+        stmt = select(Backup).where(Backup.instance_id == instance_id).order_by(Backup.created_at.desc())
         return list(self.db.scalars(stmt).all())
 
     def get_by_id(self, backup_id: UUID) -> Backup | None:
@@ -72,7 +69,7 @@ class BackupService:
         slug = _safe_slug(instance.org_code.lower())
         db_container = f"dotmac_{slug}_db"
         db_name = f"dotmac_{slug}"
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         backup_dir = f"{DEFAULT_BACKUP_DIR}/{slug}"
         backup_file = f"{backup_dir}/{db_name}_{timestamp}.sql.gz"
 
@@ -106,12 +103,14 @@ class BackupService:
             backup.file_path = backup_file
             backup.size_bytes = size_bytes
             backup.status = BackupStatus.completed
-            backup.completed_at = datetime.now(timezone.utc)
+            backup.completed_at = datetime.now(UTC)
             self.db.flush()
 
             logger.info(
                 "Backup completed for %s: %s (%s bytes)",
-                instance.org_code, backup_file, size_bytes,
+                instance.org_code,
+                backup_file,
+                size_bytes,
             )
             return backup
 
@@ -125,11 +124,7 @@ class BackupService:
     def restore_backup(self, instance_id: UUID, backup_id: UUID) -> dict:
         """Restore a database from backup."""
         backup = self.get_by_id(backup_id)
-        if (
-            not backup
-            or backup.instance_id != instance_id
-            or backup.status != BackupStatus.completed
-        ):
+        if not backup or backup.instance_id != instance_id or backup.status != BackupStatus.completed:
             raise ValueError("Backup not found or not completed")
 
         instance = self.db.get(Instance, backup.instance_id)

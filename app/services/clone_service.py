@@ -1,9 +1,9 @@
 """Clone Service — clone an existing instance for staging/testing."""
+
 from __future__ import annotations
 
 import logging
 import re
-import uuid
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -35,9 +35,7 @@ class CloneService:
         3. If include_data: create backup of source, mark for restore after deploy
         """
         if not _ORG_CODE_RE.match(new_org_code):
-            raise ValueError(
-                f"Invalid org_code {new_org_code!r}: must match [a-zA-Z0-9_-]+"
-            )
+            raise ValueError(f"Invalid org_code {new_org_code!r}: must match [a-zA-Z0-9_-]+")
 
         source = self.db.get(Instance, source_instance_id)
         if not source:
@@ -47,6 +45,7 @@ class CloneService:
 
         # Allocate new ports
         from app.services.instance_service import InstanceService
+
         inst_svc = InstanceService(self.db)
         app_port, db_port, redis_port = inst_svc.allocate_ports(source.server_id)
 
@@ -90,6 +89,7 @@ class CloneService:
         if include_data:
             try:
                 from app.services.backup_service import BackupService
+
                 backup_svc = BackupService(self.db)
                 backup = backup_svc.create_backup(source_instance_id)
                 backup_id = backup.backup_id
@@ -99,42 +99,54 @@ class CloneService:
         self.db.flush()
         logger.info(
             "Cloned instance %s -> %s (org_code=%s, backup=%s)",
-            source_instance_id, clone.instance_id, new_org_code, backup_id,
+            source_instance_id,
+            clone.instance_id,
+            new_org_code,
+            backup_id,
         )
         return clone
 
     def _copy_modules(self, source_id: UUID, target_id: UUID) -> None:
-        from app.models.module import InstanceModule
         from sqlalchemy import select
+
+        from app.models.module import InstanceModule
 
         stmt = select(InstanceModule).where(InstanceModule.instance_id == source_id)
         for im in self.db.scalars(stmt).all():
-            self.db.add(InstanceModule(
-                instance_id=target_id,
-                module_id=im.module_id,
-                enabled=im.enabled,
-            ))
+            self.db.add(
+                InstanceModule(
+                    instance_id=target_id,
+                    module_id=im.module_id,
+                    enabled=im.enabled,
+                )
+            )
 
     def _copy_flags(self, source_id: UUID, target_id: UUID) -> None:
-        from app.models.feature_flag import InstanceFlag
         from sqlalchemy import select
+
+        from app.models.feature_flag import InstanceFlag
 
         stmt = select(InstanceFlag).where(InstanceFlag.instance_id == source_id)
         for flag in self.db.scalars(stmt).all():
-            self.db.add(InstanceFlag(
-                instance_id=target_id,
-                flag_key=flag.flag_key,
-                flag_value=flag.flag_value,
-            ))
+            self.db.add(
+                InstanceFlag(
+                    instance_id=target_id,
+                    flag_key=flag.flag_key,
+                    flag_value=flag.flag_value,
+                )
+            )
 
     def _copy_tags(self, source_id: UUID, target_id: UUID) -> None:
-        from app.models.instance_tag import InstanceTag
         from sqlalchemy import select
+
+        from app.models.instance_tag import InstanceTag
 
         stmt = select(InstanceTag).where(InstanceTag.instance_id == source_id)
         for tag in self.db.scalars(stmt).all():
-            self.db.add(InstanceTag(
-                instance_id=target_id,
-                key=tag.key,
-                value=tag.value,
-            ))
+            self.db.add(
+                InstanceTag(
+                    instance_id=target_id,
+                    key=tag.key,
+                    value=tag.value,
+                )
+            )

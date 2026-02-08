@@ -1,10 +1,8 @@
-from app.schemas.common import ListResponse
-
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.db import SessionLocal
 from app.api.deps import require_role
+from app.db import SessionLocal
 from app.schemas.auth import (
     ApiKeyCreate,
     ApiKeyGenerateRequest,
@@ -21,6 +19,7 @@ from app.schemas.auth import (
     UserCredentialRead,
     UserCredentialUpdate,
 )
+from app.schemas.common import ListResponse
 from app.services import auth as auth_service
 
 router = APIRouter(dependencies=[Depends(require_role("admin"))])
@@ -78,9 +77,7 @@ def list_user_credentials(
     response_model=UserCredentialRead,
     tags=["user-credentials"],
 )
-def update_user_credential(
-    credential_id: str, payload: UserCredentialUpdate, db: Session = Depends(get_db)
-):
+def update_user_credential(credential_id: str, payload: UserCredentialUpdate, db: Session = Depends(get_db)):
     return auth_service.user_credentials.update(db, credential_id, payload)
 
 
@@ -148,9 +145,7 @@ def list_mfa_methods(
     response_model=MFAMethodRead,
     tags=["mfa-methods"],
 )
-def update_mfa_method(
-    method_id: str, payload: MFAMethodUpdate, db: Session = Depends(get_db)
-):
+def update_mfa_method(method_id: str, payload: MFAMethodUpdate, db: Session = Depends(get_db)):
     return auth_service.mfa_methods.update(db, method_id, payload)
 
 
@@ -196,9 +191,7 @@ def list_sessions(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
-    return auth_service.sessions.list_response(
-        db, person_id, status, order_by, order_dir, limit, offset
-    )
+    return auth_service.sessions.list_response(db, person_id, status, order_by, order_dir, limit, offset)
 
 
 @router.patch(
@@ -206,9 +199,7 @@ def list_sessions(
     response_model=SessionRead,
     tags=["sessions"],
 )
-def update_session(
-    session_id: str, payload: SessionUpdate, db: Session = Depends(get_db)
-):
+def update_session(session_id: str, payload: SessionUpdate, db: Session = Depends(get_db)):
     return auth_service.sessions.update(db, session_id, payload)
 
 
@@ -268,9 +259,7 @@ def list_api_keys(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
-    return auth_service.api_keys.list_response(
-        db, person_id, is_active, order_by, order_dir, limit, offset
-    )
+    return auth_service.api_keys.list_response(db, person_id, is_active, order_by, order_dir, limit, offset)
 
 
 @router.patch(

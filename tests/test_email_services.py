@@ -3,8 +3,6 @@
 import smtplib
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from app.services.email import (
     _env_bool,
     _env_int,
@@ -225,9 +223,7 @@ class TestSendEmail:
         monkeypatch.setenv("SMTP_USE_SSL", "false")
 
         mock_smtp = MagicMock()
-        mock_smtp.login.side_effect = smtplib.SMTPAuthenticationError(
-            535, "Authentication failed"
-        )
+        mock_smtp.login.side_effect = smtplib.SMTPAuthenticationError(535, "Authentication failed")
         with patch("app.services.email.smtplib.SMTP", return_value=mock_smtp):
             result = send_email(
                 None,
@@ -244,9 +240,7 @@ class TestSendEmail:
         monkeypatch.setenv("SMTP_USE_SSL", "false")
 
         mock_smtp = MagicMock()
-        mock_smtp.sendmail.side_effect = smtplib.SMTPRecipientsRefused(
-            {"bad@example.com": (550, "User unknown")}
-        )
+        mock_smtp.sendmail.side_effect = smtplib.SMTPRecipientsRefused({"bad@example.com": (550, "User unknown")})
         with patch("app.services.email.smtplib.SMTP", return_value=mock_smtp):
             result = send_email(
                 None,
@@ -402,6 +396,7 @@ class TestEmailLogging:
         mock_smtp = MagicMock()
         with patch("app.services.email.smtplib.SMTP", return_value=mock_smtp):
             import logging
+
             with caplog.at_level(logging.INFO):
                 send_email(
                     None,
@@ -421,6 +416,7 @@ class TestEmailLogging:
             side_effect=Exception("Test error"),
         ):
             import logging
+
             with caplog.at_level(logging.ERROR):
                 send_email(
                     None,

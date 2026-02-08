@@ -1,8 +1,8 @@
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Index, Integer, JSON, String
+from sqlalchemy import JSON, Boolean, DateTime, Enum, Index, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,15 +24,9 @@ class AuditEvent(Base):
         Index("ix_audit_events_entity", "entity_type", "entity_id"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    occurred_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
-    actor_type: Mapped[AuditActorType] = mapped_column(
-        Enum(AuditActorType), default=AuditActorType.system
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    actor_type: Mapped[AuditActorType] = mapped_column(Enum(AuditActorType), default=AuditActorType.system)
     actor_id: Mapped[str | None] = mapped_column(String(120))
     action: Mapped[str] = mapped_column(String(80))
     entity_type: Mapped[str] = mapped_column(String(160))

@@ -1,6 +1,7 @@
 """
 RBAC — Web routes for roles and permissions management.
 """
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -23,7 +24,9 @@ def rbac_index(
     db: Session = Depends(get_db),
 ):
     require_admin(auth)
-    from app.services.rbac import roles as roles_service, permissions as permissions_service, role_permissions as rp_service
+    from app.services.rbac import permissions as permissions_service
+    from app.services.rbac import role_permissions as rp_service
+    from app.services.rbac import roles as roles_service
 
     roles = roles_service.list(db, is_active=None, order_by="name", order_dir="asc", limit=200, offset=0)
     permissions = permissions_service.list(db, is_active=None, order_by="key", order_dir="asc", limit=500, offset=0)
@@ -92,7 +95,9 @@ def rbac_create_role(
     validate_csrf_token(request, csrf_token)
     from app.services.rbac import roles as roles_service
 
-    roles_service.create(db, RoleCreate(name=name.strip(), description=description.strip() or None, is_active=is_active))
+    roles_service.create(
+        db, RoleCreate(name=name.strip(), description=description.strip() or None, is_active=is_active)
+    )
     return RedirectResponse("/rbac", status_code=302)
 
 

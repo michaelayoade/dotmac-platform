@@ -1,8 +1,9 @@
 """Alert Service — evaluate rules against health data and fire notifications."""
+
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -91,10 +92,9 @@ class AlertService:
         instances = list(self.db.scalars(stmt).all())
 
         from app.services.health_service import HealthService
+
         health_svc = HealthService(self.db)
-        checks_map = health_svc.get_latest_checks_batch(
-            [i.instance_id for i in instances]
-        )
+        checks_map = health_svc.get_latest_checks_batch([i.instance_id for i in instances])
 
         alert_count = 0
         for rule in rules:
@@ -133,7 +133,7 @@ class AlertService:
         """Count unhealthy checks in the last 30 minutes."""
         from app.models.health_check import HealthStatus
 
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
+        cutoff = datetime.now(UTC) - timedelta(minutes=30)
         stmt = select(func.count(HealthCheck.check_id)).where(
             HealthCheck.instance_id == instance_id,
             HealthCheck.status == HealthStatus.unhealthy,
@@ -145,7 +145,7 @@ class AlertService:
         """Check if this rule already fired recently for this instance."""
         rule = self.db.get(AlertRule, rule_id)
         cooldown = timedelta(minutes=rule.cooldown_minutes if rule else 15)
-        cutoff = datetime.now(timezone.utc) - cooldown
+        cutoff = datetime.now(UTC) - cooldown
         stmt = select(AlertEvent).where(
             AlertEvent.rule_id == rule_id,
             AlertEvent.instance_id == instance_id,
@@ -169,13 +169,21 @@ class AlertService:
         elif rule.channel == AlertChannel.email:
             logger.warning(
                 "ALERT [%s] email channel not yet configured — instance=%s metric=%s value=%.2f threshold=%.2f",
-                rule.name, instance_id, rule.metric.value, value, rule.threshold,
+                rule.name,
+                instance_id,
+                rule.metric.value,
+                value,
+                rule.threshold,
             )
             event.notified = False
         elif rule.channel == AlertChannel.log:
             logger.warning(
                 "ALERT [%s] instance=%s metric=%s value=%.2f threshold=%.2f",
-                rule.name, instance_id, rule.metric.value, value, rule.threshold,
+                rule.name,
+                instance_id,
+                rule.metric.value,
+                value,
+                rule.threshold,
             )
             event.notified = True
 
@@ -185,6 +193,7 @@ class AlertService:
     def _notify_webhook(self, rule: AlertRule, instance_id: UUID, value: float) -> None:
         try:
             from app.services.webhook_service import WebhookService
+
             wh_svc = WebhookService(self.db)
             wh_svc.dispatch(
                 "alert_triggered",

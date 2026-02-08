@@ -1,8 +1,9 @@
 """
 Drift — Web routes for configuration drift reports.
 """
-from uuid import UUID
+
 from urllib.parse import urlencode
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse

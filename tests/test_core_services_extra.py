@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime, timezone
 
 from starlette.requests import Request
 from starlette.responses import Response
@@ -16,9 +15,7 @@ def test_rbac_role_permission_link(db_session, person):
     permission = rbac_service.permissions.create(
         db_session, PermissionCreate(key=permission_key, description="People Read")
     )
-    link = rbac_service.person_roles.create(
-        db_session, PersonRoleCreate(person_id=person.id, role_id=role.id)
-    )
+    link = rbac_service.person_roles.create(db_session, PersonRoleCreate(person_id=person.id, role_id=role.id))
     assert link.person_id == person.id
     assert permission.key == permission_key
 

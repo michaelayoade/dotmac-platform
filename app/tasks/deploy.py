@@ -1,6 +1,7 @@
 """
 Deploy Task — Celery tasks for deployment pipeline and batch deployments.
 """
+
 import logging
 
 from celery import shared_task
@@ -25,12 +26,16 @@ def deploy_instance(
     """
     logger.info(
         "Starting %s deployment %s for instance %s (git_ref=%s)",
-        deployment_type, deployment_id, instance_id, git_ref,
+        deployment_type,
+        deployment_id,
+        instance_id,
+        git_ref,
     )
 
     with SessionLocal() as db:
-        from app.services.deploy_service import DeployService
         from uuid import UUID
+
+        from app.services.deploy_service import DeployService
 
         svc = DeployService(db)
         admin_password = svc.get_deploy_secret(UUID(instance_id), deployment_id)
@@ -78,26 +83,21 @@ def run_batch_deploy(batch_id: str) -> dict:
                 db.commit()
 
                 admin_password = deploy_svc.get_deploy_secret(iid, deployment_id)
-                result = deploy_svc.run_deployment(
-                    iid, deployment_id, admin_password or ""
-                )
-                batch_svc.update_progress(
-                    UUID(batch_id), instance_id_str, result.get("success", False)
-                )
+                result = deploy_svc.run_deployment(iid, deployment_id, admin_password or "")
+                batch_svc.update_progress(UUID(batch_id), instance_id_str, result.get("success", False))
                 db.commit()
 
                 # For rolling strategy, stop on first failure
                 if batch.strategy.value == "rolling" and not result.get("success"):
                     logger.warning(
                         "Batch %s: stopping rolling deploy after failure on %s",
-                        batch_id, instance_id_str,
+                        batch_id,
+                        instance_id_str,
                     )
                     break
 
-            except Exception as e:
-                logger.exception(
-                    "Batch %s: deployment failed for %s", batch_id, instance_id_str
-                )
+            except Exception:
+                logger.exception("Batch %s: deployment failed for %s", batch_id, instance_id_str)
                 batch_svc.update_progress(UUID(batch_id), instance_id_str, False)
                 db.commit()
 

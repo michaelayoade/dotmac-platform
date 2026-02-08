@@ -1,6 +1,7 @@
 """
 Server Management — Web routes for VPS server CRUD and connectivity testing.
 """
+
 import logging
 from uuid import UUID
 
@@ -30,10 +31,7 @@ def server_list(
     servers = svc.list_all()
     # Batch-fetch instance counts to avoid N+1
     counts = svc.instance_counts_batch([s.server_id for s in servers])
-    server_data = [
-        {"server": s, "instance_count": counts.get(s.server_id, 0)}
-        for s in servers
-    ]
+    server_data = [{"server": s, "instance_count": counts.get(s.server_id, 0)} for s in servers]
 
     return templates.TemplateResponse(
         "servers/list.html", ctx(request, auth, "Servers", active_page="servers", servers=server_data)
@@ -97,7 +95,14 @@ def server_create(
         logger.exception("Failed to create server")
         return templates.TemplateResponse(
             "servers/form.html",
-            ctx(request, auth, "Add Server", active_page="servers", server=None, errors=["An unexpected error occurred. Please try again."]),
+            ctx(
+                request,
+                auth,
+                "Add Server",
+                active_page="servers",
+                server=None,
+                errors=["An unexpected error occurred. Please try again."],
+            ),
         )
 
 
@@ -210,8 +215,12 @@ def server_delete(
         return templates.TemplateResponse(
             "servers/detail.html",
             ctx(
-                request, auth, server.name, active_page="servers",
-                server=server, instances=instances,
+                request,
+                auth,
+                server.name,
+                active_page="servers",
+                server=server,
+                instances=instances,
                 errors=["Cannot delete server while it has instances. Remove all instances first."],
             ),
         )

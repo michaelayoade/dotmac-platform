@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
-from app.schemas.common import ListResponse
 
 from app.api.deps import require_role
 from app.db import SessionLocal
+from app.schemas.common import ListResponse
 from app.schemas.person import PersonCreate, PersonRead, PersonUpdate
 from app.services import person as person_service
 
@@ -44,9 +44,7 @@ def list_people(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
-    return person_service.people.list_response(
-        db, email, status, is_active, order_by, order_dir, limit, offset
-    )
+    return person_service.people.list_response(db, email, status, is_active, order_by, order_dir, limit, offset)
 
 
 @router.patch(

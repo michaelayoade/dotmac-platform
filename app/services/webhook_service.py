@@ -1,11 +1,12 @@
 """Webhook Service — dispatch events to registered endpoints."""
+
 from __future__ import annotations
 
 import hashlib
 import hmac
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 import httpx
@@ -54,10 +55,7 @@ class WebhookService:
     def list_endpoints(self, instance_id: UUID | None = None) -> list[WebhookEndpoint]:
         stmt = select(WebhookEndpoint).where(WebhookEndpoint.is_active.is_(True))
         if instance_id:
-            stmt = stmt.where(
-                (WebhookEndpoint.instance_id == instance_id)
-                | (WebhookEndpoint.instance_id.is_(None))
-            )
+            stmt = stmt.where((WebhookEndpoint.instance_id == instance_id) | (WebhookEndpoint.instance_id.is_(None)))
         return list(self.db.scalars(stmt).all())
 
     def create_endpoint(
@@ -105,6 +103,7 @@ class WebhookService:
             self.db.flush()
             try:
                 from app.tasks.webhooks import deliver_webhook  # lazy import
+
                 deliver_webhook.delay(str(delivery.delivery_id))
             except Exception as exc:
                 logger.warning("Failed to enqueue webhook delivery: %s", exc)
@@ -141,7 +140,7 @@ class WebhookService:
             delivery.response_body = resp.text[:2000] if resp.text else None
             if 200 <= resp.status_code < 300:
                 delivery.status = DeliveryStatus.success
-                delivery.delivered_at = datetime.now(timezone.utc)
+                delivery.delivered_at = datetime.now(UTC)
                 return True
         except Exception as exc:
             delivery.response_body = str(exc)[:2000]

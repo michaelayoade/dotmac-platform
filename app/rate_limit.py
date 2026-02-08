@@ -4,11 +4,12 @@ Simple in-memory rate limiter for sensitive endpoints.
 Uses a sliding window counter per IP address. For production with
 multiple workers, switch to Redis-backed rate limiting.
 """
+
 from __future__ import annotations
 
 import os
-import time
 import threading
+import time
 from collections import OrderedDict, deque
 
 from fastapi import HTTPException, Request
@@ -23,19 +24,11 @@ class RateLimiter:
         self.max_ips = max_ips
         self._requests: OrderedDict[str, deque[float]] = OrderedDict()
         self._lock = threading.Lock()
-        self._trusted_proxies = {
-            ip.strip()
-            for ip in os.getenv("TRUSTED_PROXY_IPS", "").split(",")
-            if ip.strip()
-        }
+        self._trusted_proxies = {ip.strip() for ip in os.getenv("TRUSTED_PROXY_IPS", "").split(",") if ip.strip()}
 
     def _client_ip(self, request: Request) -> str:
         forwarded = request.headers.get("x-forwarded-for")
-        if (
-            forwarded
-            and request.client
-            and request.client.host in self._trusted_proxies
-        ):
+        if forwarded and request.client and request.client.host in self._trusted_proxies:
             return forwarded.split(",")[0].strip()
         return request.client.host if request.client else "unknown"
 

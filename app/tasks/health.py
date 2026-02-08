@@ -1,6 +1,7 @@
 """
 Health Task — Celery beat task to poll all running instances.
 """
+
 import logging
 
 from celery import shared_task

@@ -1,5 +1,3 @@
-import hashlib
-
 import pytest
 from fastapi import HTTPException
 
@@ -29,7 +27,7 @@ def test_user_credentials_soft_delete(db_session, person):
     payload = UserCredentialCreate(
         person_id=person.id,
         username="user@example.com",
-        password="secret",
+        password="secret123",
     )
     credential = auth_service.user_credentials.create(db_session, payload)
     active = auth_service.user_credentials.list(
@@ -73,7 +71,6 @@ def test_mfa_primary_switch(db_session, person):
         person_id=person.id,
         method_type="totp",
         label="primary",
-        secret="encrypted",
         is_primary=True,
         enabled=True,
     )
@@ -117,13 +114,11 @@ def test_api_key_generate_with_redis(monkeypatch, db_session):
     result = auth_service.api_keys.generate_with_rate_limit(db_session, payload, None)
     raw_key = result["key"]
     api_key = result["api_key"]
-    assert hashlib.sha256(raw_key.encode("utf-8")).hexdigest() == api_key.key_hash
+    assert api_key.key_hash == auth_service.hash_api_key(raw_key)
 
 
 def test_api_key_rate_limit_requires_redis(monkeypatch, db_session):
     monkeypatch.setattr(auth_service, "_get_redis_client", lambda: None)
     with pytest.raises(HTTPException) as exc:
-        auth_service.api_keys.generate_with_rate_limit(
-            db_session, ApiKeyGenerateRequest(label="test"), None
-        )
+        auth_service.api_keys.generate_with_rate_limit(db_session, ApiKeyGenerateRequest(label="test"), None)
     assert exc.value.status_code == 503

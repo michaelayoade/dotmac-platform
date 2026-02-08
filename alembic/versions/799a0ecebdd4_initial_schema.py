@@ -6,8 +6,9 @@ Create Date: 2026-01-09 07:31:51.528180
 
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "799a0ecebdd4"
 down_revision = None
@@ -167,9 +168,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["permission_id"], ["permissions.id"]),
         sa.ForeignKeyConstraint(["role_id"], ["roles.id"]),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "role_id", "permission_id", name="uq_role_permissions_role_permission"
-        ),
+        sa.UniqueConstraint("role_id", "permission_id", name="uq_role_permissions_role_permission"),
     )
     op.create_table(
         "person_roles",
@@ -209,7 +208,9 @@ def upgrade() -> None:
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column("domain", sa.Enum("auth", "audit", "scheduler", name="settingdomain"), nullable=False),
         sa.Column("key", sa.String(length=120), nullable=False),
-        sa.Column("value_type", sa.Enum("string", "integer", "boolean", "json", name="settingvaluetype"), nullable=False),
+        sa.Column(
+            "value_type", sa.Enum("string", "integer", "boolean", "json", name="settingvaluetype"), nullable=False
+        ),
         sa.Column("value_text", sa.Text(), nullable=True),
         sa.Column("value_json", sa.JSON(), nullable=True),
         sa.Column("is_secret", sa.Boolean(), nullable=False),

@@ -18,9 +18,7 @@ def coerce_uuid(value: str | uuid.UUID | None) -> uuid.UUID | None:
         raise HTTPException(status_code=400, detail=f"Invalid UUID: {value!r}") from exc
 
 
-def apply_ordering(
-    stmt: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]
-) -> Any:
+def apply_ordering(stmt: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]) -> Any:
     if order_by not in allowed_columns:
         raise HTTPException(
             status_code=400,

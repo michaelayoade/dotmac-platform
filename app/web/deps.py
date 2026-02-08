@@ -3,13 +3,17 @@ Web authentication dependencies for platform routes.
 
 Uses cookie-based JWT auth with the starter's existing auth system.
 """
+
 from __future__ import annotations
+
+from datetime import UTC
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models.auth import Session as AuthSession, SessionStatus
+from app.models.auth import Session as AuthSession
+from app.models.auth import SessionStatus
 from app.models.person import Person
 from app.services.auth_flow import decode_access_token
 from app.services.common import coerce_uuid
@@ -70,7 +74,7 @@ def require_web_auth(
         raise HTTPException(status_code=302, headers={"Location": "/login"})
 
     try:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         payload = decode_access_token(db, token)
         person_id = payload.get("sub")
@@ -80,7 +84,7 @@ def require_web_auth(
             raise HTTPException(status_code=302, headers={"Location": "/login"})
 
         # Validate session
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         session = db.get(AuthSession, coerce_uuid(session_id))
         if not session or session.status != SessionStatus.active:
             raise HTTPException(status_code=302, headers={"Location": "/login"})

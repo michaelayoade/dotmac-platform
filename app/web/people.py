@@ -1,6 +1,7 @@
 """
 People — Web routes for managing users.
 """
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -151,7 +152,8 @@ def people_detail(
 ):
     require_admin(auth)
     from app.services.person import people as people_service
-    from app.services.rbac import roles as role_service, person_roles as person_roles_service
+    from app.services.rbac import person_roles as person_roles_service
+    from app.services.rbac import roles as role_service
 
     person = people_service.get(db, str(person_id))
     roles = role_service.list(db, is_active=None, order_by="name", order_dir="asc", limit=200, offset=0)

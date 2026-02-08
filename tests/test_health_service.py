@@ -1,14 +1,13 @@
 """Tests for HealthService -- polling, pruning, and query methods."""
+
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from tests.conftest import _test_engine, TestBase
-from app.models.server import Server
-from app.models.instance import Instance, InstanceStatus
 from app.models.health_check import HealthCheck, HealthStatus
+from app.models.instance import Instance, InstanceStatus
+from app.models.server import Server
+from tests.conftest import TestBase, _test_engine
 
 TestBase.metadata.create_all(_test_engine)
 
@@ -46,7 +45,7 @@ def _make_instance(db_session, server, *, status=InstanceStatus.running, org_cod
 
 
 def _make_checks(db_session, instance_id, count, *, base_time=None):
-    base = base_time or datetime.now(timezone.utc)
+    base = base_time or datetime.now(UTC)
     checks = []
     for i in range(count):
         hc = HealthCheck(

@@ -4,6 +4,7 @@ Instance Service — CRUD, provisioning, and file generation for ERP instances.
 Generates docker-compose.yml, .env, bootstrap_db.py, and setup.sh for each
 instance, based on the patterns in dotmac's bootstrap_instance.py.
 """
+
 from __future__ import annotations
 
 import logging
@@ -12,13 +13,11 @@ import re
 import secrets
 import textwrap
 import uuid
-from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import settings as platform_settings
 from app.models.instance import (
     AccountingFramework,
     Instance,
@@ -30,7 +29,7 @@ from app.services.ssh_service import get_ssh_for_server
 
 logger = logging.getLogger(__name__)
 
-_DOMAIN_RE = re.compile(r'^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$')
+_DOMAIN_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$")
 
 
 def _validate_domain(domain: str) -> str:
@@ -38,6 +37,7 @@ def _validate_domain(domain: str) -> str:
     if not domain or len(domain) > 253 or not _DOMAIN_RE.match(domain):
         raise ValueError(f"Invalid domain: {domain!r}")
     return domain
+
 
 # Port allocation base
 BASE_APP_PORT = 8010
@@ -48,11 +48,11 @@ BASE_REDIS_PORT = 6390
 # Secrets that MUST be preserved across redeploys.
 # Regenerating these would break running infrastructure or corrupt encrypted data.
 _PRESERVE_SECRETS = {
-    "TOTP_ENCRYPTION_KEY",   # Encrypts data at rest — changing corrupts stored credentials
-    "POSTGRES_PASSWORD",     # DB already initialised with this password
-    "REDIS_PASSWORD",        # Redis already running with this password
-    "JWT_SECRET",            # Active JWTs would be invalidated
-    "OPENBAO_TOKEN",         # Must match running OpenBao container's root token
+    "TOTP_ENCRYPTION_KEY",  # Encrypts data at rest — changing corrupts stored credentials
+    "POSTGRES_PASSWORD",  # DB already initialised with this password
+    "REDIS_PASSWORD",  # Redis already running with this password
+    "JWT_SECRET",  # Active JWTs would be invalidated
+    "OPENBAO_TOKEN",  # Must match running OpenBao container's root token
 }
 
 # Derived secrets — recomputed from the preserved base secrets above.
@@ -91,11 +91,7 @@ class InstanceService:
         return list(self.db.scalars(stmt).all())
 
     def list_for_server(self, server_id: UUID) -> list[Instance]:
-        stmt = (
-            select(Instance)
-            .where(Instance.server_id == server_id)
-            .order_by(Instance.created_at.desc())
-        )
+        stmt = select(Instance).where(Instance.server_id == server_id).order_by(Instance.created_at.desc())
         return list(self.db.scalars(stmt).all())
 
     def get_by_id(self, instance_id: UUID) -> Instance | None:
@@ -117,11 +113,7 @@ class InstanceService:
         Uses SELECT ... FOR UPDATE to prevent concurrent allocations
         from assigning the same ports.
         """
-        stmt = (
-            select(Instance)
-            .where(Instance.server_id == server_id)
-            .with_for_update()
-        )
+        stmt = select(Instance).where(Instance.server_id == server_id).with_for_update()
         instances = list(self.db.scalars(stmt).all())
 
         used_app = {inst.app_port for inst in instances}
@@ -158,10 +150,8 @@ class InstanceService:
         org_code = org_code.upper()
 
         # Validate org_code — used in container names and shell commands
-        if not re.match(r'^[A-Z0-9_-]+$', org_code):
-            raise ValueError(
-                f"Invalid org_code: {org_code!r} — must be alphanumeric, hyphens, or underscores"
-            )
+        if not re.match(r"^[A-Z0-9_-]+$", org_code):
+            raise ValueError(f"Invalid org_code: {org_code!r} — must be alphanumeric, hyphens, or underscores")
 
         # Auto-allocate ports if not specified
         if app_port is None or db_port is None or redis_port is None:
@@ -314,9 +304,11 @@ class InstanceService:
         else:
             try:
                 from cryptography.fernet import Fernet
+
                 totp_key = Fernet.generate_key().decode()
             except ImportError:
                 import base64
+
                 totp_key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
 
         slug = instance.org_code.lower()
@@ -367,7 +359,7 @@ class InstanceService:
             BRAND_NAME={instance.org_name}
             BRAND_TAGLINE=
             BRAND_LOGO_URL=
-            APP_URL={instance.app_url or ''}
+            APP_URL={instance.app_url or ""}
             DEFAULT_FUNCTIONAL_CURRENCY_CODE={instance.currency}
             DEFAULT_PRESENTATION_CURRENCY_CODE={instance.currency}
 
@@ -379,8 +371,8 @@ class InstanceService:
             BOOTSTRAP_SECTOR_TYPE={instance.sector_type.value}
             BOOTSTRAP_FRAMEWORK={instance.framework.value}
             BOOTSTRAP_CURRENCY={instance.currency}
-            BOOTSTRAP_ADMIN_EMAIL={instance.admin_email or ''}
-            BOOTSTRAP_ADMIN_USERNAME={instance.admin_username or 'admin'}
+            BOOTSTRAP_ADMIN_EMAIL={instance.admin_email or ""}
+            BOOTSTRAP_ADMIN_USERNAME={instance.admin_username or "admin"}
             BOOTSTRAP_ADMIN_PASSWORD={admin_password}
 
             # ERPNext Integration (optional)
@@ -397,6 +389,7 @@ class InstanceService:
         # --- Inject feature flags ---
         try:
             from app.services.feature_flag_service import FeatureFlagService
+
             flag_svc = FeatureFlagService(self.db)
             flag_vars = flag_svc.get_env_vars(instance.instance_id)
             if flag_vars:
@@ -410,6 +403,7 @@ class InstanceService:
         if instance.plan_id:
             try:
                 from app.services.plan_service import PlanService
+
                 plan_svc = PlanService(self.db)
                 plan = plan_svc.get_by_id(instance.plan_id)
                 if plan:
@@ -593,7 +587,7 @@ class InstanceService:
             echo ""
             echo "=== Instance ready ==="
             APP_PORT=$(grep "^APP_PORT=" .env | cut -d= -f2)
-            echo "  URL: {instance.app_url or 'http://localhost:$APP_PORT'}"
+            echo "  URL: {instance.app_url or "http://localhost:$APP_PORT"}"
             echo ""
         """)
 
@@ -812,23 +806,15 @@ class InstanceService:
         ssh.sftp_put_string(env_content, env_path)
 
         compose_content = self.generate_docker_compose(instance)
-        ssh.sftp_put_string(
-            compose_content, os.path.join(deploy_path, "docker-compose.yml")
-        )
+        ssh.sftp_put_string(compose_content, os.path.join(deploy_path, "docker-compose.yml"))
 
         setup_content = self.generate_setup_script(instance)
-        ssh.sftp_put_string(
-            setup_content, os.path.join(deploy_path, "setup.sh"), mode=0o755
-        )
+        ssh.sftp_put_string(setup_content, os.path.join(deploy_path, "setup.sh"), mode=0o755)
 
         bootstrap_content = self.generate_bootstrap_db_script()
-        ssh.sftp_put_string(
-            bootstrap_content, os.path.join(deploy_path, "bootstrap_db.py")
-        )
+        ssh.sftp_put_string(bootstrap_content, os.path.join(deploy_path, "bootstrap_db.py"))
 
-        logger.info(
-            "Provisioned files for %s at %s", instance.org_code, deploy_path
-        )
+        logger.info("Provisioned files for %s at %s", instance.org_code, deploy_path)
         return {
             "deploy_path": deploy_path,
             "files": [".env", "docker-compose.yml", "setup.sh", "bootstrap_db.py"],

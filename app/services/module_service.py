@@ -4,6 +4,7 @@ Module Service — Manage ERP modules and per-instance module assignments.
 Maps the 32 ERP database schemas to logical modules that can be toggled
 per tenant instance.
 """
+
 from __future__ import annotations
 
 import logging
@@ -181,9 +182,7 @@ class ModuleService:
         """Seed default modules if they don't exist. Returns count of modules created."""
         created = 0
         for mod_data in DEFAULT_MODULES:
-            existing = self.db.scalar(
-                select(Module).where(Module.slug == mod_data["slug"])
-            )
+            existing = self.db.scalar(select(Module).where(Module.slug == mod_data["slug"]))
             if not existing:
                 module = Module(
                     name=mod_data["name"],
@@ -217,18 +216,18 @@ class ModuleService:
         modules = self.list_all()
         enabled_map: dict[UUID, bool] = {}
 
-        stmt = select(InstanceModule).where(
-            InstanceModule.instance_id == instance_id
-        )
+        stmt = select(InstanceModule).where(InstanceModule.instance_id == instance_id)
         for im in self.db.scalars(stmt).all():
             enabled_map[im.module_id] = im.enabled
 
         result = []
         for mod in modules:
-            result.append({
-                "module": mod,
-                "enabled": enabled_map.get(mod.module_id, mod.is_core),
-            })
+            result.append(
+                {
+                    "module": mod,
+                    "enabled": enabled_map.get(mod.module_id, mod.is_core),
+                }
+            )
         return result
 
     def get_enabled_schemas(self, instance_id: UUID) -> list[str]:
@@ -239,9 +238,7 @@ class ModuleService:
                 schemas.extend(entry["module"].schemas)
         return sorted(set(schemas))
 
-    def set_module_enabled(
-        self, instance_id: UUID, module_id: UUID, enabled: bool
-    ) -> InstanceModule:
+    def set_module_enabled(self, instance_id: UUID, module_id: UUID, enabled: bool) -> InstanceModule:
         """Enable or disable a module for an instance."""
         module = self.get_by_id(module_id)
         if not module:
@@ -300,6 +297,4 @@ class ModuleService:
                 # Core modules are implicitly enabled
                 if dep_mod.is_core:
                     continue
-                raise ValueError(
-                    f"Module '{module.slug}' requires '{dep_slug}' to be enabled first"
-                )
+                raise ValueError(f"Module '{module.slug}' requires '{dep_slug}' to be enabled first")

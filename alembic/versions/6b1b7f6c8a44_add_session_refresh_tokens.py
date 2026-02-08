@@ -6,12 +6,12 @@ Create Date: 2026-02-08 13:00:00.000000
 
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
-revision = '6b1b7f6c8a44'
-down_revision = 'd2f9c8b7a0f1'
+revision = "6b1b7f6c8a44"
+down_revision = "d2f9c8b7a0f1"
 branch_labels = None
 depends_on = None
 

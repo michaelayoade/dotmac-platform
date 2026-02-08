@@ -1,12 +1,10 @@
 import uuid
-from datetime import datetime, timedelta, timezone
-
-import pytest
+from datetime import UTC, datetime, timedelta
 
 from app.models.auth import (
-    MFAMethod,
-    MFAMethodType,
     Session as AuthSession,
+)
+from app.models.auth import (
     SessionStatus,
     UserCredential,
 )
@@ -156,15 +154,13 @@ class TestSessionsAPI:
             status=SessionStatus.active,
             ip_address="192.168.1.1",
             user_agent="other-client",
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+            expires_at=datetime.now(UTC) + timedelta(days=30),
         )
         db_session.add(other_session)
         db_session.commit()
         db_session.refresh(other_session)
 
-        response = client.delete(
-            f"/auth/me/sessions/{other_session.id}", headers=auth_headers
-        )
+        response = client.delete(f"/auth/me/sessions/{other_session.id}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "revoked_at" in data
@@ -185,7 +181,7 @@ class TestSessionsAPI:
                 status=SessionStatus.active,
                 ip_address=f"192.168.1.{i}",
                 user_agent=f"client-{i}",
-                expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+                expires_at=datetime.now(UTC) + timedelta(days=30),
             )
             db_session.add(session)
         db_session.commit()
@@ -256,9 +252,7 @@ class TestPasswordAPI:
         response = client.post("/auth/me/password", json=payload, headers=auth_headers)
         assert response.status_code == 400
 
-    def test_change_password_revokes_sessions(
-        self, client, auth_headers, db_session, person, auth_session
-    ):
+    def test_change_password_revokes_sessions(self, client, auth_headers, db_session, person, auth_session):
         """Test changing password revokes active sessions."""
         credential = UserCredential(
             person_id=person.id,
@@ -275,7 +269,7 @@ class TestPasswordAPI:
             status=SessionStatus.active,
             ip_address="192.168.1.100",
             user_agent="other-client",
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+            expires_at=datetime.now(UTC) + timedelta(days=30),
         )
         db_session.add(other_session)
         db_session.commit()
@@ -287,11 +281,7 @@ class TestPasswordAPI:
         response = client.post("/auth/me/password", json=payload, headers=auth_headers)
         assert response.status_code == 200
 
-        sessions = (
-            db_session.query(AuthSession)
-            .filter(AuthSession.person_id == person.id)
-            .all()
-        )
+        sessions = db_session.query(AuthSession).filter(AuthSession.person_id == person.id).all()
         assert sessions
         for session in sessions:
             assert session.status == SessionStatus.revoked
@@ -328,7 +318,7 @@ class TestPasswordAPI:
             status=SessionStatus.active,
             ip_address="192.168.1.200",
             user_agent="client-one",
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+            expires_at=datetime.now(UTC) + timedelta(days=30),
         )
         session_two = AuthSession(
             person_id=person.id,
@@ -336,7 +326,7 @@ class TestPasswordAPI:
             status=SessionStatus.active,
             ip_address="192.168.1.201",
             user_agent="client-two",
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+            expires_at=datetime.now(UTC) + timedelta(days=30),
         )
         db_session.add_all([session_one, session_two])
         db_session.commit()
@@ -348,11 +338,7 @@ class TestPasswordAPI:
         response = client.post("/auth/reset-password", json=payload)
         assert response.status_code == 200
 
-        sessions = (
-            db_session.query(AuthSession)
-            .filter(AuthSession.person_id == person.id)
-            .all()
-        )
+        sessions = db_session.query(AuthSession).filter(AuthSession.person_id == person.id).all()
         assert sessions
         for session in sessions:
             assert session.status == SessionStatus.revoked
@@ -455,11 +441,7 @@ class TestRefreshAPI:
         # Error handler transforms response to {"code": ..., "message": ..., "details": ...}
         assert "reuse" in data["message"].lower()
 
-        session = (
-            db_session.query(AuthSession)
-            .filter(AuthSession.person_id == person.id)
-            .first()
-        )
+        session = db_session.query(AuthSession).filter(AuthSession.person_id == person.id).first()
         assert session is not None
         assert session.status == SessionStatus.revoked
         assert session.revoked_at is not None
@@ -517,9 +499,7 @@ class TestMFAAPI:
         db_session.commit()
         db_session.refresh(other_person)
 
-        setup = auth_flow_service.auth_flow.mfa_setup(
-            db_session, str(other_person.id), label="Other Device"
-        )
+        setup = auth_flow_service.auth_flow.mfa_setup(db_session, str(other_person.id), label="Other Device")
         payload = {"method_id": str(setup["method_id"]), "code": "123456"}
         response = client.post("/auth/mfa/confirm", json=payload, headers=auth_headers)
         assert response.status_code == 404

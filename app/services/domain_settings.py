@@ -6,12 +6,11 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-from app.models.domain_settings import DomainSetting, SettingDomain
-from app.models.domain_settings import SettingValueType
+from app.models.domain_settings import DomainSetting, SettingDomain, SettingValueType
 from app.schemas.settings import DomainSettingCreate, DomainSettingUpdate
 from app.services.common import apply_ordering, apply_pagination, coerce_uuid
-from app.services.settings_crypto import encrypt_payload
 from app.services.response import ListResponseMixin
+from app.services.settings_crypto import encrypt_payload
 
 
 class DomainSettings(ListResponseMixin):
@@ -31,9 +30,7 @@ class DomainSettings(ListResponseMixin):
         data = payload.model_dump()
         data["domain"] = self._resolve_domain(payload.domain)
         if data.get("is_secret"):
-            value_text, value_json = encrypt_payload(
-                data.get("value_text"), data.get("value_json")
-            )
+            value_text, value_json = encrypt_payload(data.get("value_text"), data.get("value_json"))
             data["value_text"] = value_text
             data["value_json"] = value_json
             data["value_type"] = SettingValueType.string
@@ -84,9 +81,7 @@ class DomainSettings(ListResponseMixin):
         if "domain" in data and data["domain"] != setting.domain:
             raise HTTPException(status_code=400, detail="Setting domain mismatch")
         if data.get("is_secret") or setting.is_secret:
-            value_text, value_json = encrypt_payload(
-                data.get("value_text"), data.get("value_json")
-            )
+            value_text, value_json = encrypt_payload(data.get("value_text"), data.get("value_json"))
             if value_text is not None:
                 data["value_text"] = value_text
                 data["value_json"] = value_json
@@ -100,11 +95,7 @@ class DomainSettings(ListResponseMixin):
     def get_by_key(self, db: Session, key: str) -> DomainSetting:
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
-        stmt = (
-            select(DomainSetting)
-            .where(DomainSetting.domain == self.domain)
-            .where(DomainSetting.key == key)
-        )
+        stmt = select(DomainSetting).where(DomainSetting.domain == self.domain).where(DomainSetting.key == key)
         setting = db.scalar(stmt)
         if not setting:
             raise HTTPException(status_code=404, detail="Setting not found")
@@ -113,20 +104,14 @@ class DomainSettings(ListResponseMixin):
     def upsert_by_key(self, db: Session, key: str, payload: DomainSettingUpdate) -> DomainSetting:
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
-        stmt = (
-            select(DomainSetting)
-            .where(DomainSetting.domain == self.domain)
-            .where(DomainSetting.key == key)
-        )
+        stmt = select(DomainSetting).where(DomainSetting.domain == self.domain).where(DomainSetting.key == key)
         setting = db.scalar(stmt)
         if setting:
             data = payload.model_dump(exclude_unset=True)
             data.pop("domain", None)
             data.pop("key", None)
             if data.get("is_secret") or setting.is_secret:
-                value_text, value_json = encrypt_payload(
-                    data.get("value_text"), data.get("value_json")
-                )
+                value_text, value_json = encrypt_payload(data.get("value_text"), data.get("value_json"))
                 if value_text is not None:
                     data["value_text"] = value_text
                     data["value_json"] = value_json
@@ -158,11 +143,7 @@ class DomainSettings(ListResponseMixin):
     ) -> DomainSetting:
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
-        stmt = (
-            select(DomainSetting)
-            .where(DomainSetting.domain == self.domain)
-            .where(DomainSetting.key == key)
-        )
+        stmt = select(DomainSetting).where(DomainSetting.domain == self.domain).where(DomainSetting.key == key)
         existing = db.scalar(stmt)
         if existing:
             return existing

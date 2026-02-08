@@ -50,6 +50,7 @@ def _get_smtp_config() -> dict:
         "from_name": _env_value("SMTP_FROM_NAME") or _env_value("BRAND_NAME") or "DotMac Platform",
     }
 
+
 def _sanitize_header(value: str, field: str) -> str:
     if "\r" in value or "\n" in value:
         raise ValueError(f"Invalid header value for {field}")
@@ -105,7 +106,10 @@ def send_email(
             if attempt < _SMTP_MAX_RETRIES:
                 logger.warning(
                     "SMTP attempt %d/%d to %s failed: %s",
-                    attempt + 1, _SMTP_MAX_RETRIES + 1, to_email, exc,
+                    attempt + 1,
+                    _SMTP_MAX_RETRIES + 1,
+                    to_email,
+                    exc,
                 )
                 time.sleep(_SMTP_RETRY_DELAY * (attempt + 1))
         finally:

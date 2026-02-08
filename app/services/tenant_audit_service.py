@@ -1,11 +1,11 @@
 """Tenant Audit Service — log and query tenant-level actions."""
+
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.tenant_audit import TenantAuditLog
@@ -76,19 +76,14 @@ class TenantAuditService:
         limit: int = 100,
         offset: int = 0,
     ) -> list[TenantAuditLog]:
-        stmt = (
-            select(TenantAuditLog)
-            .where(TenantAuditLog.instance_id == instance_id)
-        )
+        stmt = select(TenantAuditLog).where(TenantAuditLog.instance_id == instance_id)
         if action:
             stmt = stmt.where(TenantAuditLog.action == action)
         stmt = stmt.order_by(TenantAuditLog.created_at.desc()).offset(offset).limit(limit)
         return list(self.db.scalars(stmt).all())
 
     def count_logs(self, instance_id: UUID, action: str | None = None) -> int:
-        stmt = select(func.count(TenantAuditLog.id)).where(
-            TenantAuditLog.instance_id == instance_id
-        )
+        stmt = select(func.count(TenantAuditLog.id)).where(TenantAuditLog.instance_id == instance_id)
         if action:
             stmt = stmt.where(TenantAuditLog.action == action)
         return self.db.scalar(stmt) or 0

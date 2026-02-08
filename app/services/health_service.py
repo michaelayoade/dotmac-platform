@@ -3,13 +3,14 @@ Health Service — Poll running instances and record health status.
 
 Includes resource monitoring: CPU, memory, disk, DB size, active connections.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import shlex
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 import httpx
@@ -174,7 +175,7 @@ class HealthService:
             quoted_db = shlex.quote(db_name)
             size_result = ssh.exec_command(
                 f"docker exec {shlex.quote(db_container)} psql -U postgres -d {quoted_db} "
-                f"-t -c \"SELECT pg_database_size(current_database()) / 1048576\"",
+                f'-t -c "SELECT pg_database_size(current_database()) / 1048576"',
                 timeout=10,
             )
             if size_result.ok and size_result.stdout.strip():
@@ -186,7 +187,7 @@ class HealthService:
             # Active DB connections
             conn_result = ssh.exec_command(
                 f"docker exec {shlex.quote(db_container)} psql -U postgres -d {quoted_db} "
-                f"-t -c \"SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()\"",
+                f'-t -c "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()"',
                 timeout=10,
             )
             if conn_result.ok and conn_result.stdout.strip():
@@ -256,20 +257,15 @@ class HealthService:
             .subquery()
         )
 
-        stmt = (
-            select(HealthCheck)
-            .join(
-                latest_sub,
-                (HealthCheck.instance_id == latest_sub.c.instance_id)
-                & (HealthCheck.checked_at == latest_sub.c.max_checked_at),
-            )
+        stmt = select(HealthCheck).join(
+            latest_sub,
+            (HealthCheck.instance_id == latest_sub.c.instance_id)
+            & (HealthCheck.checked_at == latest_sub.c.max_checked_at),
         )
         checks = list(self.db.scalars(stmt).all())
         return {check.instance_id: check for check in checks}
 
-    def get_recent_checks(
-        self, instance_id: UUID, limit: int = 20
-    ) -> list[HealthCheck]:
+    def get_recent_checks(self, instance_id: UUID, limit: int = 20) -> list[HealthCheck]:
         """Get recent health checks for an instance."""
         stmt = (
             select(HealthCheck)
@@ -290,9 +286,7 @@ class HealthService:
         )
         old_ids = list(self.db.scalars(stmt).all())
         if old_ids:
-            self.db.execute(
-                delete(HealthCheck).where(HealthCheck.id.in_(old_ids))
-            )
+            self.db.execute(delete(HealthCheck).where(HealthCheck.id.in_(old_ids)))
         return len(old_ids)
 
     def prune_all_old_checks(self) -> int:
@@ -337,7 +331,7 @@ class HealthService:
         # Batch fetch latest health checks for running instances
         if running_ids:
             checks = self.get_latest_checks_batch(running_ids)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             for iid in running_ids:
                 check = checks.get(iid)
                 state = self.classify_health(check, now)
@@ -348,9 +342,7 @@ class HealthService:
                 else:
                     stats["unknown"] += 1
 
-        stats["total_servers"] = self.db.scalar(
-            select(func.count(Server.server_id))
-        ) or 0
+        stats["total_servers"] = self.db.scalar(select(func.count(Server.server_id))) or 0
 
         return stats
 
@@ -358,7 +350,7 @@ class HealthService:
         """Classify health as healthy, unhealthy, or unknown (missing/stale/unreachable)."""
         if not check:
             return "unknown"
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         if not check.checked_at:
             return "unknown"
         age = (now - check.checked_at).total_seconds()
@@ -382,13 +374,15 @@ class HealthService:
         for inst in running:
             check = checks.get(inst.instance_id)
             if check:
-                consumers.append({
-                    "instance": inst,
-                    "cpu_percent": check.cpu_percent or 0,
-                    "memory_mb": check.memory_mb or 0,
-                    "db_size_mb": check.db_size_mb or 0,
-                    "active_connections": check.active_connections or 0,
-                })
+                consumers.append(
+                    {
+                        "instance": inst,
+                        "cpu_percent": check.cpu_percent or 0,
+                        "memory_mb": check.memory_mb or 0,
+                        "db_size_mb": check.db_size_mb or 0,
+                        "active_connections": check.active_connections or 0,
+                    }
+                )
 
         consumers.sort(key=lambda x: x["cpu_percent"], reverse=True)
         return consumers[:limit]

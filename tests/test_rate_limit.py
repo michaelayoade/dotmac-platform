@@ -1,4 +1,5 @@
 """Tests for rate limiter."""
+
 import time
 from unittest.mock import MagicMock
 
@@ -54,7 +55,8 @@ class TestRateLimiter:
         time.sleep(1.1)
         limiter.check(request)  # Should not raise after window expires
 
-    def test_uses_forwarded_for_header(self):
+    def test_uses_forwarded_for_header(self, monkeypatch):
+        monkeypatch.setenv("TRUSTED_PROXY_IPS", "10.0.0.1,10.0.0.2")
         limiter = RateLimiter(max_requests=1, window_seconds=60)
         request = _mock_request("10.0.0.1")
         request.headers = {"x-forwarded-for": "192.168.1.100, 10.0.0.1"}

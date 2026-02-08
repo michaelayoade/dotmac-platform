@@ -1,12 +1,14 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models.auth import Session as AuthSession, SessionStatus, UserCredential
+from app.models.auth import Session as AuthSession
+from app.models.auth import SessionStatus, UserCredential
 from app.models.person import Person
+from app.rate_limit import login_limiter, password_reset_limiter
 from app.schemas.auth import MFAMethodRead
 from app.schemas.auth_flow import (
     AvatarUploadResponse,
@@ -43,9 +45,8 @@ from app.services.auth_flow import (
     revoke_sessions_for_person,
     verify_password,
 )
-from app.services.email import send_password_reset_email
 from app.services.common import coerce_uuid
-from app.rate_limit import login_limiter, password_reset_limiter
+from app.services.email import send_password_reset_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -81,9 +82,7 @@ def get_db():
 )
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
     login_limiter.check(request)
-    return auth_flow_service.auth_flow.login_response(
-        db, payload.username, payload.password, request, payload.provider
-    )
+    return auth_flow_service.auth_flow.login_response(db, payload.username, payload.password, request, payload.provider)
 
 
 @router.post(
@@ -102,9 +101,7 @@ def mfa_setup(
 ):
     if str(payload.person_id) != auth["person_id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
-    return auth_flow_service.auth_flow.mfa_setup(
-        db, auth["person_id"], payload.label
-    )
+    return auth_flow_service.auth_flow.mfa_setup(db, auth["person_id"], payload.label)
 
 
 @router.post(
@@ -122,9 +119,7 @@ def mfa_confirm(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    return auth_flow_service.auth_flow.mfa_confirm(
-        db, str(payload.method_id), payload.code, auth["person_id"]
-    )
+    return auth_flow_service.auth_flow.mfa_confirm(db, str(payload.method_id), payload.code, auth["person_id"])
 
 
 @router.post(
@@ -137,9 +132,7 @@ def mfa_confirm(
     },
 )
 def mfa_verify(payload: MfaVerifyRequest, request: Request, db: Session = Depends(get_db)):
-    return auth_flow_service.auth_flow.mfa_verify_response(
-        db, payload.mfa_token, payload.code, request
-    )
+    return auth_flow_service.auth_flow.mfa_verify_response(db, payload.mfa_token, payload.code, request)
 
 
 @router.post(
@@ -151,9 +144,7 @@ def mfa_verify(payload: MfaVerifyRequest, request: Request, db: Session = Depend
     },
 )
 def refresh(payload: RefreshRequest, request: Request, db: Session = Depends(get_db)):
-    return auth_flow_service.auth_flow.refresh_response(
-        db, payload.refresh_token, request
-    )
+    return auth_flow_service.auth_flow.refresh_response(db, payload.refresh_token, request)
 
 
 @router.post(
@@ -165,9 +156,7 @@ def refresh(payload: RefreshRequest, request: Request, db: Session = Depends(get
     },
 )
 def logout(payload: LogoutRequest, request: Request, db: Session = Depends(get_db)):
-    return auth_flow_service.auth_flow.logout_response(
-        db, payload.refresh_token, request
-    )
+    return auth_flow_service.auth_flow.logout_response(db, payload.refresh_token, request)
 
 
 @router.get(
@@ -223,9 +212,15 @@ def update_me(
         raise HTTPException(status_code=404, detail="User not found")
 
     _ME_UPDATABLE_FIELDS = {
-        "first_name", "last_name", "display_name", "phone",
-        "date_of_birth", "gender", "preferred_contact_method",
-        "locale", "timezone",
+        "first_name",
+        "last_name",
+        "display_name",
+        "phone",
+        "date_of_birth",
+        "gender",
+        "preferred_contact_method",
+        "locale",
+        "timezone",
     }
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -374,7 +369,7 @@ def revoke_session(
     if session.status == SessionStatus.revoked:
         raise HTTPException(status_code=400, detail="Session already revoked")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session.status = SessionStatus.revoked
     session.revoked_at = now
     db.commit()
@@ -407,7 +402,7 @@ def revoke_all_other_sessions(
     )
     sessions = list(db.scalars(stmt).all())
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for session in sessions:
         session.status = SessionStatus.revoked
         session.revoked_at = now
@@ -448,7 +443,7 @@ def change_password(
     if payload.current_password == payload.new_password:
         raise HTTPException(status_code=400, detail="New password must be different")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     credential.password_hash = hash_password(payload.new_password)
     credential.password_updated_at = now
     credential.must_change_password = False
