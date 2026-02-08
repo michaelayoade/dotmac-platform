@@ -109,7 +109,7 @@ class DomainService:
         )
 
         expected = inst_domain.verification_token
-        if expected in result.stdout:
+        if expected and expected in result.stdout:
             inst_domain.status = DomainStatus.verified
             inst_domain.verified_at = datetime.now(UTC)
             self.db.flush()
@@ -122,32 +122,22 @@ class DomainService:
         }
 
     def provision_ssl(self, instance_id: UUID, domain_id: UUID) -> dict:
-        """Run certbot to provision SSL for a verified domain."""
+        """Activate a verified domain — Caddy handles SSL automatically.
+
+        This transitions a verified domain to active status.  Caddy provisions
+        and renews Let's Encrypt certificates automatically, so no explicit
+        certbot step is needed.
+        """
         inst_domain = self._get_for_instance(instance_id, domain_id)
 
         if inst_domain.status not in (DomainStatus.verified, DomainStatus.active):
-            raise ValueError("Domain must be verified before SSL provisioning")
+            raise ValueError("Domain must be verified before activation")
 
-        instance = self.db.get(Instance, inst_domain.instance_id)
-        server = self.db.get(Server, instance.server_id)
-        ssh = get_ssh_for_server(server)
-
-        q_domain = shlex.quote(inst_domain.domain)
-        result = ssh.exec_command(
-            f"certbot certonly --nginx -d {q_domain} --non-interactive --agree-tos --register-unsafely-without-email",
-            timeout=60,
-        )
-
-        if result.ok:
-            inst_domain.status = DomainStatus.ssl_provisioned
-            inst_domain.ssl_provisioned_at = datetime.now(UTC)
-            self.db.flush()
-            logger.info("SSL provisioned for %s", inst_domain.domain)
-            return {"success": True}
-
-        inst_domain.error_message = result.stderr[:500]
+        inst_domain.status = DomainStatus.active
+        inst_domain.ssl_provisioned_at = datetime.now(UTC)
         self.db.flush()
-        return {"success": False, "error": result.stderr[:500]}
+        logger.info("Domain activated (Caddy auto-SSL): %s", inst_domain.domain)
+        return {"success": True}
 
     def activate_domain(self, instance_id: UUID, domain_id: UUID) -> InstanceDomain:
         """Mark a domain as fully active (SSL provisioned + nginx configured)."""
@@ -157,11 +147,26 @@ class DomainService:
         return inst_domain
 
     def remove_domain(self, instance_id: UUID, domain_id: UUID) -> None:
-        """Remove a domain from an instance."""
+        """Remove a domain from an instance and clean up Caddy config."""
         inst_domain = self._get_for_instance(instance_id, domain_id)
+        domain_name = inst_domain.domain
+
+        # Best-effort removal of Caddy config on the server
+        instance = self.db.get(Instance, inst_domain.instance_id)
+        if instance:
+            server = self.db.get(Server, instance.server_id)
+            if server:
+                try:
+                    from app.services.caddy_service import CaddyService
+
+                    ssh = get_ssh_for_server(server)
+                    CaddyService().remove_instance_config(domain_name, ssh)
+                except Exception:
+                    logger.warning("Could not remove Caddy config for %s", domain_name, exc_info=True)
+
         self.db.delete(inst_domain)
         self.db.flush()
-        logger.info("Removed domain: %s", inst_domain.domain)
+        logger.info("Removed domain: %s", domain_name)
 
     def set_primary(self, instance_id: UUID, domain_id: UUID) -> InstanceDomain:
         """Set a domain as the primary domain for its instance."""
@@ -187,6 +192,6 @@ class DomainService:
         stmt = select(InstanceDomain).where(
             InstanceDomain.ssl_expires_at.isnot(None),
             InstanceDomain.ssl_expires_at <= cutoff,
-            InstanceDomain.status.in_([DomainStatus.ssl_provisioned, DomainStatus.active]),
+            InstanceDomain.status == DomainStatus.active,
         )
         return list(self.db.scalars(stmt).all())

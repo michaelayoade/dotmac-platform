@@ -12,7 +12,6 @@ from app.db import Base
 class DomainStatus(str, enum.Enum):
     pending_verification = "pending_verification"
     verified = "verified"
-    ssl_provisioned = "ssl_provisioned"
     active = "active"
     failed = "failed"
 

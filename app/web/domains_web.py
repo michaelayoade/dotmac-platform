@@ -137,8 +137,8 @@ def domains_provision_ssl(
         result = svc.provision_ssl(instance_id, domain_id)
         db.commit()
         if result.get("success"):
-            return _redirect_with(instance_id, message="SSL provisioned.")
-        return _redirect_with(instance_id, error=result.get("error", "SSL provisioning failed"))
+            return _redirect_with(instance_id, message="Domain activated — Caddy will provision SSL automatically.")
+        return _redirect_with(instance_id, error=result.get("error", "Domain activation failed"))
     except ValueError as e:
         db.rollback()
         return _redirect_with(instance_id, error=str(e))

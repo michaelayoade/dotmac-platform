@@ -29,21 +29,24 @@ def check_trial_expiry(self) -> int:
 
 @shared_task(bind=True, max_retries=2, default_retry_delay=60)
 def check_ssl_expiry(self) -> int:
-    """Check for SSL certificates expiring soon and attempt renewal."""
+    """Monitor SSL certificate expiry — Caddy renews automatically.
+
+    Caddy handles Let's Encrypt renewal, so this task only logs warnings
+    for domains whose tracked expiry dates are approaching.  This provides
+    an early alert if Caddy's auto-renewal has silently failed.
+    """
     logger.info("Checking SSL certificate expiry")
     with SessionLocal() as db:
         from app.services.domain_service import DomainService
 
         svc = DomainService(db)
         expiring = svc.get_expiring_certs(days_until_expiry=14)
-        renewed = 0
         for domain in expiring:
-            try:
-                result = svc.provision_ssl(domain.instance_id, domain.domain_id)
-                if result.get("success"):
-                    renewed += 1
-            except Exception:
-                logger.exception("SSL renewal failed for %s", domain.domain)
-        db.commit()
-        logger.info("Renewed %d/%d expiring certificates", renewed, len(expiring))
-        return renewed
+            logger.warning(
+                "SSL certificate expiring soon for %s (expires %s) — verify Caddy auto-renewal",
+                domain.domain,
+                domain.ssl_expires_at,
+            )
+        if expiring:
+            logger.warning("%d domain(s) have certificates expiring within 14 days", len(expiring))
+        return len(expiring)

@@ -39,7 +39,7 @@ DEPLOY_STEPS = [
     "start_app",
     "migrate",
     "bootstrap",
-    "nginx",
+    "caddy",
     "verify",
 ]
 
@@ -60,7 +60,7 @@ STEP_LABELS = {
     "start_app": "Start application containers",
     "migrate": "Run database migrations",
     "bootstrap": "Bootstrap organization and admin",
-    "nginx": "Configure nginx + SSL",
+    "caddy": "Configure Caddy reverse proxy + SSL",
     "verify": "Verify instance health",
     "restart": "Restart application containers",
 }
@@ -311,7 +311,7 @@ class DeployService:
         self._dispatch_webhook("deploy_started", instance, deployment_id)
 
         ssh = get_ssh_for_server(server)
-        results: dict[str, dict[str, object]] = {}
+        results: dict[str, bool] = {}
         steps = RECONFIGURE_STEPS if deployment_type == "reconfigure" else DEPLOY_STEPS
 
         try:
@@ -377,10 +377,10 @@ class DeployService:
             if not results["bootstrap"]:
                 raise DeployError("bootstrap", "Bootstrap failed")
 
-            # Step 9: Nginx + certbot (non-fatal — DNS may not be ready)
-            results["nginx"] = self._step_nginx(instance, deployment_id, ssh)
-            if not results["nginx"]:
-                logger.warning("Nginx config failed for %s — continuing", instance.org_code)
+            # Step 9: Caddy reverse proxy (non-fatal — DNS may not be ready)
+            results["caddy"] = self._step_caddy(instance, deployment_id, ssh)
+            if not results["caddy"]:
+                logger.warning("Caddy config failed for %s — continuing", instance.org_code)
 
             # Step 10: Verify health
             results["verify"] = self._step_verify(instance, deployment_id, ssh)
@@ -531,7 +531,7 @@ class DeployService:
             from app.services.instance_service import InstanceService
 
             svc = InstanceService(self.db)
-            result = svc.provision_files(instance, admin_password)
+            result = svc.provision_files(instance, admin_password or "")
             self._update_step(
                 instance.instance_id,
                 deployment_id,
@@ -943,8 +943,8 @@ class DeployService:
         )
         return False
 
-    def _step_nginx(self, instance: Instance, deployment_id: str, ssh: SSHService) -> bool:
-        step = "nginx"
+    def _step_caddy(self, instance: Instance, deployment_id: str, ssh: SSHService) -> bool:
+        step = "caddy"
         self._update_step(instance.instance_id, deployment_id, step, DeployStepStatus.running)
 
         if not instance.domain:
@@ -953,21 +953,21 @@ class DeployService:
                 deployment_id,
                 step,
                 DeployStepStatus.skipped,
-                "No domain configured, skipping nginx",
+                "No domain configured, skipping Caddy",
             )
             return True
 
-        from app.services.nginx_service import NginxService
+        from app.services.caddy_service import CaddyService
 
-        nginx_svc = NginxService()
+        caddy_svc = CaddyService()
         try:
-            nginx_svc.configure_instance(instance, ssh)
+            caddy_svc.configure_instance(instance, ssh)
             self._update_step(
                 instance.instance_id,
                 deployment_id,
                 step,
                 DeployStepStatus.success,
-                f"Nginx configured for {instance.domain}",
+                f"Caddy configured for {instance.domain}",
             )
             return True
         except Exception as e:
@@ -1009,7 +1009,7 @@ class DeployService:
     def _rollback_containers(self, instance: Instance, ssh, failed_step: str) -> None:
         """Best-effort rollback: stop containers started during this deploy."""
         # Only roll back if we got past the build step (containers may be running)
-        container_steps = {"start_infra", "start_app", "migrate", "bootstrap", "nginx", "verify"}
+        container_steps = {"start_infra", "start_app", "migrate", "bootstrap", "caddy", "verify"}
         if failed_step not in container_steps:
             logger.info(
                 "Rollback skipped for %s — failed at step '%s' (pre-container)",
