@@ -29,9 +29,9 @@ _TestSessionLocal = sessionmaker(bind=_test_engine, autoflush=False, autocommit=
 
 # Create a mock db module
 mock_db_module = ModuleType("app.db")
-mock_db_module.Base = TestBase
-mock_db_module.SessionLocal = _TestSessionLocal
-mock_db_module.get_engine = lambda: _test_engine
+mock_db_module.Base = TestBase  # type: ignore[attr-defined]
+mock_db_module.SessionLocal = _TestSessionLocal  # type: ignore[attr-defined]
+mock_db_module.get_engine = lambda: _test_engine  # type: ignore[attr-defined]
 
 # Also mock app.config to prevent .env loading
 mock_config_module = ModuleType("app.config")
@@ -55,8 +55,8 @@ class MockSettings:
     health_stale_seconds = 180
 
 
-mock_config_module.settings = MockSettings()
-mock_config_module.Settings = MockSettings
+mock_config_module.settings = MockSettings()  # type: ignore[attr-defined]
+mock_config_module.Settings = MockSettings  # type: ignore[attr-defined]
 
 # Insert mocks before any app imports
 sys.modules["app.config"] = mock_config_module
@@ -78,6 +78,7 @@ from app.models.auth import (
     UserCredential,
 )
 from app.models.domain_settings import DomainSetting, SettingDomain
+from app.models.notification import Notification  # noqa: F401
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role
 from app.models.scheduler import ScheduledTask, ScheduleType
@@ -136,10 +137,19 @@ def auth_env():
 @pytest.fixture(autouse=True)
 def _reset_rate_limiters():
     """Reset in-memory rate limiter state between tests."""
-    from app.rate_limit import login_limiter, password_reset_limiter
+    from app.rate_limit import (
+        login_limiter,
+        mfa_verify_limiter,
+        password_change_limiter,
+        password_reset_limiter,
+        refresh_limiter,
+    )
 
     login_limiter._requests.clear()
     password_reset_limiter._requests.clear()
+    mfa_verify_limiter._requests.clear()
+    refresh_limiter._requests.clear()
+    password_change_limiter._requests.clear()
 
 
 # ============ FastAPI Test Client Fixtures ============
@@ -167,6 +177,8 @@ def client(db_session):
             session.close()
 
     # Override all get_db dependencies
+    from app.api.deps import get_db as deps_get_db
+
     app.dependency_overrides[persons_get_db] = override_get_db
     app.dependency_overrides[auth_flow_get_db] = override_get_db
     app.dependency_overrides[rbac_get_db] = override_get_db
@@ -174,6 +186,7 @@ def client(db_session):
     app.dependency_overrides[settings_get_db] = override_get_db
     app.dependency_overrides[scheduler_get_db] = override_get_db
     app.dependency_overrides[auth_deps_get_db] = override_get_db
+    app.dependency_overrides[deps_get_db] = override_get_db
 
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
@@ -181,7 +194,12 @@ def client(db_session):
     app.dependency_overrides.clear()
 
 
-def _create_access_token(person_id: str, session_id: str, roles: list[str] = None, scopes: list[str] = None) -> str:
+def _create_access_token(
+    person_id: str,
+    session_id: str,
+    roles: list[str] | None = None,
+    scopes: list[str] | None = None,
+) -> str:
     """Create a JWT access token for testing."""
     secret = os.getenv("JWT_SECRET", "test-secret")
     algorithm = os.getenv("JWT_ALGORITHM", "HS256")
@@ -196,7 +214,7 @@ def _create_access_token(person_id: str, session_id: str, roles: list[str] = Non
         "exp": int(expire.timestamp()),
         "iat": int(now.timestamp()),
     }
-    return jwt.encode(payload, secret, algorithm=algorithm)
+    return str(jwt.encode(payload, secret, algorithm=algorithm))
 
 
 @pytest.fixture()

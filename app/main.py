@@ -44,6 +44,7 @@ from app.web.drift_web import router as drift_web_router
 from app.web.helpers import CSRF_COOKIE_NAME
 from app.web.instances import router as instances_router
 from app.web.maintenance_web import router as maintenance_web_router
+from app.web.notifications_web import router as notifications_web_router
 from app.web.people import router as people_web_router
 from app.web.platform_settings import router as platform_settings_router
 from app.web.rbac_web import router as rbac_web_router
@@ -229,6 +230,10 @@ from app.api.instances import router as instances_api_router
 
 _include_api_router(instances_api_router, dependencies=[Depends(require_user_auth)])
 
+from app.api.notifications import router as notifications_api_router
+
+_include_api_router(notifications_api_router, dependencies=[Depends(require_user_auth)])
+
 app.include_router(auth_web_router)
 app.include_router(dashboard_router)
 app.include_router(servers_router)
@@ -247,6 +252,7 @@ app.include_router(secrets_web_router)
 app.include_router(domains_web_router)
 app.include_router(drift_web_router)
 app.include_router(clone_web_router)
+app.include_router(notifications_web_router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

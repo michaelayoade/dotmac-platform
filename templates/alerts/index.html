@@ -12,7 +12,7 @@
 <div class="grid gap-6 lg:grid-cols-[1fr_1fr]">
     <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
         <h2 class="text-lg font-display text-surface-800 dark:text-white">Create Rule</h2>
-        <form method="POST" action="/alerts/rules" class="mt-4 grid gap-3 sm:grid-cols-2">
+        <form method="POST" action="/alerts/rules" class="mt-4 grid gap-3 sm:grid-cols-2" x-data>
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <div class="sm:col-span-2">
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Name</label>
@@ -40,11 +40,15 @@
             </div>
             <div>
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Channel</label>
-                <select name="channel" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                <select name="channel" x-ref="channelSelect" @change="$el.dispatchEvent(new Event('input'))" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
                     {% for value in channels %}
                     <option value="{{ value }}">{{ value }}</option>
                     {% endfor %}
                 </select>
+            </div>
+            <div class="sm:col-span-2" x-show="$refs.channelSelect && $refs.channelSelect.value === 'email'" x-cloak>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Email Recipients</label>
+                <input type="text" name="email_recipients" placeholder="admin@example.com, ops@example.com" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
             </div>
             <div class="sm:col-span-2">
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Instance (optional)</label>

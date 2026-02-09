@@ -43,6 +43,11 @@ from app.models.instance_domain import DomainStatus, InstanceDomain  # noqa: F40
 from app.models.instance_tag import InstanceTag  # noqa: F401
 from app.models.maintenance_window import MaintenanceWindow  # noqa: F401
 from app.models.module import InstanceModule, Module  # noqa: F401
+from app.models.notification import (  # noqa: F401
+    Notification,
+    NotificationCategory,
+    NotificationSeverity,
+)
 from app.models.person import ContactMethod, Gender, Person, PersonStatus  # noqa: F401
 from app.models.plan import Plan  # noqa: F401
 from app.models.rbac import Permission, PersonRole, Role, RolePermission  # noqa: F401

@@ -1085,6 +1085,33 @@ class DeployService:
         except Exception:
             logger.warning("Webhook dispatch failed for %s event", event, exc_info=True)
 
+        # Best-effort in-app notification
+        try:
+            from app.models.notification import NotificationCategory, NotificationSeverity
+            from app.services.notification_service import NotificationService
+
+            severity_map = {
+                "deploy_started": NotificationSeverity.info,
+                "deploy_success": NotificationSeverity.info,
+                "deploy_failed": NotificationSeverity.critical,
+            }
+            title_map = {
+                "deploy_started": f"Deploy started: {instance.org_code}",
+                "deploy_success": f"Deploy succeeded: {instance.org_code}",
+                "deploy_failed": f"Deploy failed: {instance.org_code}",
+            }
+            sev = severity_map.get(event, NotificationSeverity.info)
+            title = title_map.get(event, f"Deploy event: {instance.org_code}")
+            NotificationService(self.db).create_for_admins(
+                category=NotificationCategory.deploy,
+                severity=sev,
+                title=title,
+                message=f"Deployment {deployment_id} for {instance.org_code}",
+                link=f"/instances/{instance.instance_id}",
+            )
+        except Exception:
+            logger.debug("Failed to create deploy notification", exc_info=True)
+
     def check_maintenance_window(self, instance_id: UUID) -> bool:
         """Check if deployment is allowed based on maintenance windows."""
         try:

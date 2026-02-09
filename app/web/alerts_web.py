@@ -64,12 +64,19 @@ def alerts_create_rule(
     channel: str = Form("webhook"),
     instance_id: str = Form(""),
     cooldown_minutes: int = Form(15),
+    email_recipients: str = Form(""),
     csrf_token: str = Form(""),
 ):
     require_admin(auth)
     validate_csrf_token(request, csrf_token)
     from app.services.alert_service import AlertService
     from app.services.common import coerce_uuid
+
+    channel_config: dict[str, list[str]] | None = None
+    if channel == "email" and email_recipients.strip():
+        channel_config = {
+            "recipients": [r.strip() for r in email_recipients.split(",") if r.strip()],
+        }
 
     svc = AlertService(db)
     try:
@@ -79,6 +86,7 @@ def alerts_create_rule(
             operator=AlertOperator(operator),
             threshold=threshold,
             channel=AlertChannel(channel),
+            channel_config=channel_config,
             instance_id=coerce_uuid(instance_id) if instance_id else None,
             cooldown_minutes=cooldown_minutes,
         )

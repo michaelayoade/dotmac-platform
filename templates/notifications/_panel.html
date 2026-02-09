@@ -1,0 +1,25 @@
+<div class="max-h-80 overflow-y-auto divide-y divide-surface-100 dark:divide-surface-800">
+    {% if notifications %}
+        {% for n in notifications %}
+        <a href="{{ n.link or '#' }}"
+           {% if not n.is_read %}hx-post="/notifications/{{ n.notification_id }}/read" hx-swap="none"{% endif %}
+           class="flex items-start gap-3 px-4 py-3 hover:bg-surface-50 dark:hover:bg-surface-800/60 transition {{ '' if n.is_read else 'bg-primary-50/40 dark:bg-primary-900/10' }}">
+            <span class="mt-1 h-2 w-2 shrink-0 rounded-full
+                {% if n.severity.value == 'critical' %}bg-red-500
+                {% elif n.severity.value == 'warning' %}bg-amber-500
+                {% else %}bg-surface-300 dark:bg-surface-600{% endif %}"></span>
+            <div class="min-w-0 flex-1">
+                <p class="text-[13px] font-medium text-surface-800 dark:text-surface-100 truncate">{{ n.title }}</p>
+                <p class="text-[12px] text-surface-400 dark:text-surface-500 line-clamp-2">{{ n.message }}</p>
+                <p class="mt-0.5 text-[11px] text-surface-300 dark:text-surface-600">
+                    {{ n.created_at.strftime('%b %d, %H:%M') if n.created_at else '' }}
+                </p>
+            </div>
+        </a>
+        {% endfor %}
+    {% else %}
+        <div class="px-4 py-8 text-center text-[13px] text-surface-400 dark:text-surface-500">
+            No notifications yet.
+        </div>
+    {% endif %}
+</div>

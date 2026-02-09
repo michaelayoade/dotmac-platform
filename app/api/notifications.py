@@ -1,0 +1,95 @@
+"""Notification API — list and manage in-app notifications."""
+
+from __future__ import annotations
+
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_db, require_user_auth
+from app.services.common import coerce_uuid
+
+router = APIRouter(prefix="/notifications", tags=["notifications"])
+
+
+def _person_id(auth: dict) -> UUID:
+    pid = coerce_uuid(auth["person_id"])
+    if pid is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return pid
+
+
+@router.get("")
+def list_notifications(
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    auth: dict = Depends(require_user_auth),
+) -> dict:
+    from app.services.notification_service import NotificationService
+
+    pid = _person_id(auth)
+    svc = NotificationService(db)
+    notifications = svc.get_recent(pid, limit=limit, offset=offset)
+    unread_count = svc.get_unread_count(pid)
+    return {
+        "unread_count": unread_count,
+        "notifications": [
+            {
+                "notification_id": str(n.notification_id),
+                "category": n.category.value,
+                "severity": n.severity.value,
+                "title": n.title,
+                "message": n.message,
+                "link": n.link,
+                "is_read": n.is_read,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+            }
+            for n in notifications
+        ],
+    }
+
+
+@router.get("/unread-count")
+def unread_count(
+    db: Session = Depends(get_db),
+    auth: dict = Depends(require_user_auth),
+) -> dict:
+    from app.services.notification_service import NotificationService
+
+    pid = _person_id(auth)
+    svc = NotificationService(db)
+    return {"unread_count": svc.get_unread_count(pid)}
+
+
+@router.post("/{notification_id}/read")
+def mark_read(
+    notification_id: UUID,
+    db: Session = Depends(get_db),
+    auth: dict = Depends(require_user_auth),
+) -> dict:
+    from app.services.notification_service import NotificationService
+
+    pid = _person_id(auth)
+    svc = NotificationService(db)
+    try:
+        svc.mark_read(notification_id, pid)
+        db.commit()
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return {"ok": True}
+
+
+@router.post("/read-all")
+def mark_all_read(
+    db: Session = Depends(get_db),
+    auth: dict = Depends(require_user_auth),
+) -> dict:
+    from app.services.notification_service import NotificationService
+
+    pid = _person_id(auth)
+    svc = NotificationService(db)
+    count = svc.mark_all_read(pid)
+    db.commit()
+    return {"marked": count}

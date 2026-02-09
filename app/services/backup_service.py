@@ -112,6 +112,7 @@ class BackupService:
                 backup_file,
                 size_bytes,
             )
+            self._notify_backup(instance, backup)
             return backup
 
         except Exception as e:
@@ -119,13 +120,41 @@ class BackupService:
             backup.error_message = str(e)[:2000]
             self.db.flush()
             logger.exception("Backup failed for %s", instance.org_code)
+            self._notify_backup(instance, backup)
             return backup
+
+    def _notify_backup(self, instance: Instance, backup: Backup) -> None:
+        """Best-effort in-app notification for backup results."""
+        try:
+            from app.models.notification import NotificationCategory, NotificationSeverity
+            from app.services.notification_service import NotificationService
+
+            if backup.status == BackupStatus.completed:
+                sev = NotificationSeverity.info
+                title = f"Backup completed: {instance.org_code}"
+                message = f"Backup finished successfully ({backup.size_bytes or 0} bytes)"
+            else:
+                sev = NotificationSeverity.warning
+                title = f"Backup failed: {instance.org_code}"
+                message = f"Backup failed: {(backup.error_message or 'unknown error')[:200]}"
+
+            NotificationService(self.db).create_for_admins(
+                category=NotificationCategory.backup,
+                severity=sev,
+                title=title,
+                message=message,
+                link=f"/instances/{instance.instance_id}",
+            )
+        except Exception:
+            logger.debug("Failed to create backup notification", exc_info=True)
 
     def restore_backup(self, instance_id: UUID, backup_id: UUID) -> dict:
         """Restore a database from backup."""
         backup = self.get_by_id(backup_id)
         if not backup or backup.instance_id != instance_id or backup.status != BackupStatus.completed:
             raise ValueError("Backup not found or not completed")
+        if not backup.file_path:
+            raise ValueError("Backup file missing")
 
         instance = self.db.get(Instance, backup.instance_id)
         if not instance:

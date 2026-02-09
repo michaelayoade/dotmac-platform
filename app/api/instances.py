@@ -175,10 +175,14 @@ def assign_plan(
     auth=Depends(require_role("admin")),
 ):
     from app.models.instance import Instance
+    from app.services.plan_service import PlanService
 
     instance = db.get(Instance, instance_id)
     if not instance:
         raise HTTPException(status_code=404, detail="Instance not found")
+    plan = PlanService(db).get_by_id(plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
     instance.plan_id = plan_id
     db.commit()
     return {"instance_id": str(instance_id), "plan_id": str(plan_id)}
@@ -204,7 +208,6 @@ def list_backups(
             "backup_id": str(b.backup_id),
             "backup_type": b.backup_type.value,
             "status": b.status.value,
-            "file_path": b.file_path,
             "size_bytes": b.size_bytes,
             "created_at": b.created_at.isoformat() if b.created_at else None,
         }
@@ -289,7 +292,6 @@ def list_domains(
             "domain": d.domain,
             "is_primary": d.is_primary,
             "status": d.status.value,
-            "verification_token": d.verification_token,
             "ssl_expires_at": d.ssl_expires_at.isoformat() if d.ssl_expires_at else None,
         }
         for d in _paginate_list(domains, limit, offset)
@@ -512,8 +514,16 @@ def create_batch_deploy(
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
+    from app.models.deployment_batch import BatchStrategy
     from app.services.batch_deploy_service import BatchDeployService
     from app.tasks.deploy import run_batch_deploy
+
+    if not instance_ids or len(instance_ids) > 100:
+        raise HTTPException(status_code=400, detail="instance_ids must contain 1–100 entries")
+    try:
+        BatchStrategy(strategy)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid strategy: {strategy!r}")
 
     svc = BatchDeployService(db)
     batch = svc.create_batch(instance_ids, strategy=strategy)
@@ -748,11 +758,11 @@ def list_maintenance_windows(
 @router.post("/{instance_id}/maintenance-windows", status_code=status.HTTP_201_CREATED)
 def set_maintenance_window(
     instance_id: UUID,
-    day_of_week: int,
-    start_hour: int,
-    start_minute: int = 0,
-    end_hour: int = 6,
-    end_minute: int = 0,
+    day_of_week: int = Query(..., ge=0, le=6),
+    start_hour: int = Query(..., ge=0, le=23),
+    start_minute: int = Query(0, ge=0, le=59),
+    end_hour: int = Query(6, ge=0, le=23),
+    end_minute: int = Query(0, ge=0, le=59),
     tz: str = "UTC",
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
@@ -807,7 +817,10 @@ def get_instance_usage(
     from app.services.usage_service import UsageService
 
     svc = UsageService(db)
-    m = UsageMetric(metric) if metric else None
+    try:
+        m = UsageMetric(metric) if metric else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid usage metric: {metric!r}")
     records = svc.get_usage(instance_id, metric=m)
     return [
         {
@@ -1073,11 +1086,21 @@ def create_alert_rule(
     channel: str = "webhook",
     instance_id: UUID | None = None,
     cooldown_minutes: int = 15,
+    channel_config: str | None = None,
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
+    import json as _json
+
     from app.models.alert_rule import AlertChannel, AlertMetric, AlertOperator
     from app.services.alert_service import AlertService
+
+    parsed_config: dict | None = None
+    if channel_config:
+        try:
+            parsed_config = _json.loads(channel_config)
+        except (ValueError, TypeError):
+            pass
 
     svc = AlertService(db)
     rule = svc.create_rule(
@@ -1086,6 +1109,7 @@ def create_alert_rule(
         AlertOperator(operator),
         threshold,
         AlertChannel(channel),
+        channel_config=parsed_config,
         instance_id=instance_id,
         cooldown_minutes=cooldown_minutes,
     )

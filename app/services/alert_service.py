@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import html
 import logging
+import os
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -134,7 +136,7 @@ class AlertService:
         from app.models.health_check import HealthStatus
 
         cutoff = datetime.now(UTC) - timedelta(minutes=30)
-        stmt = select(func.count(HealthCheck.check_id)).where(
+        stmt = select(func.count(HealthCheck.id)).where(
             HealthCheck.instance_id == instance_id,
             HealthCheck.status == HealthStatus.unhealthy,
             HealthCheck.checked_at >= cutoff,
@@ -167,15 +169,8 @@ class AlertService:
             self._notify_webhook(rule, instance_id, value)
             event.notified = True
         elif rule.channel == AlertChannel.email:
-            logger.warning(
-                "ALERT [%s] email channel not yet configured — instance=%s metric=%s value=%.2f threshold=%.2f",
-                rule.name,
-                instance_id,
-                rule.metric.value,
-                value,
-                rule.threshold,
-            )
-            event.notified = False
+            self._notify_email(rule, instance_id, value)
+            event.notified = True
         elif rule.channel == AlertChannel.log:
             logger.warning(
                 "ALERT [%s] instance=%s metric=%s value=%.2f threshold=%.2f",
@@ -187,8 +182,72 @@ class AlertService:
             )
             event.notified = True
 
+        # Best-effort in-app notification
+        try:
+            from app.models.notification import NotificationCategory, NotificationSeverity
+            from app.services.notification_service import NotificationService
+
+            sev = NotificationSeverity.critical if value >= rule.threshold * 1.5 else NotificationSeverity.warning
+            NotificationService(self.db).create_for_admins(
+                category=NotificationCategory.alert,
+                severity=sev,
+                title=f"Alert: {rule.name}",
+                message=f"{rule.metric.value} {rule.operator.value} {rule.threshold} (actual: {value:.2f})",
+                link="/alerts",
+            )
+        except Exception:
+            logger.debug("Failed to create alert notification", exc_info=True)
+
         self.db.flush()
         return event
+
+    def _notify_email(self, rule: AlertRule, instance_id: UUID, value: float) -> None:
+        """Send alert email to configured recipients."""
+        try:
+            from app.services.email import send_email
+
+            # Determine recipients
+            recipients: list[str] = []
+            if rule.channel_config and isinstance(rule.channel_config.get("recipients"), list):
+                recipients = [r.strip() for r in rule.channel_config["recipients"] if isinstance(r, str) and r.strip()]
+            if not recipients:
+                env_recipients = os.getenv("ALERT_EMAIL_RECIPIENTS", "")
+                recipients = [r.strip() for r in env_recipients.split(",") if r.strip()]
+
+            if not recipients:
+                logger.warning("Alert [%s] email channel has no recipients configured", rule.name)
+                return
+
+            # Look up instance for context
+            org_code = "unknown"
+            instance = self.db.get(Instance, instance_id) if instance_id else None
+            if instance:
+                org_code = instance.org_code
+
+            safe_name = html.escape(rule.name)
+            safe_org = html.escape(org_code)
+            subject = f"Alert: {rule.name} — {org_code}"
+            body_html = (
+                f"<h3>Alert: {safe_name}</h3>"
+                f"<p><strong>Instance:</strong> {safe_org}</p>"
+                f"<p><strong>Metric:</strong> {html.escape(rule.metric.value)} "
+                f"{html.escape(rule.operator.value)} {rule.threshold}</p>"
+                f"<p><strong>Actual value:</strong> {value:.2f}</p>"
+            )
+            body_text = (
+                f"Alert: {rule.name}\n"
+                f"Instance: {org_code}\n"
+                f"Metric: {rule.metric.value} {rule.operator.value} {rule.threshold}\n"
+                f"Actual value: {value:.2f}"
+            )
+
+            for recipient in recipients:
+                try:
+                    send_email(None, recipient, subject, body_html, body_text)
+                except Exception:
+                    logger.warning("Failed to send alert email to %s for rule %s", recipient, rule.name, exc_info=True)
+        except Exception:
+            logger.warning("Failed to send alert emails for rule %s", rule.name, exc_info=True)
 
     def _notify_webhook(self, rule: AlertRule, instance_id: UUID, value: float) -> None:
         try:
