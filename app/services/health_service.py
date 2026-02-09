@@ -11,6 +11,7 @@ import logging
 import shlex
 import time
 from datetime import UTC, datetime
+from typing import TypedDict
 from uuid import UUID
 
 import httpx
@@ -25,6 +26,14 @@ from app.models.server import Server
 logger = logging.getLogger(__name__)
 
 
+class _ConsumerRow(TypedDict):
+    instance: Instance
+    cpu_percent: float
+    memory_mb: float
+    db_size_mb: float
+    active_connections: int
+
+
 class HealthService:
     def __init__(self, db: Session):
         self.db = db
@@ -37,8 +46,18 @@ class HealthService:
         """
         server = self.db.get(Server, instance.server_id)
         if server and server.is_local:
-            return self._poll_local(instance)
-        return self._poll_remote(instance, server)
+            check = self._poll_local(instance)
+        else:
+            check = self._poll_remote(instance, server)
+
+        try:
+            from app.services.metrics_export import MetricsExportService
+
+            MetricsExportService(self.db).update_instance_metrics(instance, check)
+        except Exception:
+            logger.debug("Failed to update metrics for %s", instance.org_code, exc_info=True)
+
+        return check
 
     def _poll_local(self, instance: Instance) -> HealthCheck:
         """Poll a local instance directly via HTTP."""
@@ -360,7 +379,7 @@ class HealthService:
             return "healthy"
         return "unhealthy"
 
-    def get_top_resource_consumers(self, limit: int = 5) -> list[dict]:
+    def get_top_resource_consumers(self, limit: int = 5) -> list[_ConsumerRow]:
         """Get instances with highest resource usage from latest health checks."""
         stmt = select(Instance).where(Instance.status == InstanceStatus.running)
         running = list(self.db.scalars(stmt).all())
@@ -370,7 +389,7 @@ class HealthService:
         ids = [i.instance_id for i in running]
         checks = self.get_latest_checks_batch(ids)
 
-        consumers = []
+        consumers: list[_ConsumerRow] = []
         for inst in running:
             check = checks.get(inst.instance_id)
             if check:

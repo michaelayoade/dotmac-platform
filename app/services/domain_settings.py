@@ -1,4 +1,6 @@
 import logging
+from collections.abc import Sequence
+from typing import cast
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -26,7 +28,7 @@ class DomainSettings(ListResponseMixin):
             return payload_domain
         raise HTTPException(status_code=400, detail="Setting domain is required")
 
-    def create(self, db: Session, payload: DomainSettingCreate):
+    def create(self, db: Session, payload: DomainSettingCreate) -> DomainSetting:
         data = payload.model_dump()
         data["domain"] = self._resolve_domain(payload.domain)
         if data.get("is_secret"):
@@ -40,7 +42,7 @@ class DomainSettings(ListResponseMixin):
         db.refresh(setting)
         return setting
 
-    def get(self, db: Session, setting_id: str):
+    def get(self, db: Session, setting_id: str) -> DomainSetting:
         setting = db.get(DomainSetting, coerce_uuid(setting_id))
         if not setting or (self.domain and setting.domain != self.domain):
             raise HTTPException(status_code=404, detail="Setting not found")
@@ -55,7 +57,7 @@ class DomainSettings(ListResponseMixin):
         order_dir: str,
         limit: int,
         offset: int,
-    ):
+    ) -> list[DomainSetting]:
         stmt = select(DomainSetting)
         effective_domain = self.domain or domain
         if effective_domain:
@@ -99,7 +101,7 @@ class DomainSettings(ListResponseMixin):
         setting = db.scalar(stmt)
         if not setting:
             raise HTTPException(status_code=404, detail="Setting not found")
-        return setting
+        return cast(DomainSetting, setting)
 
     def upsert_by_key(self, db: Session, key: str, payload: DomainSettingUpdate) -> DomainSetting:
         if not self.domain:
@@ -120,7 +122,7 @@ class DomainSettings(ListResponseMixin):
                 setattr(setting, field, value)
             db.flush()
             db.refresh(setting)
-            return setting
+            return cast(DomainSetting, setting)
         create_payload = DomainSettingCreate(
             domain=self.domain,
             key=key,
@@ -138,7 +140,7 @@ class DomainSettings(ListResponseMixin):
         key: str,
         value_type: SettingValueType,
         value_text: str | None = None,
-        value_json: dict | bool | int | None = None,
+        value_json: dict | Sequence[object] | bool | int | str | None = None,
         is_secret: bool = False,
     ) -> DomainSetting:
         if not self.domain:
@@ -146,13 +148,19 @@ class DomainSettings(ListResponseMixin):
         stmt = select(DomainSetting).where(DomainSetting.domain == self.domain).where(DomainSetting.key == key)
         existing = db.scalar(stmt)
         if existing:
-            return existing
+            return cast(DomainSetting, existing)
+        normalized_value_json = value_json
+        if isinstance(normalized_value_json, bytes):
+            normalized_value_json = normalized_value_json.decode("utf-8", errors="replace")
+        if isinstance(normalized_value_json, Sequence) and not isinstance(normalized_value_json, (str, dict, list)):
+            normalized_value_json = list(normalized_value_json)
+
         payload = DomainSettingCreate(
             domain=self.domain,
             key=key,
             value_type=value_type,
             value_text=value_text,
-            value_json=value_json,
+            value_json=normalized_value_json,
             is_secret=is_secret,
             is_active=True,
         )

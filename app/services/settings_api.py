@@ -34,7 +34,12 @@ def _normalize_spec_setting(domain: SettingDomain, key: str, payload: DomainSett
         raise HTTPException(status_code=400, detail=f"Value must be one of: {allowed}")
     if spec.value_type == SettingValueType.integer:
         try:
-            parsed = int(coerced)
+            if isinstance(coerced, (int, bool)):
+                parsed = int(coerced)
+            elif isinstance(coerced, str):
+                parsed = int(coerced)
+            else:
+                raise TypeError("Invalid integer value")
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=400, detail="Value must be an integer") from exc
         if spec.min_value is not None and parsed < spec.min_value:

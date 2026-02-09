@@ -97,6 +97,10 @@ class FeatureFlagService:
 
     def set_flag(self, instance_id: UUID, flag_key: str, flag_value: str) -> InstanceFlag:
         """Set a feature flag for an instance (upsert)."""
+        if _is_truthy(flag_value):
+            from app.services.resource_enforcement import ResourceEnforcementService
+
+            ResourceEnforcementService(self.db).enforce_flag_access(instance_id, flag_key)
         stmt = select(InstanceFlag).where(
             InstanceFlag.instance_id == instance_id,
             InstanceFlag.flag_key == flag_key,
@@ -126,9 +130,15 @@ class FeatureFlagService:
             self.db.delete(flag)
             self.db.flush()
 
-    def get_env_vars(self, instance_id: UUID) -> dict[str, str]:
+def get_env_vars(self, instance_id: UUID) -> dict[str, str]:
         """Get all flags as env vars for .env generation."""
         env = {}
         for entry in self.list_for_instance(instance_id):
             env[entry["key"]] = entry["value"]
         return env
+
+
+def _is_truthy(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}

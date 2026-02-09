@@ -249,6 +249,9 @@ class ModuleService:
 
         # Check dependencies when enabling
         if enabled:
+            from app.services.resource_enforcement import ResourceEnforcementService
+
+            ResourceEnforcementService(self.db).enforce_module_access(instance_id, module.slug)
             self._check_dependencies(instance_id, module)
 
         stmt = select(InstanceModule).where(

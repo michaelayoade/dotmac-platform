@@ -1,0 +1,123 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-display text-surface-900 dark:text-white">Disaster Recovery</h1>
+    <p class="mt-1 text-[13px] text-surface-400 dark:text-surface-500">Configure DR plans and trigger backups/tests.</p>
+</div>
+
+<div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+    <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-4">Create DR Plan</h2>
+    <form method="POST" action="/dr/create" class="grid gap-4 sm:grid-cols-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <div class="sm:col-span-2">
+            <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Instance</label>
+            <select name="instance_id" required class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                {% for inst in instances %}
+                <option value="{{ inst.instance_id }}">{{ inst.org_code }} — {{ inst.org_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Cron Schedule</label>
+            <input type="text" name="backup_schedule_cron" value="0 2 * * *" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+        </div>
+        <div>
+            <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Retention Days</label>
+            <input type="number" name="retention_days" value="30" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+        </div>
+        <div class="sm:col-span-2">
+            <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Target Server</label>
+            <select name="target_server_id" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                {% for s in servers %}
+                <option value="{{ s.server_id }}">{{ s.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="sm:col-span-2">
+            <button type="submit" class="rounded-lg bg-surface-900 px-4 py-2 text-[13px] font-semibold text-white hover:bg-surface-800 dark:bg-primary-500 dark:text-surface-950 dark:hover:bg-primary-400 transition">Create Plan</button>
+        </div>
+    </form>
+</div>
+
+<div class="mt-6 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-display text-surface-700 dark:text-surface-300">DR Plans</h2>
+    </div>
+    {% if plans %}
+    <div class="overflow-x-auto">
+        <table class="w-full text-[12px]">
+            <thead>
+                <tr class="border-b border-surface-100 dark:border-surface-800/60 text-left">
+                    <th class="pb-2 pr-4 text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400">Instance</th>
+                    <th class="pb-2 pr-4 text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400">Cron</th>
+                    <th class="pb-2 pr-4 text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400">Retention</th>
+                    <th class="pb-2 pr-4 text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400">Last Backup</th>
+                    <th class="pb-2 pr-4 text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400">Last Test</th>
+                    <th class="pb-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-surface-100 dark:divide-surface-800/60">
+                {% for plan in plans %}
+                <tr>
+                    <td class="py-2 pr-4 text-surface-700 dark:text-surface-200">{{ plan.instance_id }}</td>
+                    <td class="py-2 pr-4 text-surface-500">{{ plan.backup_schedule_cron }}</td>
+                    <td class="py-2 pr-4 text-surface-500">{{ plan.retention_days }} days</td>
+                    <td class="py-2 pr-4 text-surface-500">{{ plan.last_backup_at.strftime('%Y-%m-%d %H:%M') if plan.last_backup_at else '--' }}</td>
+                    <td class="py-2 pr-4 text-surface-500">{{ plan.last_test_status.value if plan.last_test_status else '--' }}</td>
+                    <td class="py-2 text-right">
+                        <div class="flex flex-wrap gap-2 justify-end">
+                            <form method="POST" action="/dr/{{ plan.dr_plan_id }}/backup">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                <button class="text-[11px] text-surface-500 hover:text-surface-700">Backup</button>
+                            </form>
+                            <form method="POST" action="/dr/{{ plan.dr_plan_id }}/test">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                <button class="text-[11px] text-surface-500 hover:text-surface-700">Test</button>
+                            </form>
+                            <form method="POST" action="/dr/{{ plan.dr_plan_id }}/delete" onsubmit="return confirm('Delete this DR plan?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                <button class="text-[11px] text-red-500 hover:text-red-600">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                <tr class="bg-surface-50/50 dark:bg-surface-900/40">
+                    <td colspan="6" class="py-3">
+                        <form method="POST" action="/dr/{{ plan.dr_plan_id }}/restore" class="grid gap-3 sm:grid-cols-5 items-end">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <div>
+                                <label class="block text-[10px] uppercase tracking-[0.2em] text-surface-400">Backup ID</label>
+                                <input type="text" name="backup_id" required class="mt-1 w-full rounded-md border border-surface-200 bg-white px-2 py-1 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase tracking-[0.2em] text-surface-400">Target Server</label>
+                                <select name="target_server_id" class="mt-1 w-full rounded-md border border-surface-200 bg-white px-2 py-1 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                                    {% for s in servers %}
+                                    <option value="{{ s.server_id }}">{{ s.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase tracking-[0.2em] text-surface-400">New Org Code</label>
+                                <input type="text" name="new_org_code" required class="mt-1 w-full rounded-md border border-surface-200 bg-white px-2 py-1 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase tracking-[0.2em] text-surface-400">Admin Password</label>
+                                <input type="password" name="admin_password" required class="mt-1 w-full rounded-md border border-surface-200 bg-white px-2 py-1 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+                            </div>
+                            <div>
+                                <button class="rounded-md bg-surface-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-surface-800 dark:bg-primary-500 dark:text-surface-950">Restore</button>
+                            </div>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-[13px] text-surface-400">No DR plans configured.</p>
+    {% endif %}
+</div>
+{% endblock %}

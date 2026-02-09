@@ -112,6 +112,12 @@ class BackupService:
                 backup_file,
                 size_bytes,
             )
+            try:
+                from app.services.metrics_export import MetricsExportService
+
+                MetricsExportService(self.db).update_backup_metrics(instance.instance_id, backup.completed_at)
+            except Exception:
+                logger.debug("Failed to update backup metrics for %s", instance.org_code, exc_info=True)
             self._notify_backup(instance, backup)
             return backup
 
@@ -183,6 +189,71 @@ class BackupService:
             logger.info("Restore completed for %s from %s", instance.org_code, backup.file_path)
             return {"success": True, "message": "Restore completed"}
         return {"success": False, "error": result.stderr[:2000]}
+
+    def restore_backup_clean(self, instance_id: UUID, backup_id: UUID) -> dict:
+        """Clean restore: drop/create DB then restore from backup."""
+        backup = self.get_by_id(backup_id)
+        if not backup or backup.instance_id != instance_id or backup.status != BackupStatus.completed:
+            raise ValueError("Backup not found or not completed")
+        if not backup.file_path:
+            raise ValueError("Backup file missing")
+
+        instance = self.db.get(Instance, backup.instance_id)
+        if not instance:
+            raise ValueError("Instance not found")
+
+        server = self.db.get(Server, instance.server_id)
+        if not server:
+            raise ValueError("Server not found")
+
+        ssh = get_ssh_for_server(server)
+        slug = _safe_slug(instance.org_code.lower())
+        db_container = f"dotmac_{slug}_db"
+        db_name = f"dotmac_{slug}"
+
+        drop_sql = f'DROP DATABASE IF EXISTS "{db_name}" WITH (FORCE); CREATE DATABASE "{db_name}";'
+        drop_cmd = f"docker exec {shlex.quote(db_container)} psql -U postgres -d postgres -c {shlex.quote(drop_sql)}"
+        drop_result = ssh.exec_command(drop_cmd, timeout=60)
+        if not drop_result.ok:
+            return {"success": False, "error": (drop_result.stderr or drop_result.stdout or "Drop failed")[:2000]}
+
+        q_file = shlex.quote(backup.file_path)
+        restore_inner = (
+            f"set -o pipefail; "
+            f"gunzip -c {q_file} | "
+            f"docker exec -i {shlex.quote(db_container)} "
+            f"psql -U postgres -d {shlex.quote(db_name)}"
+        )
+        restore_cmd = f"bash -lc {shlex.quote(restore_inner)}"
+        result = ssh.exec_command(restore_cmd, timeout=600)
+
+        if result.ok:
+            logger.info("Clean restore completed for %s from %s", instance.org_code, backup.file_path)
+            return {"success": True, "message": "Restore completed"}
+        return {"success": False, "error": result.stderr[:2000]}
+
+    def transfer_backup_file(
+        self,
+        backup: Backup,
+        source_server: Server,
+        target_server: Server,
+    ) -> str:
+        """Transfer a backup file between servers and return target file path."""
+        if not backup.file_path:
+            raise ValueError("Backup file missing")
+        source_ssh = get_ssh_for_server(source_server)
+        target_ssh = get_ssh_for_server(target_server)
+
+        local_tmp = f"/tmp/transfer_{backup.backup_id}.sql.gz"
+        target_path = f"/tmp/transfer_{backup.backup_id}.sql.gz"
+
+        source_ssh.sftp_get(backup.file_path, local_tmp)
+        target_ssh.sftp_put(local_tmp, target_path)
+        try:
+            os.remove(local_tmp)
+        except OSError:
+            logger.debug("Failed to remove temp backup %s", local_tmp)
+        return target_path
 
     def delete_backup(self, instance_id: UUID, backup_id: UUID) -> None:
         """Delete a backup record and its file on disk."""

@@ -31,25 +31,32 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.ForeignKeyConstraint(["person_id"], ["people.id"]),
         )
-        op.create_index(
-            "ix_password_reset_tokens_token_hash",
-            "password_reset_tokens",
-            ["token_hash"],
-            unique=True,
-        )
-        op.create_index(
-            "ix_password_reset_tokens_person_id",
-            "password_reset_tokens",
-            ["person_id"],
-        )
+    if inspector.has_table("password_reset_tokens"):
+        existing_indexes = {idx["name"] for idx in inspector.get_indexes("password_reset_tokens")}
+        if "ix_password_reset_tokens_token_hash" not in existing_indexes:
+            op.create_index(
+                "ix_password_reset_tokens_token_hash",
+                "password_reset_tokens",
+                ["token_hash"],
+                unique=True,
+            )
+        if "ix_password_reset_tokens_person_id" not in existing_indexes:
+            op.create_index(
+                "ix_password_reset_tokens_person_id",
+                "password_reset_tokens",
+                ["person_id"],
+            )
 
     if inspector.has_table("user_credentials"):
-        existing = {uc["name"] for uc in inspector.get_unique_constraints("user_credentials")}
-        if "uq_user_credentials_username" not in existing:
-            op.create_unique_constraint(
-                "uq_user_credentials_username",
+        existing_indexes = {idx["name"] for idx in inspector.get_indexes("user_credentials")}
+        if "ux_user_credentials_username_not_null" not in existing_indexes:
+            op.create_index(
+                "ux_user_credentials_username_not_null",
                 "user_credentials",
                 ["username"],
+                unique=True,
+                postgresql_where=sa.text("username IS NOT NULL"),
+                sqlite_where=sa.text("username IS NOT NULL"),
             )
 
 
@@ -58,11 +65,14 @@ def downgrade() -> None:
     inspector = sa.inspect(bind)
 
     if inspector.has_table("user_credentials"):
-        existing = {uc["name"] for uc in inspector.get_unique_constraints("user_credentials")}
-        if "uq_user_credentials_username" in existing:
-            op.drop_constraint("uq_user_credentials_username", "user_credentials", type_="unique")
+        existing_indexes = {idx["name"] for idx in inspector.get_indexes("user_credentials")}
+        if "ux_user_credentials_username_not_null" in existing_indexes:
+            op.drop_index("ux_user_credentials_username_not_null", table_name="user_credentials")
 
     if inspector.has_table("password_reset_tokens"):
-        op.drop_index("ix_password_reset_tokens_person_id", table_name="password_reset_tokens")
-        op.drop_index("ix_password_reset_tokens_token_hash", table_name="password_reset_tokens")
+        existing_indexes = {idx["name"] for idx in inspector.get_indexes("password_reset_tokens")}
+        if "ix_password_reset_tokens_person_id" in existing_indexes:
+            op.drop_index("ix_password_reset_tokens_person_id", table_name="password_reset_tokens")
+        if "ix_password_reset_tokens_token_hash" in existing_indexes:
+            op.drop_index("ix_password_reset_tokens_token_hash", table_name="password_reset_tokens")
         op.drop_table("password_reset_tokens")

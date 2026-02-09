@@ -188,6 +188,71 @@ def assign_plan(
     return {"instance_id": str(instance_id), "plan_id": str(plan_id)}
 
 
+# ──────────────────────────── Secret Rotation ────────────────────
+
+
+@router.post("/{instance_id}/secrets/rotate", status_code=status.HTTP_202_ACCEPTED)
+def rotate_secret(
+    instance_id: UUID,
+    secret_name: str,
+    confirm_destructive: bool = False,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.tasks.secrets import rotate_secret_task
+
+    task = rotate_secret_task.delay(
+        str(instance_id),
+        secret_name,
+        rotated_by=auth.get("person_id"),
+        confirm_destructive=confirm_destructive,
+    )
+    return {"task_id": task.id, "instance_id": str(instance_id), "secret_name": secret_name}
+
+
+@router.post("/{instance_id}/secrets/rotate-all", status_code=status.HTTP_202_ACCEPTED)
+def rotate_all_secrets(
+    instance_id: UUID,
+    confirm_destructive: bool = False,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.tasks.secrets import rotate_all_secrets_task
+
+    task = rotate_all_secrets_task.delay(
+        str(instance_id),
+        rotated_by=auth.get("person_id"),
+        confirm_destructive=confirm_destructive,
+    )
+    return {"task_id": task.id, "instance_id": str(instance_id)}
+
+
+@router.get("/{instance_id}/secrets/history")
+def secret_rotation_history(
+    instance_id: UUID,
+    limit: int = Query(25, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.secret_rotation_service import SecretRotationService
+
+    logs = SecretRotationService(db).get_rotation_history(instance_id, limit=limit, offset=offset)
+    return [
+        {
+            "id": log.id,
+            "secret_name": log.secret_name,
+            "status": log.status.value,
+            "rotated_by": log.rotated_by,
+            "error_message": log.error_message,
+            "started_at": log.started_at.isoformat() if log.started_at else None,
+            "completed_at": log.completed_at.isoformat() if log.completed_at else None,
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+        }
+        for log in logs
+    ]
+
+
 # ──────────────────────────── Backups ────────────────────────────
 
 
@@ -704,28 +769,64 @@ def get_tenant_audit_log(
 # ──────────────────────────── Instance Cloning ───────────────────
 
 
-@router.post("/{instance_id}/clone", status_code=status.HTTP_201_CREATED)
+@router.post("/{instance_id}/clone", status_code=status.HTTP_202_ACCEPTED)
 def clone_instance(
     instance_id: UUID,
     new_org_code: str,
     new_org_name: str | None = None,
     include_data: bool = True,
+    target_server_id: UUID | None = None,
+    admin_password: str | None = None,
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
     from app.services.clone_service import CloneService
+    from app.tasks.clone import run_clone_instance
 
     svc = CloneService(db)
     try:
-        clone = svc.clone_instance(instance_id, new_org_code, new_org_name, include_data=include_data)
+        clone = svc.clone_instance(
+            instance_id,
+            new_org_code,
+            new_org_name,
+            include_data=include_data,
+            target_server_id=target_server_id,
+            admin_password=admin_password,
+        )
         db.commit()
+        run_clone_instance.delay(str(clone.clone_id))
         return {
-            "instance_id": str(clone.instance_id),
-            "org_code": clone.org_code,
+            "clone_id": str(clone.clone_id),
+            "source_instance_id": str(clone.source_instance_id),
             "status": clone.status.value,
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{instance_id}/clones/{clone_id}")
+def get_clone_status(
+    instance_id: UUID,
+    clone_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    from app.services.clone_service import CloneService
+
+    op = CloneService(db).get_clone_operation(clone_id)
+    if not op or op.source_instance_id != instance_id:
+        raise HTTPException(status_code=404, detail="Clone operation not found")
+    return {
+        "clone_id": str(op.clone_id),
+        "source_instance_id": str(op.source_instance_id),
+        "target_instance_id": str(op.target_instance_id) if op.target_instance_id else None,
+        "status": op.status.value,
+        "progress_pct": op.progress_pct,
+        "current_step": op.current_step,
+        "error_message": op.error_message,
+        "created_at": op.created_at.isoformat() if op.created_at else None,
+        "completed_at": op.completed_at.isoformat() if op.completed_at else None,
+    }
 
 
 # ──────────────────────────── Maintenance Windows ────────────────
@@ -847,6 +948,44 @@ def get_billing_summary(
     now = datetime.now(UTC)
     period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     return svc.get_billing_summary(instance_id, period_start, now)
+
+
+# ──────────────────────────── Compliance ─────────────────────────
+
+
+@router.get("/{instance_id}/compliance")
+def get_plan_compliance(
+    instance_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.resource_enforcement import ResourceEnforcementService
+
+    violations = ResourceEnforcementService(db).check_plan_compliance(instance_id)
+    return [
+        {
+            "kind": v.kind,
+            "message": v.message,
+            "current": v.current,
+            "limit": v.limit,
+            "percent": v.percent,
+        }
+        for v in violations
+    ]
+
+
+@router.get("/{instance_id}/usage-summary")
+def get_usage_summary(
+    instance_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.resource_enforcement import ResourceEnforcementService
+
+    try:
+        return ResourceEnforcementService(db).get_usage_summary(instance_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # ──────────────────────────── Tags ───────────────────────────────
@@ -1045,6 +1184,20 @@ def detect_drift(
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ──────────────────────────── DR Status ─────────────────────────
+
+
+@router.get("/{instance_id}/dr-status")
+def get_dr_status(
+    instance_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    from app.services.dr_service import DisasterRecoveryService
+
+    return DisasterRecoveryService(db).get_dr_status(instance_id)
 
 
 # ──────────────────────────── Alerts ─────────────────────────────

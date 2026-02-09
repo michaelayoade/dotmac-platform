@@ -206,6 +206,11 @@ def seed_scheduled_tasks(db: Session) -> None:
             "interval_seconds": 3600,
         },
         {
+            "name": "Check plan limits",
+            "task_name": "app.tasks.monitoring.check_plan_limits",
+            "interval_seconds": 3600,
+        },
+        {
             "name": "Detect config drift",
             "task_name": "app.tasks.monitoring.detect_config_drift",
             "interval_seconds": 21600,

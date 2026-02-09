@@ -18,6 +18,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    is_postgres = bind.dialect.name == "postgresql"
     # Webhook Endpoints
     op.create_table(
         "webhook_endpoints",
@@ -25,7 +27,11 @@ def upgrade() -> None:
         sa.Column("url", sa.String(1024), nullable=False),
         sa.Column("secret", sa.String(256)),
         sa.Column("description", sa.String(500)),
-        sa.Column("events", JSON, server_default="[]"),
+        sa.Column(
+            "events",
+            JSON,
+            server_default=sa.text("'[]'::json") if is_postgres else sa.text("'[]'"),
+        ),
         sa.Column("is_active", sa.Boolean(), server_default="true"),
         sa.Column("instance_id", UUID(as_uuid=True), sa.ForeignKey("instances.instance_id"), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
@@ -37,7 +43,11 @@ def upgrade() -> None:
         sa.Column("delivery_id", UUID(as_uuid=True), primary_key=True),
         sa.Column("endpoint_id", UUID(as_uuid=True), sa.ForeignKey("webhook_endpoints.endpoint_id"), nullable=False),
         sa.Column("event", sa.String(60), nullable=False),
-        sa.Column("payload", JSON, server_default="{}"),
+        sa.Column(
+            "payload",
+            JSON,
+            server_default=sa.text("'{}'::json") if is_postgres else sa.text("'{}'"),
+        ),
         sa.Column("status", sa.Enum("pending", "success", "failed", name="deliverystatus"), server_default="pending"),
         sa.Column("response_code", sa.Integer()),
         sa.Column("response_body", sa.Text()),
@@ -136,7 +146,11 @@ def upgrade() -> None:
         "drift_reports",
         sa.Column("id", sa.Integer(), autoincrement=True, primary_key=True),
         sa.Column("instance_id", UUID(as_uuid=True), sa.ForeignKey("instances.instance_id"), nullable=False),
-        sa.Column("diffs", JSON, server_default="{}"),
+        sa.Column(
+            "diffs",
+            JSON,
+            server_default=sa.text("'{}'::json") if is_postgres else sa.text("'{}'"),
+        ),
         sa.Column("has_drift", sa.Boolean(), server_default="false"),
         sa.Column("detected_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )

@@ -9,6 +9,8 @@ from datetime import UTC, datetime, timedelta
 import pyotp
 
 logger = logging.getLogger(__name__)
+from typing import cast
+
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException, Request, Response, status
 from jose import JWTError, jwt
@@ -207,7 +209,7 @@ def _issue_access_token(
         payload["roles"] = roles
     if permissions:
         payload["scopes"] = permissions
-    return jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db))
+    return cast(str, jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db)))
 
 
 def _issue_mfa_token(db: Session | None, person_id: str) -> str:
@@ -218,7 +220,7 @@ def _issue_mfa_token(db: Session | None, person_id: str) -> str:
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=5)).timestamp()),
     }
-    return jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db))
+    return cast(str, jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db)))
 
 
 def _password_reset_ttl_minutes(db: Session | None) -> int:
@@ -243,7 +245,7 @@ def _issue_password_reset_token(db: Session | None, person_id: str, email: str) 
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=_password_reset_ttl_minutes(db))).timestamp()),
     }
-    return jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db))
+    return cast(str, jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db)))
 
 
 def _decode_password_reset_token(db: Session | None, token: str) -> dict:
@@ -252,7 +254,7 @@ def _decode_password_reset_token(db: Session | None, token: str) -> dict:
 
 def _decode_jwt(db: Session | None, token: str, expected_type: str) -> dict:
     try:
-        payload = jwt.decode(token, _jwt_secret(db), algorithms=[_jwt_algorithm(db)])
+        payload = cast(dict, jwt.decode(token, _jwt_secret(db), algorithms=[_jwt_algorithm(db)]))
     except JWTError as exc:
         raise HTTPException(status_code=401, detail="Invalid token") from exc
     if payload.get("typ") != expected_type:
@@ -306,7 +308,7 @@ def _primary_totp_method(db: Session, person_id: str) -> MFAMethod | None:
         .where(MFAMethod.enabled.is_(True))
         .where(MFAMethod.is_primary.is_(True))
     )
-    return db.scalar(stmt)
+    return cast(MFAMethod | None, db.scalar(stmt))
 
 
 def _encrypt_secret(db: Session | None, secret: str) -> str:
@@ -321,13 +323,13 @@ def _decrypt_secret(db: Session | None, secret: str) -> str:
 
 
 def hash_password(password: str) -> str:
-    return PASSWORD_CONTEXT.hash(password)
+    return cast(str, PASSWORD_CONTEXT.hash(password))
 
 
 def verify_password(password: str, password_hash: str | None) -> bool:
     if not password_hash:
         return False
-    return PASSWORD_CONTEXT.verify(password, password_hash)
+    return cast(bool, PASSWORD_CONTEXT.verify(password, password_hash))
 
 
 def revoke_sessions_for_person(
@@ -399,14 +401,26 @@ class AuthFlow(ListResponseMixin):
         return response
 
     @staticmethod
-    def login_response(db: Session, username: str, password: str, request: Request, provider: str | None):
+    def login_response(
+        db: Session,
+        username: str,
+        password: str,
+        request: Request,
+        provider: AuthProvider | str | None,
+    ):
         result = AuthFlow.login(db, username, password, request, provider)
         if result.get("refresh_token"):
             return AuthFlow._response_with_refresh_cookie(db, result, LoginResponse, status.HTTP_200_OK)
         return result
 
     @staticmethod
-    def login(db: Session, username: str, password: str, request: Request, provider: str | None):
+    def login(
+        db: Session,
+        username: str,
+        password: str,
+        request: Request,
+        provider: AuthProvider | str | None,
+    ):
         if isinstance(provider, AuthProvider):
             provider_value = provider.value
         else:
@@ -456,7 +470,7 @@ class AuthFlow(ListResponseMixin):
                 "mfa_token": _issue_mfa_token(db, str(credential.person_id)),
             }
 
-        return AuthFlow._issue_tokens(db, credential.person_id, request)
+        return AuthFlow._issue_tokens(db, str(credential.person_id), request)
 
     @staticmethod
     def mfa_setup(db: Session, person_id: str, label: str | None):
@@ -652,7 +666,8 @@ class AuthFlow(ListResponseMixin):
     @staticmethod
     def resolve_refresh_token(request: Request, refresh_token: str | None, db: Session | None = None):
         settings = AuthFlow.refresh_cookie_settings(db)
-        return refresh_token or request.cookies.get(settings["key"])
+        value = refresh_token or request.cookies.get(settings["key"])
+        return cast(str | None, value)
 
     @staticmethod
     def refresh_cookie_settings(db: Session | None = None):

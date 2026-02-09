@@ -167,7 +167,13 @@ def rbac_add_role_permission(
     validate_csrf_token(request, csrf_token)
     from app.services.rbac import role_permissions as rp_service
 
-    rp_service.create(db, RolePermissionCreate(role_id=role_id, permission_id=permission_id))
+    rp_service.create(
+        db,
+        RolePermissionCreate(
+            role_id=UUID(role_id),
+            permission_id=UUID(permission_id),
+        ),
+    )
     return RedirectResponse(f"/rbac?role_id={role_id}", status_code=302)
 
 

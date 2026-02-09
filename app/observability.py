@@ -52,8 +52,8 @@ def _extract_actor_id_from_jwt(token: str | None) -> str | None:
 def _request_path(request: Request) -> str:
     route = request.scope.get("route")
     if route and hasattr(route, "path"):
-        return route.path
-    return request.url.path
+        return str(route.path)
+    return str(request.url.path)
 
 
 class ObservabilityMiddleware(BaseHTTPMiddleware):

@@ -36,10 +36,13 @@ domain_status_enum = sa.Enum(
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    is_postgres = bind.dialect.name == "postgresql"
     # ── 1. Extend the existing instancestatus enum with new values ──────
-    op.execute("ALTER TYPE instancestatus ADD VALUE IF NOT EXISTS 'trial'")
-    op.execute("ALTER TYPE instancestatus ADD VALUE IF NOT EXISTS 'suspended'")
-    op.execute("ALTER TYPE instancestatus ADD VALUE IF NOT EXISTS 'archived'")
+    if is_postgres:
+        op.execute("ALTER TYPE instancestatus ADD VALUE IF NOT EXISTS 'trial'")
+        op.execute("ALTER TYPE instancestatus ADD VALUE IF NOT EXISTS 'suspended'")
+        op.execute("ALTER TYPE instancestatus ADD VALUE IF NOT EXISTS 'archived'")
 
     # ── 2. Create new tables (plans first, because instances will FK to it) ─
 
@@ -51,8 +54,18 @@ def upgrade() -> None:
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("max_users", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("max_storage_gb", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("allowed_modules", JSON(), nullable=False, server_default="[]"),
-        sa.Column("allowed_flags", JSON(), nullable=False, server_default="[]"),
+        sa.Column(
+            "allowed_modules",
+            JSON(),
+            nullable=False,
+            server_default=sa.text("'[]'::json") if is_postgres else sa.text("'[]'"),
+        ),
+        sa.Column(
+            "allowed_flags",
+            JSON(),
+            nullable=False,
+            server_default=sa.text("'[]'::json") if is_postgres else sa.text("'[]'"),
+        ),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
@@ -67,8 +80,18 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=120), nullable=False),
         sa.Column("slug", sa.String(length=60), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("schemas", JSON(), nullable=False, server_default="[]"),
-        sa.Column("dependencies", JSON(), nullable=False, server_default="[]"),
+        sa.Column(
+            "schemas",
+            JSON(),
+            nullable=False,
+            server_default=sa.text("'[]'::json") if is_postgres else sa.text("'[]'"),
+        ),
+        sa.Column(
+            "dependencies",
+            JSON(),
+            nullable=False,
+            server_default=sa.text("'[]'::json") if is_postgres else sa.text("'[]'"),
+        ),
         sa.Column("is_core", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),

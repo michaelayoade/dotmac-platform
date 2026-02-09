@@ -7,6 +7,7 @@ Create Date: 2026-02-04 15:16:00.657160
 """
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
 from sqlalchemy.dialects.postgresql import UUID
 
 from alembic import op
@@ -20,29 +21,31 @@ depends_on = None
 def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
+    is_postgres = bind.dialect.name == "postgresql"
 
     # Add 'platform' value to settingdomain enum
-    op.execute("ALTER TYPE settingdomain ADD VALUE IF NOT EXISTS 'platform'")
+    if is_postgres:
+        op.execute("ALTER TYPE settingdomain ADD VALUE IF NOT EXISTS 'platform'")
 
     # Create enum types if they don't exist
     existing_enums = [e["name"] for e in inspector.get_enums()]
 
-    if "serverstatus" not in existing_enums:
+    if is_postgres and "serverstatus" not in existing_enums:
         sa.Enum("connected", "unreachable", "unknown", name="serverstatus").create(bind)
 
-    if "sectortype" not in existing_enums:
+    if is_postgres and "sectortype" not in existing_enums:
         sa.Enum("PRIVATE", "PUBLIC", "NGO", name="sectortype").create(bind)
 
-    if "accountingframework" not in existing_enums:
+    if is_postgres and "accountingframework" not in existing_enums:
         sa.Enum("IFRS", "IPSAS", "BOTH", name="accountingframework").create(bind)
 
-    if "instancestatus" not in existing_enums:
+    if is_postgres and "instancestatus" not in existing_enums:
         sa.Enum("provisioned", "deploying", "running", "stopped", "error", name="instancestatus").create(bind)
 
-    if "healthstatus" not in existing_enums:
+    if is_postgres and "healthstatus" not in existing_enums:
         sa.Enum("healthy", "unhealthy", "unreachable", name="healthstatus").create(bind)
 
-    if "deploystepstatus" not in existing_enums:
+    if is_postgres and "deploystepstatus" not in existing_enums:
         sa.Enum("pending", "running", "success", "failed", "skipped", name="deploystepstatus").create(bind)
 
     # Create servers table
@@ -59,8 +62,8 @@ def upgrade() -> None:
             sa.Column("is_local", sa.Boolean, server_default="false"),
             sa.Column(
                 "status",
-                sa.Enum("connected", "unreachable", "unknown", name="serverstatus", create_type=False),
-                server_default="'unknown'",
+                PG_ENUM("connected", "unreachable", "unknown", name="serverstatus", create_type=False),
+                server_default="unknown",
             ),
             sa.Column("last_connected", sa.DateTime(timezone=True), nullable=True),
             sa.Column("notes", sa.Text, nullable=True),
@@ -79,13 +82,13 @@ def upgrade() -> None:
             sa.Column("org_uuid", sa.String(36), nullable=True),
             sa.Column(
                 "sector_type",
-                sa.Enum("PRIVATE", "PUBLIC", "NGO", name="sectortype", create_type=False),
-                server_default="'PRIVATE'",
+                PG_ENUM("PRIVATE", "PUBLIC", "NGO", name="sectortype", create_type=False),
+                server_default="PRIVATE",
             ),
             sa.Column(
                 "framework",
-                sa.Enum("IFRS", "IPSAS", "BOTH", name="accountingframework", create_type=False),
-                server_default="'IFRS'",
+                PG_ENUM("IFRS", "IPSAS", "BOTH", name="accountingframework", create_type=False),
+                server_default="IFRS",
             ),
             sa.Column("currency", sa.String(3), server_default="'NGN'"),
             sa.Column("app_port", sa.Integer, nullable=False),
@@ -98,10 +101,10 @@ def upgrade() -> None:
             sa.Column("deploy_path", sa.String(512), nullable=True),
             sa.Column(
                 "status",
-                sa.Enum(
+                PG_ENUM(
                     "provisioned", "deploying", "running", "stopped", "error", name="instancestatus", create_type=False
                 ),
-                server_default="'provisioned'",
+                server_default="provisioned",
             ),
             sa.Column("notes", sa.Text, nullable=True),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
@@ -119,8 +122,8 @@ def upgrade() -> None:
             sa.Column("checked_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column(
                 "status",
-                sa.Enum("healthy", "unhealthy", "unreachable", name="healthstatus", create_type=False),
-                server_default="'unreachable'",
+                PG_ENUM("healthy", "unhealthy", "unreachable", name="healthstatus", create_type=False),
+                server_default="unreachable",
             ),
             sa.Column("response_ms", sa.Integer, nullable=True),
             sa.Column("db_healthy", sa.Boolean, nullable=True),
@@ -140,10 +143,10 @@ def upgrade() -> None:
             sa.Column("step", sa.String(60), nullable=False),
             sa.Column(
                 "status",
-                sa.Enum(
+                PG_ENUM(
                     "pending", "running", "success", "failed", "skipped", name="deploystepstatus", create_type=False
                 ),
-                server_default="'pending'",
+                server_default="pending",
             ),
             sa.Column("message", sa.Text, nullable=True),
             sa.Column("output", sa.Text, nullable=True),

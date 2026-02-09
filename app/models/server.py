@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +24,7 @@ class Server(Base):
     ssh_port: Mapped[int] = mapped_column(Integer, default=22)
     ssh_user: Mapped[str] = mapped_column(String(80), default="root")
     ssh_key_path: Mapped[str] = mapped_column(String(512), default="/root/.ssh/id_rsa")
+    ssh_key_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("ssh_keys.key_id"))
     base_domain: Mapped[str | None] = mapped_column(String(255))
     is_local: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[ServerStatus] = mapped_column(Enum(ServerStatus), default=ServerStatus.unknown)

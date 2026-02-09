@@ -14,10 +14,14 @@ from starlette.responses import Response
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.auth_flow import router as auth_flow_router
+from app.api.dr import router as dr_api_router
 from app.api.deps import require_role, require_user_auth
+from app.api.git_repos import router as git_repos_api_router
+from app.api.observability import router as observability_api_router
 from app.api.persons import router as people_router
 from app.api.rbac import router as rbac_router
 from app.api.scheduler import router as scheduler_router
+from app.api.ssh_keys import router as ssh_keys_api_router
 from app.api.settings import router as settings_router
 from app.config import settings
 from app.db import SessionLocal
@@ -40,9 +44,12 @@ from app.web.auth_web import router as auth_web_router
 from app.web.clone_web import router as clone_web_router
 from app.web.dashboard import router as dashboard_router
 from app.web.domains_web import router as domains_web_router
+from app.web.dr_web import router as dr_web_router
 from app.web.drift_web import router as drift_web_router
 from app.web.helpers import CSRF_COOKIE_NAME
 from app.web.instances import router as instances_router
+from app.web.git_repos_web import router as git_repos_web_router
+from app.web.logs_web import router as logs_web_router
 from app.web.maintenance_web import router as maintenance_web_router
 from app.web.notifications_web import router as notifications_web_router
 from app.web.people import router as people_web_router
@@ -51,6 +58,7 @@ from app.web.rbac_web import router as rbac_web_router
 from app.web.scheduler_web import router as scheduler_web_router
 from app.web.secrets_web import router as secrets_web_router
 from app.web.servers import router as servers_router
+from app.web.ssh_keys_web import router as ssh_keys_web_router
 from app.web.usage_web import router as usage_web_router
 from app.web.webhooks_web import router as webhooks_web_router
 
@@ -233,6 +241,10 @@ _include_api_router(instances_api_router, dependencies=[Depends(require_user_aut
 from app.api.notifications import router as notifications_api_router
 
 _include_api_router(notifications_api_router, dependencies=[Depends(require_user_auth)])
+_include_api_router(observability_api_router, dependencies=[Depends(require_user_auth)])
+_include_api_router(ssh_keys_api_router, dependencies=[Depends(require_user_auth)])
+_include_api_router(git_repos_api_router, dependencies=[Depends(require_user_auth)])
+_include_api_router(dr_api_router, dependencies=[Depends(require_user_auth)])
 
 app.include_router(auth_web_router)
 app.include_router(dashboard_router)
@@ -253,6 +265,10 @@ app.include_router(domains_web_router)
 app.include_router(drift_web_router)
 app.include_router(clone_web_router)
 app.include_router(notifications_web_router)
+app.include_router(logs_web_router)
+app.include_router(ssh_keys_web_router)
+app.include_router(git_repos_web_router)
+app.include_router(dr_web_router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

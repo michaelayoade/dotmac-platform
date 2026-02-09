@@ -8,7 +8,13 @@ from app.db import SessionLocal
 from app.models.auth import Session as AuthSession
 from app.models.auth import SessionStatus, UserCredential
 from app.models.person import Person
-from app.rate_limit import login_limiter, password_reset_limiter
+from app.rate_limit import (
+    login_limiter,
+    mfa_verify_limiter,
+    password_change_limiter,
+    password_reset_limiter,
+    refresh_limiter,
+)
 from app.schemas.auth import MFAMethodRead
 from app.schemas.auth_flow import (
     AvatarUploadResponse,
@@ -132,6 +138,7 @@ def mfa_confirm(
     },
 )
 def mfa_verify(payload: MfaVerifyRequest, request: Request, db: Session = Depends(get_db)):
+    mfa_verify_limiter.check(request)
     return auth_flow_service.auth_flow.mfa_verify_response(db, payload.mfa_token, payload.code, request)
 
 
@@ -144,6 +151,7 @@ def mfa_verify(payload: MfaVerifyRequest, request: Request, db: Session = Depend
     },
 )
 def refresh(payload: RefreshRequest, request: Request, db: Session = Depends(get_db)):
+    refresh_limiter.check(request)
     return auth_flow_service.auth_flow.refresh_response(db, payload.refresh_token, request)
 
 
@@ -424,9 +432,11 @@ def revoke_all_other_sessions(
 )
 def change_password(
     payload: PasswordChangeRequest,
+    request: Request,
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
+    password_change_limiter.check(request)
     stmt = (
         select(UserCredential)
         .where(UserCredential.person_id == coerce_uuid(auth["person_id"]))

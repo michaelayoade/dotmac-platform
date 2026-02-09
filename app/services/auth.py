@@ -5,7 +5,7 @@ import os
 import secrets
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from fastapi import HTTPException, Request
 
@@ -151,7 +151,7 @@ class UserCredentials(ListResponseMixin):
         if "provider" not in fields_set:
             default_provider = settings_spec.resolve_value(db, SettingDomain.auth, "default_auth_provider")
             if default_provider:
-                data["provider"] = _validate_enum(default_provider, AuthProvider, "provider")
+                data["provider"] = _validate_enum(str(default_provider), AuthProvider, "provider")
         credential = UserCredential(**data)
         db.add(credential)
         db.commit()
@@ -423,7 +423,7 @@ class ApiKeys(ListResponseMixin):
         window = max(window_seconds, 1)
         key = f"api_key_rl:{client_ip}:{int(time.time() // window)}"
         try:
-            count = redis_client.incr(key)
+            count = int(cast(int, redis_client.incr(key)))
             if count == 1:
                 redis_client.expire(key, window)
             if count > max(max_per_window, 1):

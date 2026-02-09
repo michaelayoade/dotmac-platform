@@ -63,6 +63,12 @@ class Instance(Base):
     git_branch: Mapped[str | None] = mapped_column(String(120))
     git_tag: Mapped[str | None] = mapped_column(String(120))
     deployed_git_ref: Mapped[str | None] = mapped_column(String(120))
+    git_repo_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("git_repositories.repo_id"),
+        nullable=True,
+        index=True,
+    )
     # Lifecycle
     trial_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

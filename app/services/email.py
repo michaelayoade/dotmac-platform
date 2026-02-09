@@ -80,7 +80,7 @@ def send_email(
 
     last_err: Exception | None = None
     for attempt in range(_SMTP_MAX_RETRIES + 1):
-        server = None
+        server: smtplib.SMTP | smtplib.SMTP_SSL | None = None
         try:
             if config["use_ssl"]:
                 server = smtplib.SMTP_SSL(config["host"], config["port"])

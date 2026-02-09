@@ -106,6 +106,22 @@
                 <dd class="text-[12px] text-surface-500 dark:text-surface-400 font-mono">{{ server.ssh_key_path }}</dd>
             </div>
             <div class="flex justify-between items-baseline">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">SSH Key</dt>
+                <dd class="text-[12px] text-surface-500 dark:text-surface-400 font-mono">
+                    {% if server.ssh_key_id and ssh_key %}
+                        {% if ssh_key_label %}
+                            <span class="text-surface-700 dark:text-surface-300">{{ ssh_key_label }}</span>
+                            <span class="text-surface-400"> — </span>
+                        {% endif %}
+                        {{ ssh_key[:28] }}...
+                    {% elif server.ssh_key_id %}
+                        assigned
+                    {% else %}
+                        (none)
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="flex justify-between items-baseline">
                 <dt class="text-[13px] text-surface-400 dark:text-surface-500">Base Domain</dt>
                 <dd class="text-[13px] text-surface-900 dark:text-white">{{ server.base_domain or '(none)' }}</dd>
             </div>

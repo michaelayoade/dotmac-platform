@@ -29,14 +29,17 @@ def _csrf_session_id(request: Request) -> str:
     """
     token = request.cookies.get("access_token")
     if token:
-        return token
+        return str(token)
     csrf_session = request.cookies.get(CSRF_COOKIE_NAME)
     if csrf_session:
-        return csrf_session
+        return str(csrf_session)
     csrf_session = getattr(request.state, "csrf_session", None)
     if csrf_session:
-        return csrf_session
-    return "anonymous"
+        return str(csrf_session)
+    # Generate a unique binding for anonymous visitors instead of a shared constant
+    csrf_session = secrets.token_urlsafe(32)
+    request.state.csrf_session = csrf_session
+    return csrf_session
 
 
 def brand() -> dict:

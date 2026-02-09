@@ -26,12 +26,22 @@ def server_list(
     db: Session = Depends(get_db),
 ):
     from app.services.server_service import ServerService
+    from app.services.ssh_key_service import SSHKeyService
 
     svc = ServerService(db)
     servers = svc.list_all()
     # Batch-fetch instance counts to avoid N+1
     counts = svc.instance_counts_batch([s.server_id for s in servers])
-    server_data = [{"server": s, "instance_count": counts.get(s.server_id, 0)} for s in servers]
+    keys = SSHKeyService(db).list_keys(active_only=False)
+    key_labels = {k.key_id: k.label for k in keys}
+    server_data = [
+        {
+            "server": s,
+            "instance_count": counts.get(s.server_id, 0),
+            "ssh_key_label": key_labels.get(s.ssh_key_id),
+        }
+        for s in servers
+    ]
 
     return templates.TemplateResponse(
         "servers/list.html", ctx(request, auth, "Servers", active_page="servers", servers=server_data)
@@ -115,14 +125,34 @@ def server_detail(
 ):
     from app.services.instance_service import InstanceService
     from app.services.server_service import ServerService
+    from app.services.ssh_key_service import SSHKeyService
+    from app.models.ssh_key import SSHKey
 
     svc = ServerService(db)
     server = svc.get_or_404(server_id)
     instances = InstanceService(db).list_for_server(server_id)
+    ssh_key = None
+    ssh_key_label = None
+    if server.ssh_key_id:
+        try:
+            ssh_key = SSHKeyService(db).get_public_key(server.ssh_key_id)
+            key_row = db.get(SSHKey, server.ssh_key_id)
+            ssh_key_label = key_row.label if key_row else None
+        except Exception:
+            ssh_key = None
 
     return templates.TemplateResponse(
         "servers/detail.html",
-        ctx(request, auth, server.name, active_page="servers", server=server, instances=instances),
+        ctx(
+            request,
+            auth,
+            server.name,
+            active_page="servers",
+            server=server,
+            instances=instances,
+            ssh_key=ssh_key,
+            ssh_key_label=ssh_key_label,
+        ),
     )
 
 

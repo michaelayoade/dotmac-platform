@@ -3,6 +3,7 @@ Instance Management — Web routes for ERP instance CRUD, deployment, and operat
 """
 
 import logging
+from typing import TypedDict
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.models.health_check import HealthCheck
+from app.models.instance import Instance
 from app.web.deps import WebAuthContext, get_db, require_web_auth
 from app.web.helpers import ctx, require_admin, validate_csrf_token
 
@@ -40,7 +43,14 @@ def instance_list(
     from datetime import datetime
 
     now = datetime.now(UTC)
-    instance_data = []
+
+    class _InstanceRow(TypedDict):
+        instance: Instance
+        health: HealthCheck | None
+        health_state: str
+        health_checked_at: datetime | None
+
+    instance_data: list[_InstanceRow] = []
     for inst in instances:
         check = health_map.get(inst.instance_id)
         health_state = health_svc.classify_health(check, now) if inst.status.value == "running" else "n/a"
@@ -76,7 +86,7 @@ def instance_list(
     # Sorting
     health_rank = {"healthy": 0, "unhealthy": 1, "unknown": 2, "n/a": 3}
 
-    def _sort_value(item):
+    def _sort_value(item: _InstanceRow):
         inst = item["instance"]
         if sort_key == "status":
             return inst.status.value
@@ -219,10 +229,13 @@ def instance_detail(
     from app.services.instance_service import InstanceService
     from app.services.module_service import ModuleService
     from app.services.plan_service import PlanService
+    from app.services.resource_enforcement import ResourceEnforcementService
+    from app.services.secret_rotation_service import SecretRotationService
     from app.services.tenant_audit_service import TenantAuditService
 
     svc = InstanceService(db)
     instance = svc.get_or_404(instance_id)
+    active_tab = (request.query_params.get("tab") or "modules").strip().lower()
 
     health_svc = HealthService(db)
     latest_health = health_svc.get_latest_check(instance_id)
@@ -241,6 +254,10 @@ def instance_detail(
     backups = BackupService(db).list_for_instance(instance_id)
     domains = DomainService(db).list_for_instance(instance_id)
     audit_logs = TenantAuditService(db).get_logs(instance_id, limit=20)
+    enforcement_svc = ResourceEnforcementService(db)
+    usage_summary = enforcement_svc.get_usage_summary(instance_id)
+    compliance_violations = enforcement_svc.check_plan_compliance(instance_id)
+    rotation_history = SecretRotationService(db).get_rotation_history(instance_id, limit=20)
 
     return templates.TemplateResponse(
         "instances/detail.html",
@@ -260,6 +277,10 @@ def instance_detail(
             backups=backups,
             domains=domains,
             audit_logs=audit_logs,
+            usage_summary=usage_summary,
+            compliance_violations=compliance_violations,
+            rotation_history=rotation_history,
+            active_tab=active_tab,
         ),
     )
 
@@ -419,23 +440,10 @@ def instance_migrate(
     require_admin(auth)
     validate_csrf_token(request, csrf_token)
 
-    import re
-
-    from app.models.server import Server
     from app.services.instance_service import InstanceService
-    from app.services.ssh_service import get_ssh_for_server
 
     svc = InstanceService(db)
-    instance = svc.get_or_404(instance_id)
-    slug = instance.org_code.lower()
-    if not re.match(r"^[a-zA-Z0-9_-]+$", slug):
-        raise ValueError(f"Invalid org_code slug: {slug!r}")
-    server = db.get(Server, instance.server_id)
-    ssh = get_ssh_for_server(server)
-    ssh.exec_command(
-        f"docker exec dotmac_{slug}_app alembic upgrade heads",
-        timeout=120,
-    )
+    svc.migrate_instance(instance_id)
     db.commit()
     return RedirectResponse(f"/instances/{instance_id}", status_code=302)
 
@@ -654,6 +662,52 @@ def suspend_instance(
     svc.suspend_instance(instance_id, reason or None)
     db.commit()
     return RedirectResponse(f"/instances/{instance_id}", status_code=302)
+
+
+@router.post("/{instance_id}/secrets/rotate")
+def instance_rotate_secret(
+    request: Request,
+    instance_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    secret_name: str = Form(...),
+    confirm_destructive: str | None = Form(None),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.tasks.secrets import rotate_secret_task
+
+    rotate_secret_task.delay(
+        str(instance_id),
+        secret_name,
+        rotated_by=str(auth.person_id) if auth else None,
+        confirm_destructive=bool(confirm_destructive),
+    )
+    return RedirectResponse(f"/instances/{instance_id}?tab=secrets", status_code=302)
+
+
+@router.post("/{instance_id}/secrets/rotate-all")
+def instance_rotate_all_secrets(
+    request: Request,
+    instance_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    confirm_destructive: str | None = Form(None),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.tasks.secrets import rotate_all_secrets_task
+
+    rotate_all_secrets_task.delay(
+        str(instance_id),
+        rotated_by=str(auth.person_id) if auth else None,
+        confirm_destructive=bool(confirm_destructive),
+    )
+    return RedirectResponse(f"/instances/{instance_id}?tab=secrets", status_code=302)
 
 
 @router.post("/{instance_id}/reactivate")

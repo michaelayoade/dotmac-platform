@@ -80,6 +80,14 @@ def _safe_schema_name(value: str) -> str:
     return value
 
 
+def _redact_git_url(url: str) -> str:
+    if url.startswith(("http://", "https://")) and "@" in url:
+        scheme, rest = url.split("://", 1)
+        if "@" in rest:
+            return f"{scheme}://***@{rest.split('@', 1)[1]}"
+    return url
+
+
 def _encrypt_deploy_secret(db: Session, value: str) -> str:
     return _encrypt_auth_secret(db, value)
 
@@ -306,6 +314,15 @@ class DeployService:
         if not server:
             return {"success": False, "error": "Server not found"}
 
+        try:
+            from app.services.resource_enforcement import ResourceEnforcementService
+
+            violations = ResourceEnforcementService(self.db).check_plan_compliance(instance_id)
+            for v in violations:
+                logger.warning("Plan compliance issue for %s: %s", instance.org_code, v.message)
+        except Exception:
+            logger.debug("Plan compliance check failed for %s", instance.org_code, exc_info=True)
+
         instance.status = InstanceStatus.deploying
         self.db.commit()
         self._dispatch_webhook("deploy_started", instance, deployment_id)
@@ -316,7 +333,7 @@ class DeployService:
 
         try:
             if deployment_type == "reconfigure":
-                return self._run_reconfigure(
+                result = self._run_reconfigure(
                     instance,
                     deployment_id,
                     admin_password,
@@ -324,6 +341,13 @@ class DeployService:
                     results,
                     steps,
                 )
+                try:
+                    from app.services.metrics_export import MetricsExportService
+
+                    MetricsExportService(self.db).record_deployment(instance_id, result.get("success", False))
+                except Exception:
+                    logger.debug("Failed to record deployment metric for %s", instance.org_code, exc_info=True)
+                return result
 
             # Full deployment pipeline
 
@@ -387,6 +411,12 @@ class DeployService:
             if not results["verify"]:
                 instance.status = InstanceStatus.error
                 self.db.commit()
+                try:
+                    from app.services.metrics_export import MetricsExportService
+
+                    MetricsExportService(self.db).record_deployment(instance_id, False)
+                except Exception:
+                    logger.debug("Failed to record deployment metric for %s", instance.org_code, exc_info=True)
                 return {"success": False, "error": "Health check failed", "results": results}
 
             # Record deployed git ref
@@ -396,6 +426,12 @@ class DeployService:
             self.db.commit()
             self.clear_deploy_secret(instance_id, deployment_id)
             self._dispatch_webhook("deploy_success", instance, deployment_id)
+            try:
+                from app.services.metrics_export import MetricsExportService
+
+                MetricsExportService(self.db).record_deployment(instance_id, True)
+            except Exception:
+                logger.debug("Failed to record deployment metric for %s", instance.org_code, exc_info=True)
             return {"success": True, "results": results}
 
         except DeployError as e:
@@ -411,6 +447,12 @@ class DeployService:
             instance.status = InstanceStatus.error
             self.db.commit()
             self._dispatch_webhook("deploy_failed", instance, deployment_id, error=str(e))
+            try:
+                from app.services.metrics_export import MetricsExportService
+
+                MetricsExportService(self.db).record_deployment(instance_id, False)
+            except Exception:
+                logger.debug("Failed to record deployment metric for %s", instance.org_code, exc_info=True)
             return {"success": False, "error": str(e), "step": e.step}
 
         except Exception as e:
@@ -422,6 +464,12 @@ class DeployService:
             instance.status = InstanceStatus.error
             self.db.commit()
             self._dispatch_webhook("deploy_failed", instance, deployment_id, error=str(e))
+            try:
+                from app.services.metrics_export import MetricsExportService
+
+                MetricsExportService(self.db).record_deployment(instance_id, False)
+            except Exception:
+                logger.debug("Failed to record deployment metric for %s", instance.org_code, exc_info=True)
             return {"success": False, "error": str(e)}
 
     def _run_reconfigure(
@@ -584,12 +632,41 @@ class DeployService:
         self._update_step(instance.instance_id, deployment_id, step, DeployStepStatus.running)
 
         from app.services.platform_settings import PlatformSettingsService
+        from app.services.git_repo_service import GitRepoService, format_env_prefix
+        from app.models.git_repository import GitAuthType
 
         ps = PlatformSettingsService(self.db)
         src_path = ps.get("dotmac_source_path")
-        git_repo_url = ps.get("dotmac_git_repo_url")
-        # Version pinning: per-instance override > deployment arg > platform default
-        git_branch = git_ref or instance.git_branch or instance.git_tag or ps.get("dotmac_git_branch")
+        repo_service = GitRepoService(self.db)
+        repo = repo_service.get_repo_for_instance(instance.instance_id)
+
+        # Version pinning: per-instance override > deployment arg > repo default > platform default
+        git_branch = git_ref or instance.git_branch or instance.git_tag
+        if not git_branch and repo:
+            git_branch = repo.default_branch
+        git_branch = git_branch or ps.get("dotmac_git_branch") or "main"
+
+        git_repo_url = None
+        env_prefix = ""
+        if repo:
+            ssh_key_path = None
+            if repo.auth_type == GitAuthType.ssh_key:
+                try:
+                    ssh_key_path = repo_service.deploy_ssh_key(repo.repo_id, instance.server_id)
+                except Exception as e:
+                    self._update_step(
+                        instance.instance_id,
+                        deployment_id,
+                        step,
+                        DeployStepStatus.failed,
+                        "Failed to deploy git SSH key",
+                        str(e),
+                    )
+                    return False
+            env, git_repo_url = repo_service.get_repo_env(repo.repo_id, ssh_key_path=ssh_key_path)
+            env_prefix = format_env_prefix(env)
+        else:
+            git_repo_url = ps.get("dotmac_git_repo_url")
 
         q_src = shlex.quote(src_path)
         q_branch = shlex.quote(git_branch)
@@ -602,9 +679,9 @@ class DeployService:
                 instance.instance_id, deployment_id, step, DeployStepStatus.running, f"Updating source at {src_path}..."
             )
             git_cmd = (
-                f"git -C {q_src} fetch origin"
-                f" && git -C {q_src} checkout {q_branch}"
-                f" && git -C {q_src} pull origin {q_branch}"
+                f"{env_prefix}git -C {q_src} fetch origin"
+                f" && {env_prefix}git -C {q_src} checkout {q_branch}"
+                f" && {env_prefix}git -C {q_src} pull origin {q_branch}"
             )
             pull_result = ssh.exec_command(git_cmd, timeout=120)
             if pull_result.ok:
@@ -639,12 +716,13 @@ class DeployService:
             )
             return False
 
+        safe_repo_url = _redact_git_url(git_repo_url)
         self._update_step(
             instance.instance_id,
             deployment_id,
             step,
             DeployStepStatus.running,
-            f"Cloning {git_repo_url} (branch: {git_branch})...",
+            f"Cloning {safe_repo_url} (branch: {git_branch})...",
         )
 
         # Ensure parent directory exists
@@ -652,7 +730,7 @@ class DeployService:
         ssh.exec_command(f"mkdir -p {shlex.quote(parent_dir)}")
 
         clone_result = ssh.exec_command(
-            f"git clone --branch {q_branch} {shlex.quote(git_repo_url)} {q_src}",
+            f"{env_prefix}git clone --branch {q_branch} {shlex.quote(git_repo_url)} {q_src}",
             timeout=300,
         )
         if clone_result.ok:

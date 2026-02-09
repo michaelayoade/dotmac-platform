@@ -261,6 +261,29 @@ class InstanceService:
         self.db.flush()
         return instance
 
+    def migrate_instance(self, instance_id: UUID) -> Instance:
+        """Run alembic migrations inside an instance's app container."""
+        import shlex
+
+        instance = self.get_or_404(instance_id)
+        slug = instance.org_code.lower()
+        if not re.match(r"^[a-zA-Z0-9_-]+$", slug):
+            raise ValueError(f"Invalid org_code slug: {slug!r}")
+        server = self.db.get(Server, instance.server_id)
+        if not server:
+            raise ValueError("Server not found for instance")
+        ssh = get_ssh_for_server(server)
+        container = f"dotmac_{shlex.quote(slug)}_app"
+        result = ssh.exec_command(
+            f"docker exec {container} alembic upgrade heads",
+            timeout=120,
+        )
+        if not result.ok:
+            detail = (result.stderr or result.stdout or "Migration failed")[:2000]
+            raise ValueError(detail)
+        logger.info("Ran migrations for instance %s", instance.org_code)
+        return instance
+
     def delete(self, instance_id: UUID) -> None:
         instance = self.get_or_404(instance_id)
         self.db.delete(instance)
@@ -785,6 +808,8 @@ class InstanceService:
 
         ssh = get_ssh_for_server(server)
         deploy_path = instance.deploy_path
+        if not deploy_path:
+            raise ValueError("Deploy path not configured")
 
         # Create deploy directory
         ssh.sftp_mkdir_p(deploy_path)

@@ -154,6 +154,24 @@
                 Settings
             </a>
 
+            <a href="/ssh-keys"
+               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
+                      {% if active == 'ssh_keys' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 0 1 0 4.243l-1.06 1.06m-2.12 2.12-2.47 2.47A2.25 2.25 0 0 1 8.37 16.5H6.75a2.25 2.25 0 0 1-2.25-2.25v-1.62a2.25 2.25 0 0 1 .66-1.59l2.47-2.47m6.12-3.84a3 3 0 1 1 4.242 4.243l-1.06 1.06m-6.12 6.12-2.12 2.12a3 3 0 1 1-4.243-4.243l2.12-2.12"/>
+                </svg>
+                SSH Keys
+            </a>
+
+            <a href="/git-repos"
+               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
+                      {% if active == 'git_repos' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 15V6A1.5 1.5 0 0 1 6 4.5Zm-1.5 3h15M8.25 19.5h7.5"/>
+                </svg>
+                Git Repos
+            </a>
+
             <a href="/usage"
                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
                       {% if active == 'usage' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
@@ -198,6 +216,15 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 6.75h.008v.008H4.5V6.75Zm0 4.5h.008v.008H4.5V11.25Zm0 4.5h.008v.008H4.5V15.75Z"/>
                 </svg>
                 Config Drift
+            </a>
+
+            <a href="/dr"
+               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
+                      {% if active == 'dr' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3.75c-4.556 0-8.25 3.694-8.25 8.25 0 4.556 3.694 8.25 8.25 8.25 4.556 0 8.25-3.694 8.25-8.25 0-4.556-3.694-8.25-8.25-8.25Zm0 4.5v4.5m0 3.75h.008"/>
+                </svg>
+                Disaster Recovery
             </a>
 
             <a href="/clone"

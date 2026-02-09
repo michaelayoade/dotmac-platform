@@ -1,0 +1,12 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-display text-surface-800 dark:text-surface-100">Clone Progress</h1>
+    <p class="text-[13px] text-surface-400 dark:text-surface-500">Tracking clone operation {{ op.clone_id }}.</p>
+</div>
+
+<div id="clone-status" {% if not testing %}hx-get="/clone/{{ op.clone_id }}/status" hx-trigger="every 3s" hx-select="#clone-status" hx-target="#clone-status" hx-swap="outerHTML"{% endif %}>
+    {% include "clone/status_partial.html" %}
+</div>
+{% endblock %}

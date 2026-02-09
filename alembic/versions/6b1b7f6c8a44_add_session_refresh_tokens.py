@@ -30,17 +30,22 @@ def upgrade() -> None:
             sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
             sa.ForeignKeyConstraint(["session_id"], ["sessions.id"]),
         )
-        op.create_index(
-            "ix_session_refresh_tokens_session_id",
-            "session_refresh_tokens",
-            ["session_id"],
-        )
-        op.create_index(
-            "ix_session_refresh_tokens_token_hash",
-            "session_refresh_tokens",
-            ["token_hash"],
-            unique=True,
-        )
+
+    if inspector.has_table("session_refresh_tokens"):
+        existing_indexes = {idx["name"] for idx in inspector.get_indexes("session_refresh_tokens")}
+        if "ix_session_refresh_tokens_session_id" not in existing_indexes:
+            op.create_index(
+                "ix_session_refresh_tokens_session_id",
+                "session_refresh_tokens",
+                ["session_id"],
+            )
+        if "ix_session_refresh_tokens_token_hash" not in existing_indexes:
+            op.create_index(
+                "ix_session_refresh_tokens_token_hash",
+                "session_refresh_tokens",
+                ["token_hash"],
+                unique=True,
+            )
 
 
 def downgrade() -> None:
@@ -48,6 +53,9 @@ def downgrade() -> None:
     inspector = sa.inspect(bind)
 
     if inspector.has_table("session_refresh_tokens"):
-        op.drop_index("ix_session_refresh_tokens_token_hash", table_name="session_refresh_tokens")
-        op.drop_index("ix_session_refresh_tokens_session_id", table_name="session_refresh_tokens")
+        existing_indexes = {idx["name"] for idx in inspector.get_indexes("session_refresh_tokens")}
+        if "ix_session_refresh_tokens_token_hash" in existing_indexes:
+            op.drop_index("ix_session_refresh_tokens_token_hash", table_name="session_refresh_tokens")
+        if "ix_session_refresh_tokens_session_id" in existing_indexes:
+            op.drop_index("ix_session_refresh_tokens_session_id", table_name="session_refresh_tokens")
         op.drop_table("session_refresh_tokens")

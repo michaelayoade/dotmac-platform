@@ -12,6 +12,7 @@ import os
 import shlex
 import threading
 import time
+from typing import Any, TypedDict, cast
 
 import paramiko
 
@@ -64,7 +65,13 @@ def _circuit_record_failure(server_id: str | None) -> None:
 
 
 # Connection cache: server_id -> {"client": SSHClient, "ts": float, "lock": Lock}
-_SSH_POOL: dict[str, dict] = {}
+class _PoolEntry(TypedDict):
+    client: Any
+    ts: float
+    lock: threading.Lock
+
+
+_SSH_POOL: dict[str, _PoolEntry] = {}
 _SSH_POOL_LOCK = threading.Lock()
 _POOL_TTL = 300  # 5 minutes
 _POOL_MAX = 100
@@ -92,6 +99,7 @@ class SSHService:
         port: int = 22,
         username: str = "root",
         key_path: str = "/root/.ssh/id_rsa",
+        pkey_data: str | None = None,
         is_local: bool = False,
         server_id: str | None = None,
     ):
@@ -99,6 +107,7 @@ class SSHService:
         self.port = port
         self.username = username
         self.key_path = key_path
+        self.pkey_data = pkey_data
         self.is_local = is_local
         self.server_id = server_id
 
@@ -133,7 +142,11 @@ class SSHService:
         }
 
         # Try key-based auth
-        if self.key_path and os.path.isfile(self.key_path):
+        if self.pkey_data:
+            pkey = _load_private_key(self.pkey_data)
+            if pkey:
+                connect_kwargs["pkey"] = pkey
+        elif self.key_path and os.path.isfile(self.key_path):
             connect_kwargs["key_filename"] = self.key_path
         else:
             connect_kwargs["allow_agent"] = True
@@ -172,7 +185,7 @@ class SSHService:
                 # Evict oldest entries if pool exceeds max size.
                 while len(_SSH_POOL) > _POOL_MAX:
                     oldest_id = min(_SSH_POOL.items(), key=lambda item: item[1]["ts"])[0]
-                    entry = _SSH_POOL.pop(oldest_id, None)
+                    entry = _SSH_POOL.pop(oldest_id)
                     if entry:
                         try:
                             entry["client"].close()
@@ -271,10 +284,31 @@ class SSHService:
             return
 
         client = self._get_client()
-        sftp = client.open_sftp()
+        sftp: Any = client.open_sftp()
         try:
             sftp.get_channel().settimeout(30)
             sftp.put(local_path, remote_path)
+        finally:
+            sftp.close()
+
+    def sftp_get(
+        self,
+        remote_path: str,
+        local_path: str,
+    ) -> None:
+        """Download a file via SFTP."""
+        if self.is_local:
+            import shutil
+
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            shutil.copy2(remote_path, local_path)
+            return
+
+        client = self._get_client()
+        sftp: Any = client.open_sftp()
+        try:
+            sftp.get_channel().settimeout(30)
+            sftp.get(remote_path, local_path)
         finally:
             sftp.close()
 
@@ -293,7 +327,7 @@ class SSHService:
             return
 
         client = self._get_client()
-        sftp = client.open_sftp()
+        sftp: Any = client.open_sftp()
         try:
             sftp.get_channel().settimeout(30)
             with sftp.file(remote_path, "w") as f:
@@ -311,11 +345,14 @@ class SSHService:
             return None
 
         client = self._get_client()
-        sftp = client.open_sftp()
+        sftp: Any = client.open_sftp()
         try:
             sftp.get_channel().settimeout(30)
             with sftp.file(remote_path, "r") as f:
-                return f.read().decode("utf-8", errors="replace")
+                data = f.read()
+                if isinstance(data, bytes):
+                    return data.decode("utf-8", errors="replace")
+                return cast(str, data)
         except FileNotFoundError:
             return None
         finally:
@@ -328,7 +365,7 @@ class SSHService:
             return
 
         client = self._get_client()
-        sftp = client.open_sftp()
+        sftp: Any = client.open_sftp()
         try:
             sftp.get_channel().settimeout(30)
             parts = remote_path.split("/")
@@ -362,11 +399,36 @@ class SSHService:
 
 def get_ssh_for_server(server) -> SSHService:
     """Create an SSHService from a Server model instance."""
+    pkey_data = None
+    if getattr(server, "ssh_key_id", None):
+        try:
+            from app.db import SessionLocal
+            from app.models.ssh_key import SSHKey
+            from app.services.settings_crypto import decrypt_value
+
+            with SessionLocal() as db:
+                key = db.get(SSHKey, server.ssh_key_id)
+                if key:
+                    pkey_data = decrypt_value(key.private_key_encrypted)
+        except Exception:
+            logger.debug("Failed to resolve ssh_key_id for server %s", server.server_id, exc_info=True)
     return SSHService(
         hostname=server.hostname,
         port=server.ssh_port,
         username=server.ssh_user,
         key_path=server.ssh_key_path,
+        pkey_data=pkey_data,
         is_local=server.is_local,
         server_id=str(server.server_id),
     )
+
+
+def _load_private_key(pem: str) -> paramiko.PKey | None:
+    import io
+
+    for key_cls in (paramiko.Ed25519Key, paramiko.RSAKey, paramiko.ECDSAKey):
+        try:
+            return key_cls.from_private_key(io.StringIO(pem))
+        except Exception:
+            continue
+    return None

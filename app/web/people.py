@@ -87,12 +87,12 @@ def people_list(
     person_ids = [p.id for p in items]
     roles_map: dict[UUID, list[str]] = {pid: [] for pid in person_ids}
     if person_ids:
-        stmt = (
+        roles_stmt = (
             select(PersonRole.person_id, Role.name)
             .join(Role, Role.id == PersonRole.role_id)
             .where(PersonRole.person_id.in_(person_ids))
         )
-        rows = db.execute(stmt).all()
+        rows = db.execute(roles_stmt).all()
         for person_id, role_name in rows:
             roles_map.setdefault(person_id, []).append(role_name)
 
@@ -216,7 +216,7 @@ def people_assign_role(
     validate_csrf_token(request, csrf_token)
     from app.services.rbac import person_roles as person_roles_service
 
-    payload = PersonRoleCreate(person_id=person_id, role_id=role_id)
+    payload = PersonRoleCreate(person_id=person_id, role_id=UUID(role_id))
     person_roles_service.create(db, payload)
     return RedirectResponse(f"/people/{person_id}", status_code=302)
 

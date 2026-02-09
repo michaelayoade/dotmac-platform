@@ -102,7 +102,11 @@ def get_celery_config() -> dict:
     broker = broker or _env_value("REDIS_URL") or "redis://localhost:6379/0"
     backend = backend or _env_value("REDIS_URL") or "redis://localhost:6379/1"
     timezone = timezone or "UTC"
-    config = {"broker_url": broker, "result_backend": backend, "timezone": timezone}
+    config: dict[str, object] = {
+        "broker_url": broker,
+        "result_backend": backend,
+        "timezone": timezone,
+    }
     config["beat_max_loop_interval"] = beat_max_loop_interval
     config["beat_refresh_seconds"] = beat_refresh_seconds
     config["task_acks_late"] = True

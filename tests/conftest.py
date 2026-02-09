@@ -21,7 +21,7 @@ _test_engine = create_engine(
 
 # Create a mock for the app.db module that uses our test engine
 class TestBase(DeclarativeBase):
-    pass
+    __test__ = False
 
 
 _TestSessionLocal = sessionmaker(bind=_test_engine, autoflush=False, autocommit=False)

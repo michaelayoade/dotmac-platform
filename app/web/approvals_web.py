@@ -5,7 +5,7 @@ Approvals — Web routes for deployment approvals.
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
@@ -65,6 +65,8 @@ def approvals_approve(
     from app.services.approval_service import ApprovalService
 
     try:
+        if not auth.person_id:
+            raise HTTPException(status_code=401, detail="Unauthorized")
         svc = ApprovalService(db)
         svc.approve(approval_id, auth.person_id, auth.user_name)
         db.commit()
@@ -88,6 +90,8 @@ def approvals_reject(
     from app.services.approval_service import ApprovalService
 
     try:
+        if not auth.person_id:
+            raise HTTPException(status_code=401, detail="Unauthorized")
         svc = ApprovalService(db)
         svc.reject(approval_id, auth.person_id, auth.user_name, reason=reason or None)
         db.commit()

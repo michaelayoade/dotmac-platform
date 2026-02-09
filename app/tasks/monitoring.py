@@ -41,6 +41,27 @@ def collect_usage_metrics() -> int:
 
 
 @shared_task
+def check_plan_limits() -> int:
+    """Check plan limits and send alerts for all running instances."""
+    logger.info("Checking plan limits")
+    with SessionLocal() as db:
+        from sqlalchemy import select
+
+        from app.models.instance import Instance, InstanceStatus
+        from app.services.resource_enforcement import ResourceEnforcementService
+
+        svc = ResourceEnforcementService(db)
+        instances = list(db.scalars(select(Instance).where(Instance.status == InstanceStatus.running)).all())
+        for inst in instances:
+            try:
+                svc.check_and_fire_alerts(inst.instance_id)
+                db.commit()
+            except Exception:
+                logger.warning("Plan limit check failed for %s", inst.org_code, exc_info=True)
+        return len(instances)
+
+
+@shared_task
 def detect_config_drift() -> int:
     """Run drift detection across all running instances."""
     logger.info("Running config drift detection")

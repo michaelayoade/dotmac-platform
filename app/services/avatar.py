@@ -16,6 +16,8 @@ def get_allowed_types() -> set[str]:
 
 def validate_avatar(file: UploadFile) -> None:
     allowed_types = get_allowed_types()
+    if not file.content_type:
+        raise HTTPException(status_code=400, detail="Missing file content type")
     if file.content_type not in allowed_types:
         raise HTTPException(
             status_code=400,
@@ -29,7 +31,9 @@ async def save_avatar(file: UploadFile, person_id: str) -> str:
     upload_dir = Path(settings.avatar_upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    ext = _get_extension(file.content_type)
+    content_type = file.content_type
+    assert content_type is not None
+    ext = _get_extension(content_type)
     filename = f"{person_id}_{uuid.uuid4().hex[:8]}{ext}"
     file_path = upload_dir / filename
 

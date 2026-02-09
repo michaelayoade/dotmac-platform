@@ -167,7 +167,7 @@ class TestRequireAuditAuthWithApiKey:
                 authorization=None,
                 x_session_token=None,
                 x_api_key=raw_key,
-                request=None,
+                request=MagicMock(),
                 db=db_session,
             )
         assert exc.value.status_code == 401
@@ -189,7 +189,7 @@ class TestRequireAuditAuthWithApiKey:
                 authorization=None,
                 x_session_token=None,
                 x_api_key=raw_key,
-                request=None,
+                request=MagicMock(),
                 db=db_session,
             )
         assert exc.value.status_code == 401
@@ -210,7 +210,7 @@ class TestRequireAuditAuthWithApiKey:
                 authorization=None,
                 x_session_token=None,
                 x_api_key=raw_key,
-                request=None,
+                request=MagicMock(),
                 db=db_session,
             )
         assert exc.value.status_code == 401
@@ -232,7 +232,7 @@ class TestRequireAuditAuthWithApiKey:
             authorization=None,
             x_session_token=None,
             x_api_key=raw_key,
-            request=None,
+            request=MagicMock(),
             db=db_session,
         )
         assert result["actor_type"] == "api_key"
@@ -263,7 +263,7 @@ class TestSessionExpiry:
                 authorization=None,
                 x_session_token=raw_token,
                 x_api_key=None,
-                request=None,
+                request=MagicMock(),
                 db=db_session,
             )
         # Session expired, but query filters it out, so it's treated as invalid
@@ -291,7 +291,7 @@ class TestSessionExpiry:
                 authorization=None,
                 x_session_token=raw_token,
                 x_api_key=None,
-                request=None,
+                request=MagicMock(),
                 db=db_session,
             )
         assert exc.value.status_code == 401
@@ -324,7 +324,7 @@ class TestSessionExpiry:
             with pytest.raises(HTTPException) as exc:
                 require_user_auth(
                     authorization="Bearer test-token",
-                    request=None,
+                    request=MagicMock(),
                     db=db_session,
                 )
             # require_user_auth uses query filter that excludes expired, returns 401 Unauthorized
@@ -355,7 +355,7 @@ class TestAuditScopeEnforcement:
                         authorization="Bearer fake.jwt.token",
                         x_session_token=None,
                         x_api_key=None,
-                        request=None,
+                        request=MagicMock(),
                         db=db_session,
                     )
                 assert exc.value.status_code == 403
@@ -430,7 +430,7 @@ class TestSessionTokenAuth:
                 authorization=None,
                 x_session_token=None,
                 x_api_key=None,
-                request=None,
+                request=MagicMock(),
                 db=db_session,
             )
         assert exc.value.status_code == 401

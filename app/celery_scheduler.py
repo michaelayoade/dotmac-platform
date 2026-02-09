@@ -18,12 +18,15 @@ class DbScheduler(Scheduler):
         self._refresh_schedule()
         return super().tick()
 
-    def _refresh_schedule(self):
+    def _refresh_schedule(self) -> None:
         refresh_seconds = int(self.app.conf.get("beat_refresh_seconds", 30))
         now = time.monotonic()
         if now - self._last_refresh_at < max(refresh_seconds, 1):
             return
-        schedule = build_beat_schedule()
-        if schedule != self.schedule:
-            self.schedule = schedule
+        raw = build_beat_schedule()
+        # Remove entries no longer in DB
+        for name in set(self.schedule) - set(raw):
+            self.schedule.pop(name, None)
+        # Add / update entries from DB (converts dicts to ScheduleEntry)
+        self.update_from_dict(raw)
         self._last_refresh_at = now

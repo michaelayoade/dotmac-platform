@@ -66,3 +66,6 @@ class RateLimiter:
 # Pre-configured limiters for different endpoint types
 login_limiter = RateLimiter(max_requests=10, window_seconds=60)
 password_reset_limiter = RateLimiter(max_requests=5, window_seconds=300)
+mfa_verify_limiter = RateLimiter(max_requests=5, window_seconds=300)
+refresh_limiter = RateLimiter(max_requests=10, window_seconds=60)
+password_change_limiter = RateLimiter(max_requests=10, window_seconds=60)

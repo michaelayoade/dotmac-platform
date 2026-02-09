@@ -72,10 +72,10 @@ def _has_audit_scope(payload: dict) -> bool:
 
 
 def require_audit_auth(
+    request: Request,
     authorization: str | None = Header(default=None),
     x_session_token: str | None = Header(default=None),
     x_api_key: str | None = Header(default=None),
-    request: Request = None,
     db: Session = Depends(_get_db),
 ):
     token = _extract_bearer_token(authorization) or x_session_token
@@ -92,12 +92,12 @@ def require_audit_auth(
                     raise HTTPException(status_code=401, detail="Invalid session")
                 if session.status != SessionStatus.active or session.revoked_at:
                     raise HTTPException(status_code=401, detail="Invalid session")
-                if _make_aware(session.expires_at) <= now:
+                expires_at = _make_aware(session.expires_at)
+                if not expires_at or expires_at <= now:
                     raise HTTPException(status_code=401, detail="Session expired")
             actor_id = str(payload.get("sub"))
-            if request is not None:
-                request.state.actor_id = actor_id
-                request.state.actor_type = "user"
+            request.state.actor_id = actor_id
+            request.state.actor_type = "user"
             return {"actor_type": "user", "actor_id": actor_id}
         stmt = (
             select(AuthSession)
@@ -108,31 +108,29 @@ def require_audit_auth(
         )
         session = db.scalar(stmt)
         if session:
-            if request is not None:
-                request.state.actor_id = str(session.person_id)
-                request.state.actor_type = "user"
+            request.state.actor_id = str(session.person_id)
+            request.state.actor_type = "user"
             return {"actor_type": "user", "actor_id": str(session.person_id)}
     if x_api_key:
         candidates = hash_api_key_candidates(x_api_key)
-        stmt = (
+        api_key_stmt = (
             select(ApiKey)
             .where(ApiKey.key_hash.in_(candidates))
             .where(ApiKey.is_active.is_(True))
             .where(ApiKey.revoked_at.is_(None))
             .where((ApiKey.expires_at.is_(None)) | (ApiKey.expires_at > now))
         )
-        api_key = db.scalar(stmt)
+        api_key = db.scalar(api_key_stmt)
         if api_key:
-            if request is not None:
-                request.state.actor_id = str(api_key.id)
-                request.state.actor_type = "api_key"
+            request.state.actor_id = str(api_key.id)
+            request.state.actor_type = "api_key"
             return {"actor_type": "api_key", "actor_id": str(api_key.id)}
     raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 def require_user_auth(
+    request: Request,
     authorization: str | None = Header(default=None),
-    request: Request = None,
     db: Session = Depends(_get_db),
 ):
     token = _extract_bearer_token(authorization)
@@ -166,9 +164,8 @@ def require_user_auth(
     roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
     scopes = [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
     actor_id = str(person_id)
-    if request is not None:
-        request.state.actor_id = actor_id
-        request.state.actor_type = "user"
+    request.state.actor_id = actor_id
+    request.state.actor_type = "user"
     return {
         "person_id": str(person_id),
         "session_id": str(session_id),

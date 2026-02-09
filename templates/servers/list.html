@@ -17,6 +17,7 @@
                 <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Host</th>
                 <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Status</th>
                 <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Instances</th>
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">SSH Key</th>
                 <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Type</th>
                 <th class="px-5 py-3"></th>
             </tr>
@@ -45,6 +46,15 @@
                     {% endif %}
                 </td>
                 <td class="px-5 py-4 text-[13px] text-surface-900 dark:text-white font-medium">{{ item.instance_count }}</td>
+                <td class="px-5 py-4 text-[12px] text-surface-500 dark:text-surface-400">
+                    {% if item.ssh_key_label %}
+                        {{ item.ssh_key_label }}
+                    {% elif s.ssh_key_id %}
+                        assigned
+                    {% else %}
+                        (none)
+                    {% endif %}
+                </td>
                 <td class="px-5 py-4">
                     {% if s.is_local %}
                         <span class="rounded-md bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700 dark:bg-primary-900/20 dark:text-primary-400">Local</span>
