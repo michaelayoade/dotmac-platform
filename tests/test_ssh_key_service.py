@@ -37,8 +37,9 @@ def test_generate_key(db_session):
 
 def test_import_key(db_session):
     svc = SSHKeyService(db_session)
-    import paramiko
     import io
+
+    import paramiko
 
     rsa = paramiko.RSAKey.generate(2048)
     buf = io.StringIO()

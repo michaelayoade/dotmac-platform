@@ -141,7 +141,7 @@ def test_export_instance_logs_rejects_invalid_stream(db_session):
     except ValueError as e:
         assert "Invalid log stream" in str(e)
     else:
-        assert False, "expected ValueError"
+        raise AssertionError("expected ValueError")
 
 
 def test_get_log_streams_marks_running(db_session):
@@ -149,7 +149,7 @@ def test_get_log_streams_marks_running(db_session):
     instance = _make_instance(db_session, server)
 
     fake_ssh = MagicMock()
-    fake_ssh.exec_command.return_value = SSHResult(0, "dotmac_%s_app\n" % instance.org_code.lower(), "")
+    fake_ssh.exec_command.return_value = SSHResult(0, f"dotmac_{instance.org_code.lower()}_app\n", "")
 
     with patch("app.services.metrics_export.get_ssh_for_server", return_value=fake_ssh):
         svc = MetricsExportService(db_session)

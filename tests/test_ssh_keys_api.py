@@ -47,8 +47,9 @@ def test_generate_and_list_keys(db_session):
 
 
 def test_import_and_get_public(db_session):
-    import paramiko
     import io
+
+    import paramiko
 
     rsa = paramiko.RSAKey.generate(2048)
     buf = io.StringIO()

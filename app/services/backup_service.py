@@ -7,6 +7,7 @@ Uses pg_dump via SSH to create backups of individual tenant databases.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import shlex
 from datetime import UTC, datetime

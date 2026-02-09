@@ -631,9 +631,9 @@ class DeployService:
         step = "ensure_source"
         self._update_step(instance.instance_id, deployment_id, step, DeployStepStatus.running)
 
-        from app.services.platform_settings import PlatformSettingsService
-        from app.services.git_repo_service import GitRepoService, format_env_prefix
         from app.models.git_repository import GitAuthType
+        from app.services.git_repo_service import GitRepoService, format_env_prefix
+        from app.services.platform_settings import PlatformSettingsService
 
         ps = PlatformSettingsService(self.db)
         src_path = ps.get("dotmac_source_path")

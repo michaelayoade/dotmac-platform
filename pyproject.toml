@@ -68,7 +68,6 @@ ignore = [
 "alembic/**" = ["E402", "F821"]
 "scripts/**" = ["S105"]
 "app/schemas/auth_flow.py" = ["S105"]  # token_type = "bearer" is not a password
-"app/services/ssh_service.py" = ["S507", "S602"]  # paramiko WarningPolicy + local shell exec
 "app/services/deploy_service.py" = ["S602"]  # shell=True for chained git commands
 "app/api/auth_flow.py" = ["N806"]  # _ME_UPDATABLE_FIELDS constant inside function
 "app/schemas/common.py" = ["UP046"]  # Generic subclass pattern kept for readability
@@ -77,6 +76,13 @@ ignore = [
 "app/services/webhook_service.py" = ["S104"]  # 0.0.0.0 binding is intentional
 "app/web/dashboard.py" = ["S324"]  # md5 for gravatar hash, not security
 "app/web/instances.py" = ["S324"]  # md5 for gravatar hash, not security
+"app/models/git_repository.py" = ["S105"]  # token is an enum value, not a password
+"app/services/backup_service.py" = ["S108"]  # /tmp paths for inter-server transfers
+"app/services/clone_service.py" = ["S108"]  # /tmp paths for inter-server transfers
+"app/services/git_repo_service.py" = ["S108"]  # /tmp for SSH key files
+"app/services/secret_rotation_service.py" = ["S105"]  # secret_name comparisons, not passwords
+"app/services/ssh_key_service.py" = ["S112"]  # try-except-continue for key type detection
+"app/services/ssh_service.py" = ["S507", "S602", "S112"]  # paramiko WarningPolicy + key detection
 
 [tool.mypy]
 python_version = "3.12"

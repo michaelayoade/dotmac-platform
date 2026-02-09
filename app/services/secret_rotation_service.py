@@ -213,10 +213,7 @@ class SecretRotationService:
         slug = _safe_slug(instance.org_code.lower())
         db_container = f"dotmac_{slug}_db"
         alter_cmd = f"ALTER ROLE postgres WITH PASSWORD '{new_password}'"
-        cmd = (
-            f"docker exec {shlex.quote(db_container)} "
-            f"psql -U postgres -d postgres -c {shlex.quote(alter_cmd)}"
-        )
+        cmd = f"docker exec {shlex.quote(db_container)} psql -U postgres -d postgres -c {shlex.quote(alter_cmd)}"
         result = ssh.exec_command(cmd, timeout=60)
         if not result.ok:
             detail = (result.stderr or result.stdout or "Postgres password update failed")[:2000]

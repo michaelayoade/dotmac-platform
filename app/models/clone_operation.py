@@ -27,7 +27,9 @@ class CloneOperation(Base):
     source_instance_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("instances.instance_id"), nullable=False, index=True
     )
-    target_instance_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("instances.instance_id"))
+    target_instance_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("instances.instance_id")
+    )
     target_server_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("servers.server_id"))
     new_org_code: Mapped[str] = mapped_column(String(40), nullable=False)
     new_org_name: Mapped[str | None] = mapped_column(String(200))

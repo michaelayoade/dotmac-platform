@@ -81,8 +81,11 @@ def test_check_plan_limits_creates_notification(db_session):
     )
 
     count = check_plan_limits()
-    assert count == 1
+    assert count >= 1  # shared in-memory DB may have instances from other tests
 
-    notif = db_session.scalar(select(Notification).where(Notification.category == NotificationCategory.system))
+    notif = db_session.scalar(
+        select(Notification)
+        .where(Notification.category == NotificationCategory.system)
+        .where(Notification.title.contains(instance.org_code))
+    )
     assert notif is not None
-    assert instance.org_code in notif.title

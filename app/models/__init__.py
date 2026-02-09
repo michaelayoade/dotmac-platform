@@ -26,12 +26,12 @@ from app.models.deployment_batch import (  # noqa: F401
     DeploymentBatch,
 )
 from app.models.deployment_log import DeploymentLog, DeployStepStatus  # noqa: F401
-from app.models.dr_plan import DRTestStatus, DisasterRecoveryPlan  # noqa: F401
 from app.models.domain_settings import (  # noqa: F401
     DomainSetting,
     SettingDomain,
     SettingValueType,
 )
+from app.models.dr_plan import DisasterRecoveryPlan, DRTestStatus  # noqa: F401
 from app.models.drift_report import DriftReport  # noqa: F401
 from app.models.feature_flag import InstanceFlag  # noqa: F401
 from app.models.git_repository import GitAuthType, GitRepository  # noqa: F401

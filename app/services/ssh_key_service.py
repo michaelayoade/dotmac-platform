@@ -150,12 +150,9 @@ class SSHKeyService:
 
     def _remove_authorized_key(self, ssh: SSHService, public_key: str) -> None:
         key_q = shlex.quote(public_key)
-        cmd = (
-            "bash -lc "
-            + shlex.quote(
-                f"grep -vF {key_q} ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp && "
-                "mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys"
-            )
+        cmd = "bash -lc " + shlex.quote(
+            f"grep -vF {key_q} ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp && "
+            "mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys"
         )
         result = ssh.exec_command(cmd, timeout=30)
         if not result.ok:

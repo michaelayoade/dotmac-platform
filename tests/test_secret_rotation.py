@@ -75,10 +75,10 @@ def test_rotate_jwt_secret_updates_env_and_log(db_session):
         with patch("app.services.secret_rotation_service.time.sleep", return_value=None):
             with patch("app.services.health_service.HealthService") as mock_health:
                 mock_health.return_value.poll_instance.return_value = HealthCheck(
-                instance_id=instance.instance_id,
-                status=HealthStatus.healthy,
-                checked_at=datetime.now(UTC),
-            )
+                    instance_id=instance.instance_id,
+                    status=HealthStatus.healthy,
+                    checked_at=datetime.now(UTC),
+                )
                 svc = SecretRotationService(db_session)
                 log = svc.rotate_secret(instance.instance_id, "JWT_SECRET", rotated_by="tester")
 
@@ -99,7 +99,7 @@ def test_rotate_totp_requires_confirm(db_session):
     except ValueError as e:
         assert "confirm_destructive" in str(e)
     else:
-        assert False, "expected ValueError"
+        raise AssertionError("expected ValueError")
 
 
 def test_rotate_postgres_updates_database_url(db_session):
@@ -114,10 +114,10 @@ def test_rotate_postgres_updates_database_url(db_session):
         with patch("app.services.secret_rotation_service.time.sleep", return_value=None):
             with patch("app.services.health_service.HealthService") as mock_health:
                 mock_health.return_value.poll_instance.return_value = HealthCheck(
-                instance_id=instance.instance_id,
-                status=HealthStatus.healthy,
-                checked_at=datetime.now(UTC),
-            )
+                    instance_id=instance.instance_id,
+                    status=HealthStatus.healthy,
+                    checked_at=datetime.now(UTC),
+                )
                 svc = SecretRotationService(db_session)
                 log = svc.rotate_secret(instance.instance_id, "POSTGRES_PASSWORD", rotated_by="tester")
 

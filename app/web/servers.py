@@ -123,10 +123,10 @@ def server_detail(
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
 ):
+    from app.models.ssh_key import SSHKey
     from app.services.instance_service import InstanceService
     from app.services.server_service import ServerService
     from app.services.ssh_key_service import SSHKeyService
-    from app.models.ssh_key import SSHKey
 
     svc = ServerService(db)
     server = svc.get_or_404(server_id)

@@ -10,7 +10,6 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.feature_flag import InstanceFlag
 from app.models.instance import Instance
 from app.models.module import InstanceModule, Module
 from app.models.notification import Notification, NotificationCategory, NotificationSeverity

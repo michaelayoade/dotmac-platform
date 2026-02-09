@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.backup import Backup, BackupStatus
-from app.models.dr_plan import DRTestStatus, DisasterRecoveryPlan
+from app.models.dr_plan import DisasterRecoveryPlan, DRTestStatus
 from app.models.instance import Instance
 from app.models.server import Server
 
@@ -109,9 +109,9 @@ class DisasterRecoveryService:
 
         admin_password = admin_password or secrets.token_urlsafe(16)
 
-        from app.services.instance_service import InstanceService
-        from app.services.deploy_service import DeployService
         from app.services.backup_service import BackupService
+        from app.services.deploy_service import DeployService
+        from app.services.instance_service import InstanceService
 
         inst_svc = InstanceService(self.db)
         new_instance = inst_svc.create(
@@ -201,9 +201,7 @@ class DisasterRecoveryService:
             return {"success": False, "error": str(e)}
 
     def get_dr_status(self, instance_id: UUID) -> dict:
-        plan = self.db.scalar(
-            select(DisasterRecoveryPlan).where(DisasterRecoveryPlan.instance_id == instance_id)
-        )
+        plan = self.db.scalar(select(DisasterRecoveryPlan).where(DisasterRecoveryPlan.instance_id == instance_id))
         if not plan:
             return {"configured": False}
         return {

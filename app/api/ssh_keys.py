@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role
@@ -70,7 +70,11 @@ def import_key(
     from app.services.ssh_key_service import SSHKeyService
 
     try:
-        key = SSHKeyService(db).import_key(label=label, private_key_pem=private_key_pem, created_by=auth.get("person_id"))
+        key = SSHKeyService(db).import_key(
+            label=label,
+            private_key_pem=private_key_pem,
+            created_by=auth.get("person_id"),
+        )
         db.commit()
         return {"key_id": str(key.key_id), "label": key.label, "fingerprint": key.fingerprint}
     except ValueError as e:

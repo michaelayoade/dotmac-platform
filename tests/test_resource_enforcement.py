@@ -1,7 +1,7 @@
 """Tests for ResourceEnforcementService."""
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from app.models.feature_flag import InstanceFlag
 from app.models.instance import Instance, InstanceStatus
@@ -65,6 +65,12 @@ def _make_plan(db_session, **kwargs) -> Plan:
 
 
 def _make_module(db_session, slug: str, *, is_core: bool = False) -> Module:
+    from sqlalchemy import select
+
+    # Re-use existing module if already seeded (shared in-memory DB)
+    existing = db_session.scalar(select(Module).where(Module.slug == slug))
+    if existing:
+        return existing
     mod = Module(
         name=slug.title(),
         slug=slug,
@@ -91,7 +97,7 @@ def test_enforce_module_access_blocks_disallowed(db_session):
     except ValueError as e:
         assert "not allowed" in str(e)
     else:
-        assert False, "expected ValueError"
+        raise AssertionError("expected ValueError")
 
 
 def test_enforce_flag_access_blocks_disallowed(db_session):
@@ -105,7 +111,7 @@ def test_enforce_flag_access_blocks_disallowed(db_session):
     except ValueError as e:
         assert "not allowed" in str(e)
     else:
-        assert False, "expected ValueError"
+        raise AssertionError("expected ValueError")
 
 
 def test_check_plan_compliance_reports_limits(db_session):

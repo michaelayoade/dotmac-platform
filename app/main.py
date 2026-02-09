@@ -14,15 +14,15 @@ from starlette.responses import Response
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.auth_flow import router as auth_flow_router
-from app.api.dr import router as dr_api_router
 from app.api.deps import require_role, require_user_auth
+from app.api.dr import router as dr_api_router
 from app.api.git_repos import router as git_repos_api_router
 from app.api.observability import router as observability_api_router
 from app.api.persons import router as people_router
 from app.api.rbac import router as rbac_router
 from app.api.scheduler import router as scheduler_router
-from app.api.ssh_keys import router as ssh_keys_api_router
 from app.api.settings import router as settings_router
+from app.api.ssh_keys import router as ssh_keys_api_router
 from app.config import settings
 from app.db import SessionLocal
 from app.errors import register_error_handlers
@@ -46,9 +46,9 @@ from app.web.dashboard import router as dashboard_router
 from app.web.domains_web import router as domains_web_router
 from app.web.dr_web import router as dr_web_router
 from app.web.drift_web import router as drift_web_router
+from app.web.git_repos_web import router as git_repos_web_router
 from app.web.helpers import CSRF_COOKIE_NAME
 from app.web.instances import router as instances_router
-from app.web.git_repos_web import router as git_repos_web_router
 from app.web.logs_web import router as logs_web_router
 from app.web.maintenance_web import router as maintenance_web_router
 from app.web.notifications_web import router as notifications_web_router
