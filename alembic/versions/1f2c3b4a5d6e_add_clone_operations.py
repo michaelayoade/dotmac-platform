@@ -7,7 +7,7 @@ Create Date: 2026-02-09 13:05:00.000000
 """
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ENUM, UUID
 
 from alembic import op
 
@@ -16,7 +16,7 @@ down_revision = "0d8b3a1c2e4f"
 branch_labels = None
 depends_on = None
 
-clone_status_enum = sa.Enum(
+clone_status_enum = ENUM(
     "pending",
     "cloning_config",
     "backing_up",
@@ -26,15 +26,21 @@ clone_status_enum = sa.Enum(
     "completed",
     "failed",
     name="clonestatus",
-    create_type=True,
+    create_type=False,
 )
 
 
 def upgrade() -> None:
     bind = op.get_bind()
-    is_postgres = bind.dialect.name == "postgresql"
-    if is_postgres:
-        clone_status_enum.create(bind, checkfirst=True)
+    if bind.dialect.name == "postgresql":
+        bind.execute(
+            sa.text(
+                "DO $$ BEGIN CREATE TYPE clonestatus AS ENUM "
+                "('pending','cloning_config','backing_up','deploying',"
+                "'restoring_data','verifying','completed','failed'); "
+                "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+            )
+        )
 
     op.create_table(
         "clone_operations",

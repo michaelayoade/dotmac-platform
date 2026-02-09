@@ -7,7 +7,7 @@ Create Date: 2026-02-09 10:20:00.000000
 """
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ENUM, UUID
 
 from alembic import op
 
@@ -16,14 +16,18 @@ down_revision = "e3f7b8c9d0e1"
 branch_labels = None
 depends_on = None
 
-ssh_key_type_enum = sa.Enum("ed25519", "rsa", name="sshkeytype", create_type=True)
+ssh_key_type_enum = ENUM("ed25519", "rsa", name="sshkeytype", create_type=False)
 
 
 def upgrade() -> None:
     bind = op.get_bind()
-    is_postgres = bind.dialect.name == "postgresql"
-    if is_postgres:
-        ssh_key_type_enum.create(bind, checkfirst=True)
+    if bind.dialect.name == "postgresql":
+        bind.execute(
+            sa.text(
+                "DO $$ BEGIN CREATE TYPE sshkeytype AS ENUM ('ed25519','rsa'); "
+                "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+            )
+        )
 
     op.create_table(
         "ssh_keys",

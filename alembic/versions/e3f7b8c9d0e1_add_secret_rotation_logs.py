@@ -7,7 +7,7 @@ Create Date: 2026-02-09 08:30:00.000000
 """
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ENUM, UUID
 
 from alembic import op
 
@@ -16,22 +16,27 @@ down_revision = "a1b2c3d4e5f6"
 branch_labels = None
 depends_on = None
 
-rotation_status_enum = sa.Enum(
+rotation_status_enum = ENUM(
     "pending",
     "running",
     "success",
     "failed",
     "rolled_back",
     name="rotationstatus",
-    create_type=True,
+    create_type=False,
 )
 
 
 def upgrade() -> None:
     bind = op.get_bind()
-    is_postgres = bind.dialect.name == "postgresql"
-    if is_postgres:
-        rotation_status_enum.create(bind, checkfirst=True)
+    if bind.dialect.name == "postgresql":
+        bind.execute(
+            sa.text(
+                "DO $$ BEGIN "
+                "CREATE TYPE rotationstatus AS ENUM ('pending','running','success','failed','rolled_back'); "
+                "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+            )
+        )
 
     op.create_table(
         "secret_rotation_logs",
@@ -51,11 +56,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    bind = op.get_bind()
-    is_postgres = bind.dialect.name == "postgresql"
-
     op.drop_index("ix_secret_rotation_logs_instance_id", table_name="secret_rotation_logs")
     op.drop_table("secret_rotation_logs")
-
-    if is_postgres:
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
         rotation_status_enum.drop(bind, checkfirst=True)

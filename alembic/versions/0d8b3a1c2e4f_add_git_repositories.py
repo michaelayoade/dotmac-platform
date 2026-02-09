@@ -7,7 +7,7 @@ Create Date: 2026-02-09 12:15:00.000000
 """
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ENUM, UUID
 
 from alembic import op
 
@@ -16,14 +16,18 @@ down_revision = "f2a4c6d8e0b1"
 branch_labels = None
 depends_on = None
 
-git_auth_type_enum = sa.Enum("none", "ssh_key", "token", name="gitauthtype", create_type=True)
+git_auth_type_enum = ENUM("none", "ssh_key", "token", name="gitauthtype", create_type=False)
 
 
 def upgrade() -> None:
     bind = op.get_bind()
-    is_postgres = bind.dialect.name == "postgresql"
-    if is_postgres:
-        git_auth_type_enum.create(bind, checkfirst=True)
+    if bind.dialect.name == "postgresql":
+        bind.execute(
+            sa.text(
+                "DO $$ BEGIN CREATE TYPE gitauthtype AS ENUM ('none','ssh_key','token'); "
+                "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+            )
+        )
 
     op.create_table(
         "git_repositories",
