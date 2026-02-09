@@ -172,6 +172,15 @@
                 Git Repos
             </a>
 
+            <a href="/catalog"
+               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
+                      {% if active == 'catalog' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 6.75h15m-15 4.5h15m-15 4.5h15"/>
+                </svg>
+                Catalog
+            </a>
+
             <a href="/usage"
                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
                       {% if active == 'usage' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">

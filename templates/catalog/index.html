@@ -1,0 +1,128 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-display text-surface-900 dark:text-white">Catalog</h1>
+    <p class="mt-1 text-[13px] text-surface-400 dark:text-surface-500">Define releases, bundles, and catalog offerings.</p>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-2">
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-4">New Release</h2>
+        <form method="POST" action="/catalog/releases/create" class="space-y-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <input type="text" name="name" placeholder="Release name" required class="w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            <input type="text" name="version" placeholder="Version (e.g. 1.3.2)" required class="w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            <input type="text" name="git_ref" placeholder="Git ref (tag/sha)" required class="w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            <select name="git_repo_id" required class="w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                <option value="">Select repo...</option>
+                {% for r in repos %}
+                <option value="{{ r.repo_id }}">{{ r.label }} — {{ r.url }}</option>
+                {% endfor %}
+            </select>
+            <textarea name="notes" rows="3" placeholder="Notes" class="w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-white"></textarea>
+            <button type="submit" class="rounded-lg bg-surface-900 px-4 py-2 text-[13px] font-semibold text-white dark:bg-primary-500 dark:text-surface-950">Create Release</button>
+        </form>
+    </div>
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-4">New Bundle</h2>
+        <form method="POST" action="/catalog/bundles/create" class="space-y-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <input type="text" name="name" placeholder="Bundle name" required class="w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            <textarea name="description" rows="3" placeholder="Description" class="w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-white"></textarea>
+            <input type="text" name="module_slugs" placeholder="Module slugs (comma-separated)" class="w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            <input type="text" name="flag_keys" placeholder="Flag keys (comma-separated)" class="w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            <button type="submit" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-semibold text-surface-600 dark:border-surface-700 dark:text-surface-300">Create Bundle</button>
+        </form>
+    </div>
+</div>
+
+<div class="mt-6 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+    <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-4">New Catalog Item</h2>
+    <form method="POST" action="/catalog/items/create" class="grid gap-3 sm:grid-cols-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <input type="text" name="label" placeholder="Label" required class="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+        <select name="release_id" required class="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+            {% for r in releases %}
+            <option value="{{ r.release_id }}">{{ r.name }} — {{ r.version }}</option>
+            {% endfor %}
+        </select>
+        <select name="bundle_id" required class="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+            {% for b in bundles %}
+            <option value="{{ b.bundle_id }}">{{ b.name }}</option>
+            {% endfor %}
+        </select>
+        <div class="sm:col-span-3">
+            <button type="submit" class="rounded-lg bg-surface-900 px-4 py-2 text-[13px] font-semibold text-white dark:bg-primary-500 dark:text-surface-950">Create Catalog Item</button>
+        </div>
+    </form>
+</div>
+
+<div class="mt-6 grid gap-6 lg:grid-cols-3">
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-4">Releases</h2>
+        {% for r in releases %}
+        <div class="mb-3 flex items-center justify-between text-[12px]">
+            <div>
+                <div class="font-medium text-surface-700 dark:text-surface-200">{{ r.name }} <span class="text-surface-400">{{ r.version }}</span></div>
+                <div class="text-surface-400">{{ r.git_ref }}</div>
+            </div>
+            {% if r.is_active %}
+            <form method="POST" action="/catalog/releases/{{ r.release_id }}/deactivate">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button class="text-[11px] text-red-500">Deactivate</button>
+            </form>
+            {% else %}
+            <span class="text-[11px] text-surface-400">Inactive</span>
+            {% endif %}
+        </div>
+        {% else %}
+        <p class="text-[13px] text-surface-400">No releases yet.</p>
+        {% endfor %}
+    </div>
+
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-4">Bundles</h2>
+        {% for b in bundles %}
+        <div class="mb-3 flex items-center justify-between text-[12px]">
+            <div>
+                <div class="font-medium text-surface-700 dark:text-surface-200">{{ b.name }}</div>
+                <div class="text-surface-400">{{ (b.module_slugs or []) | join(', ') }}</div>
+            </div>
+            {% if b.is_active %}
+            <form method="POST" action="/catalog/bundles/{{ b.bundle_id }}/deactivate">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button class="text-[11px] text-red-500">Deactivate</button>
+            </form>
+            {% else %}
+            <span class="text-[11px] text-surface-400">Inactive</span>
+            {% endif %}
+        </div>
+        {% else %}
+        <p class="text-[13px] text-surface-400">No bundles yet.</p>
+        {% endfor %}
+    </div>
+
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-4">Catalog Items</h2>
+        {% for i in items %}
+        <div class="mb-3 flex items-center justify-between text-[12px]">
+            <div>
+                <div class="font-medium text-surface-700 dark:text-surface-200">{{ i.label }}</div>
+                <div class="text-surface-400">Release {{ i.release_id }} / Bundle {{ i.bundle_id }}</div>
+            </div>
+            {% if i.is_active %}
+            <form method="POST" action="/catalog/items/{{ i.catalog_id }}/deactivate">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button class="text-[11px] text-red-500">Deactivate</button>
+            </form>
+            {% else %}
+            <span class="text-[11px] text-surface-400">Inactive</span>
+            {% endif %}
+        </div>
+        {% else %}
+        <p class="text-[13px] text-surface-400">No catalog items yet.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

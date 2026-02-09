@@ -5,6 +5,7 @@ from app.models.alert_rule import (  # noqa: F401
     AlertOperator,
     AlertRule,
 )
+from app.models.app_upgrade import AppUpgrade, UpgradeStatus  # noqa: F401
 from app.models.audit import AuditActorType, AuditEvent  # noqa: F401
 from app.models.auth import (  # noqa: F401
     ApiKey,
@@ -18,6 +19,7 @@ from app.models.auth import (  # noqa: F401
     UserCredential,
 )
 from app.models.backup import Backup, BackupStatus, BackupType  # noqa: F401
+from app.models.catalog import AppBundle, AppCatalogItem, AppRelease  # noqa: F401
 from app.models.clone_operation import CloneOperation, CloneStatus  # noqa: F401
 from app.models.deploy_approval import ApprovalStatus, DeployApproval  # noqa: F401
 from app.models.deployment_batch import (  # noqa: F401

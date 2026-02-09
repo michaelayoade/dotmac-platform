@@ -30,6 +30,9 @@ def instance_list(
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
 ):
+    from sqlalchemy import select
+
+    from app.models.catalog import AppCatalogItem, AppRelease
     from app.services.health_service import HealthService
     from app.services.instance_service import InstanceService
 
@@ -49,17 +52,34 @@ def instance_list(
         health: HealthCheck | None
         health_state: str
         health_checked_at: datetime | None
+        catalog_label: str | None
+        release_version: str | None
+
+    catalog_ids = {inst.catalog_item_id for inst in instances if inst.catalog_item_id}
+    item_map: dict[UUID, AppCatalogItem] = {}
+    release_map: dict[UUID, AppRelease] = {}
+    if catalog_ids:
+        items = list(db.scalars(select(AppCatalogItem).where(AppCatalogItem.catalog_id.in_(catalog_ids))).all())
+        item_map = {item.catalog_id: item for item in items}
+        release_ids = {item.release_id for item in items}
+        if release_ids:
+            releases = list(db.scalars(select(AppRelease).where(AppRelease.release_id.in_(release_ids))).all())
+            release_map = {rel.release_id: rel for rel in releases}
 
     instance_data: list[_InstanceRow] = []
     for inst in instances:
         check = health_map.get(inst.instance_id)
         health_state = health_svc.classify_health(check, now) if inst.status.value == "running" else "n/a"
+        catalog_item = item_map.get(inst.catalog_item_id) if inst.catalog_item_id else None
+        release = release_map.get(catalog_item.release_id) if catalog_item else None
         instance_data.append(
             {
                 "instance": inst,
                 "health": check,
                 "health_state": health_state,
                 "health_checked_at": check.checked_at if check else None,
+                "catalog_label": catalog_item.label if catalog_item else None,
+                "release_version": release.version if release else None,
             }
         )
 
@@ -144,12 +164,25 @@ def instance_form(
     db: Session = Depends(get_db),
 ):
     require_admin(auth)
+    from app.services.catalog_service import CatalogService
+    from app.services.git_repo_service import GitRepoService
     from app.services.server_service import ServerService
 
     servers = ServerService(db).list_all()
+    repos = GitRepoService(db).list_repos(active_only=True)
+    catalog_items = CatalogService(db).list_catalog_items(active_only=True)
     return templates.TemplateResponse(
         "instances/form.html",
-        ctx(request, auth, "New Instance", active_page="instances", servers=servers, errors=None),
+        ctx(
+            request,
+            auth,
+            "New Instance",
+            active_page="instances",
+            servers=servers,
+            repos=repos,
+            catalog_items=catalog_items,
+            errors=None,
+        ),
     )
 
 
@@ -167,16 +200,32 @@ def instance_create(
     admin_email: str = Form(""),
     admin_username: str = Form("admin"),
     domain: str = Form(""),
+    catalog_item_id: str = Form(""),
     csrf_token: str = Form(""),
 ):
     require_admin(auth)
     validate_csrf_token(request, csrf_token)
 
+    from app.services.catalog_service import CatalogService
+    from app.services.git_repo_service import GitRepoService
     from app.services.instance_service import InstanceService
     from app.services.server_service import ServerService
 
     svc = InstanceService(db)
     try:
+        if not catalog_item_id:
+            raise ValueError("Catalog item is required")
+        catalog_id = UUID(catalog_item_id)
+        catalog_item = CatalogService(db).get_catalog_item(catalog_id)
+        if not catalog_item or not catalog_item.is_active:
+            raise ValueError("Selected catalog item is invalid")
+        release = catalog_item.release
+        if not release or not release.is_active:
+            raise ValueError("Catalog release is invalid")
+        git_repo_id = str(release.git_repo_id)
+        repo = GitRepoService(db).get_by_id(UUID(git_repo_id))
+        if not repo or not repo.is_active:
+            raise ValueError("Catalog release repo is invalid")
         instance = svc.create(
             server_id=UUID(server_id),
             org_code=org_code,
@@ -187,20 +236,16 @@ def instance_create(
             admin_email=admin_email or None,
             admin_username=admin_username or "admin",
             domain=domain or None,
+            git_repo_id=UUID(git_repo_id),
+            catalog_item_id=catalog_id,
         )
         db.commit()
         return RedirectResponse(f"/instances/{instance.instance_id}", status_code=302)
     except ValueError as e:
         db.rollback()
         servers = ServerService(db).list_all()
-        return templates.TemplateResponse(
-            "instances/form.html",
-            ctx(request, auth, "New Instance", active_page="instances", servers=servers, errors=[str(e)]),
-        )
-    except Exception:
-        db.rollback()
-        logger.exception("Failed to create instance")
-        servers = ServerService(db).list_all()
+        repos = GitRepoService(db).list_repos(active_only=True)
+        catalog_items = CatalogService(db).list_catalog_items(active_only=True)
         return templates.TemplateResponse(
             "instances/form.html",
             ctx(
@@ -209,6 +254,27 @@ def instance_create(
                 "New Instance",
                 active_page="instances",
                 servers=servers,
+                repos=repos,
+                catalog_items=catalog_items,
+                errors=[str(e)],
+            ),
+        )
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to create instance")
+        servers = ServerService(db).list_all()
+        repos = GitRepoService(db).list_repos(active_only=True)
+        catalog_items = CatalogService(db).list_catalog_items(active_only=True)
+        return templates.TemplateResponse(
+            "instances/form.html",
+            ctx(
+                request,
+                auth,
+                "New Instance",
+                active_page="instances",
+                servers=servers,
+                repos=repos,
+                catalog_items=catalog_items,
                 errors=["An unexpected error occurred. Please try again."],
             ),
         )
@@ -222,9 +288,11 @@ def instance_detail(
     db: Session = Depends(get_db),
 ):
     from app.services.backup_service import BackupService
+    from app.services.catalog_service import CatalogService
     from app.services.deploy_service import DeployService
     from app.services.domain_service import DomainService
     from app.services.feature_flag_service import FeatureFlagService
+    from app.services.git_repo_service import GitRepoService
     from app.services.health_service import HealthService
     from app.services.instance_service import InstanceService
     from app.services.module_service import ModuleService
@@ -232,6 +300,7 @@ def instance_detail(
     from app.services.resource_enforcement import ResourceEnforcementService
     from app.services.secret_rotation_service import SecretRotationService
     from app.services.tenant_audit_service import TenantAuditService
+    from app.services.upgrade_service import UpgradeService
 
     svc = InstanceService(db)
     instance = svc.get_or_404(instance_id)
@@ -258,6 +327,13 @@ def instance_detail(
     usage_summary = enforcement_svc.get_usage_summary(instance_id)
     compliance_violations = enforcement_svc.check_plan_compliance(instance_id)
     rotation_history = SecretRotationService(db).get_rotation_history(instance_id, limit=20)
+    repos = GitRepoService(db).list_repos(active_only=True)
+    catalog_items = CatalogService(db).list_catalog_items(active_only=True)
+    catalog_map = {item.catalog_id: item for item in catalog_items}
+    upgrades = UpgradeService(db).list_upgrades(instance_id, limit=20)
+    from app.services.approval_service import ApprovalService
+
+    pending_upgrade_ids = {a.upgrade_id for a in ApprovalService(db).get_pending(instance_id) if a.upgrade_id}
 
     return templates.TemplateResponse(
         "instances/detail.html",
@@ -281,6 +357,11 @@ def instance_detail(
             compliance_violations=compliance_violations,
             rotation_history=rotation_history,
             active_tab=active_tab,
+            repos=repos,
+            catalog_items=catalog_items,
+            catalog_map=catalog_map,
+            upgrades=upgrades,
+            pending_upgrade_ids=pending_upgrade_ids,
         ),
     )
 
@@ -319,6 +400,130 @@ def instance_deploy(
         f"/instances/{instance_id}/deploy-log?deployment_id={deployment_id}",
         status_code=302,
     )
+
+
+@router.post("/{instance_id}/git-repo")
+def instance_set_git_repo(
+    request: Request,
+    instance_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    git_repo_id: str = Form(""),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+    from app.services.git_repo_service import GitRepoService
+    from app.services.instance_service import InstanceService
+
+    svc = InstanceService(db)
+    instance = svc.get_or_404(instance_id)
+    try:
+        if not git_repo_id:
+            raise ValueError("Git repository is required")
+        repo = GitRepoService(db).get_by_id(UUID(git_repo_id))
+        if not repo or not repo.is_active:
+            raise ValueError("Selected git repository is invalid")
+        instance.git_repo_id = repo.repo_id
+        db.commit()
+    except ValueError:
+        db.rollback()
+    return RedirectResponse(f"/instances/{instance_id}", status_code=302)
+
+
+@router.post("/{instance_id}/upgrades")
+def instance_create_upgrade(
+    request: Request,
+    instance_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    catalog_item_id: str = Form(""),
+    scheduled_for: str | None = Form(None),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+    from datetime import UTC as _UTC
+    from datetime import datetime
+
+    from app.services.upgrade_service import UpgradeService
+    from app.tasks.upgrade import run_upgrade
+
+    try:
+        if not catalog_item_id:
+            raise ValueError("Catalog item is required")
+        scheduled_dt = None
+        if scheduled_for:
+            scheduled_dt = datetime.fromisoformat(scheduled_for)
+            if scheduled_dt.tzinfo is None:
+                scheduled_dt = scheduled_dt.replace(tzinfo=_UTC)
+
+        upgrade = UpgradeService(db).create_upgrade(
+            instance_id,
+            UUID(catalog_item_id),
+            scheduled_for=scheduled_dt,
+            requested_by=auth.person_id,
+        )
+        from app.services.approval_service import ApprovalService
+        from app.services.catalog_service import CatalogService
+
+        approval_svc = ApprovalService(db)
+        catalog_item = CatalogService(db).get_catalog_item(UUID(catalog_item_id))
+        release = catalog_item.release if catalog_item else None
+        if approval_svc.requires_approval(instance_id):
+            reason = None
+            if catalog_item:
+                reason = f"Upgrade to {catalog_item.label}"
+                if release and release.version:
+                    reason = f"{reason} ({release.version})"
+            approval_svc.request_approval(
+                instance_id,
+                requested_by=auth.person_id or "unknown",
+                requested_by_name=auth.user_name,
+                deployment_type="upgrade",
+                git_ref=release.git_ref if release else None,
+                reason=reason,
+                upgrade_id=upgrade.upgrade_id,
+            )
+            db.commit()
+        else:
+            db.commit()
+            if scheduled_dt:
+                run_upgrade.apply_async(args=[str(upgrade.upgrade_id)], eta=scheduled_dt)
+            else:
+                run_upgrade.delay(str(upgrade.upgrade_id))
+    except Exception:
+        db.rollback()
+    return RedirectResponse(f"/instances/{instance_id}?tab=upgrades", status_code=302)
+
+
+@router.post("/{instance_id}/upgrades/{upgrade_id}/cancel")
+def instance_cancel_upgrade(
+    request: Request,
+    instance_id: UUID,
+    upgrade_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    reason: str = Form(""),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+    from app.services.upgrade_service import UpgradeService
+
+    try:
+        upgrade = UpgradeService(db).cancel_upgrade(
+            upgrade_id,
+            reason=reason or None,
+            cancelled_by=auth.person_id,
+            cancelled_by_name=auth.user_name,
+        )
+        if upgrade.instance_id != instance_id:
+            raise ValueError("Upgrade does not match instance")
+        db.commit()
+    except Exception:
+        db.rollback()
+    return RedirectResponse(f"/instances/{instance_id}?tab=upgrades", status_code=302)
 
 
 @router.get("/{instance_id}/deploy-log", response_class=HTMLResponse)

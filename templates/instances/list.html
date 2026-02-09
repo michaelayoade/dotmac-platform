@@ -95,6 +95,11 @@
             <div>
                 <h3 class="text-base font-semibold text-surface-900 dark:text-white">{{ inst.org_code }}</h3>
                 <p class="mt-0.5 text-[13px] text-surface-400 dark:text-surface-500">{{ inst.org_name }}</p>
+                {% if item.catalog_label %}
+                <p class="mt-1 text-[12px] text-surface-400 dark:text-surface-500">
+                    {{ item.catalog_label }}{% if item.release_version %} • v{{ item.release_version }}{% endif %}
+                </p>
+                {% endif %}
             </div>
             <span class="text-[11px] font-mono text-surface-400 dark:text-surface-500">:{{ inst.app_port }}</span>
         </div>
@@ -126,6 +131,7 @@
                 <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Framework</th>
                 <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Sector</th>
                 <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Port</th>
+                <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Catalog</th>
                 <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Status</th>
                 <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Health</th>
                 <th class="px-5 py-3"></th>
@@ -148,6 +154,16 @@
                     <span class="rounded-md bg-surface-100 px-2 py-0.5 text-[11px] font-medium text-surface-500 dark:bg-surface-800 dark:text-surface-400">{{ inst.sector_type.value }}</span>
                 </td>
                 <td class="px-5 py-4 text-[13px] text-surface-500 dark:text-surface-400 font-mono">:{{ inst.app_port }}</td>
+                <td class="px-5 py-4">
+                    {% if item.catalog_label %}
+                        <div class="text-[12px] text-surface-700 dark:text-surface-300">{{ item.catalog_label }}</div>
+                        {% if item.release_version %}
+                            <div class="text-[11px] text-surface-400 dark:text-surface-500">v{{ item.release_version }}</div>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-[12px] text-surface-300 dark:text-surface-600">—</span>
+                    {% endif %}
+                </td>
                 <td class="px-5 py-4">
                     {% if inst.status.value == 'running' %}
                         <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">

@@ -33,6 +33,20 @@
                 {% endif %}
             </div>
 
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Catalog Item</label>
+                <select name="catalog_item_id" required data-testid="instance-catalog"
+                        class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
+                    <option value="">Select a catalog item...</option>
+                    {% for c in catalog_items %}
+                    <option value="{{ c.catalog_id }}">{{ c.label }}</option>
+                    {% endfor %}
+                </select>
+                {% if not catalog_items %}
+                <p class="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400">No catalog items configured. <a href="/catalog" class="underline">Create one first</a>.</p>
+                {% endif %}
+            </div>
+
             <div class="grid gap-5 sm:grid-cols-2">
                 <div>
                     <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Organization Code</label>

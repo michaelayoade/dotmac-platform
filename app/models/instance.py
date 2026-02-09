@@ -69,6 +69,12 @@ class Instance(Base):
         nullable=True,
         index=True,
     )
+    catalog_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("app_catalog_items.catalog_id"),
+        nullable=True,
+        index=True,
+    )
     # Lifecycle
     trial_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

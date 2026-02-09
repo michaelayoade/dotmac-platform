@@ -146,6 +146,8 @@ class InstanceService:
         app_port: int | None = None,
         db_port: int | None = None,
         redis_port: int | None = None,
+        git_repo_id: UUID | None = None,
+        catalog_item_id: UUID | None = None,
     ) -> Instance:
         org_code = org_code.upper()
 
@@ -198,9 +200,30 @@ class InstanceService:
             admin_username=admin_username or "admin",
             deploy_path=deploy_path,
             status=InstanceStatus.provisioned,
+            git_repo_id=git_repo_id,
+            catalog_item_id=catalog_item_id,
         )
         self.db.add(instance)
         self.db.flush()
+        if catalog_item_id:
+            try:
+                from app.services.catalog_service import CatalogService
+                from app.services.feature_flag_service import FeatureFlagService
+                from app.services.module_service import ModuleService
+
+                catalog_item = CatalogService(self.db).get_catalog_item(catalog_item_id)
+                if catalog_item and catalog_item.bundle:
+                    bundle = catalog_item.bundle
+                    mod_svc = ModuleService(self.db)
+                    flag_svc = FeatureFlagService(self.db)
+                    for slug in bundle.module_slugs or []:
+                        mod = mod_svc.get_by_slug(slug)
+                        if mod:
+                            mod_svc.set_module_enabled(instance.instance_id, mod.module_id, True)
+                    for flag_key in bundle.flag_keys or []:
+                        flag_svc.set_flag(instance.instance_id, flag_key, "true")
+            except Exception:
+                logger.exception("Failed to apply catalog bundle for instance %s", instance.instance_id)
         logger.info("Created instance: %s (%s)", org_code, instance.instance_id)
         return instance
 

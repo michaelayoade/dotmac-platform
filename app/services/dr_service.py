@@ -123,11 +123,12 @@ class DisasterRecoveryService:
             currency=source_instance.currency,
             admin_email=source_instance.admin_email,
             admin_username=source_instance.admin_username,
+            git_repo_id=source_instance.git_repo_id,
+            catalog_item_id=source_instance.catalog_item_id,
         )
         new_instance.plan_id = source_instance.plan_id
         new_instance.git_branch = source_instance.git_branch
         new_instance.git_tag = source_instance.git_tag
-        new_instance.git_repo_id = source_instance.git_repo_id
         self.db.flush()
 
         # Transfer backup file if cross-server

@@ -50,6 +50,18 @@ RECONFIGURE_STEPS = [
     "verify",
 ]
 
+UPGRADE_STEPS = [
+    "backup",
+    "generate",
+    "transfer",
+    "ensure_source",
+    "build",
+    "start_infra",
+    "start_app",
+    "migrate",
+    "verify",
+]
+
 STEP_LABELS = {
     "backup": "Pre-deploy database backup",
     "generate": "Generate instance files",
@@ -126,6 +138,7 @@ class DeployService:
         admin_password: str | None = None,
         deployment_type: str = "full",
         git_ref: str | None = None,
+        upgrade_id: UUID | None = None,
     ) -> str:
         """Create pending deployment log entries for all steps.
 
@@ -151,8 +164,23 @@ class DeployService:
         if self.has_active_deployment(instance_id):
             raise ValueError("A deployment is already in progress for this instance")
 
+        if deployment_type == "upgrade":
+            from app.services.approval_service import ApprovalService
+
+            approval_svc = ApprovalService(self.db)
+            if approval_svc.requires_approval(instance_id):
+                if not upgrade_id:
+                    raise ValueError("Upgrade approval required before deployment")
+                if not approval_svc.is_upgrade_approved(upgrade_id):
+                    raise ValueError("Upgrade approval required before deployment")
+
         deployment_id = uuid.uuid4().hex
-        steps = RECONFIGURE_STEPS if deployment_type == "reconfigure" else DEPLOY_STEPS
+        if deployment_type == "reconfigure":
+            steps = RECONFIGURE_STEPS
+        elif deployment_type == "upgrade":
+            steps = UPGRADE_STEPS
+        else:
+            steps = DEPLOY_STEPS
 
         for i, step in enumerate(steps):
             log = DeploymentLog(
@@ -329,7 +357,12 @@ class DeployService:
 
         ssh = get_ssh_for_server(server)
         results: dict[str, bool] = {}
-        steps = RECONFIGURE_STEPS if deployment_type == "reconfigure" else DEPLOY_STEPS
+        if deployment_type == "reconfigure":
+            steps = RECONFIGURE_STEPS
+        elif deployment_type == "upgrade":
+            steps = UPGRADE_STEPS
+        else:
+            steps = DEPLOY_STEPS
 
         try:
             if deployment_type == "reconfigure":
@@ -396,15 +429,16 @@ class DeployService:
             if not results["migrate"]:
                 raise DeployError("migrate", "Migration failed")
 
-            # Step 8: Bootstrap org + admin
-            results["bootstrap"] = self._step_bootstrap(instance, deployment_id, ssh)
-            if not results["bootstrap"]:
-                raise DeployError("bootstrap", "Bootstrap failed")
+            if deployment_type != "upgrade":
+                # Step 8: Bootstrap org + admin
+                results["bootstrap"] = self._step_bootstrap(instance, deployment_id, ssh)
+                if not results["bootstrap"]:
+                    raise DeployError("bootstrap", "Bootstrap failed")
 
-            # Step 9: Caddy reverse proxy (non-fatal — DNS may not be ready)
-            results["caddy"] = self._step_caddy(instance, deployment_id, ssh)
-            if not results["caddy"]:
-                logger.warning("Caddy config failed for %s — continuing", instance.org_code)
+                # Step 9: Caddy reverse proxy (non-fatal — DNS may not be ready)
+                results["caddy"] = self._step_caddy(instance, deployment_id, ssh)
+                if not results["caddy"]:
+                    logger.warning("Caddy config failed for %s — continuing", instance.org_code)
 
             # Step 10: Verify health
             results["verify"] = self._step_verify(instance, deployment_id, ssh)
@@ -422,6 +456,15 @@ class DeployService:
             # Record deployed git ref
             if git_ref:
                 instance.deployed_git_ref = git_ref
+            elif getattr(instance, "catalog_item_id", None):
+                try:
+                    from app.services.catalog_service import CatalogService
+
+                    catalog_item = CatalogService(self.db).get_catalog_item(instance.catalog_item_id)
+                    if catalog_item and catalog_item.release:
+                        instance.deployed_git_ref = catalog_item.release.git_ref
+                except Exception:
+                    logger.debug("Failed to resolve catalog release for deployed ref", exc_info=True)
             instance.status = InstanceStatus.running
             self.db.commit()
             self.clear_deploy_secret(instance_id, deployment_id)
@@ -632,19 +675,57 @@ class DeployService:
         self._update_step(instance.instance_id, deployment_id, step, DeployStepStatus.running)
 
         from app.models.git_repository import GitAuthType
+        from app.services.catalog_service import CatalogService
         from app.services.git_repo_service import GitRepoService, format_env_prefix
         from app.services.platform_settings import PlatformSettingsService
 
         ps = PlatformSettingsService(self.db)
         src_path = ps.get("dotmac_source_path")
         repo_service = GitRepoService(self.db)
-        repo = repo_service.get_repo_for_instance(instance.instance_id)
+        repo = None
+        release = None
+        if getattr(instance, "catalog_item_id", None):
+            catalog_item = CatalogService(self.db).get_catalog_item(instance.catalog_item_id)
+            if not catalog_item or not catalog_item.is_active:
+                self._update_step(
+                    instance.instance_id,
+                    deployment_id,
+                    step,
+                    DeployStepStatus.failed,
+                    "Catalog item not found or inactive",
+                )
+                return False
+            release = catalog_item.release
+            if not release or not release.is_active:
+                self._update_step(
+                    instance.instance_id,
+                    deployment_id,
+                    step,
+                    DeployStepStatus.failed,
+                    "Catalog release not found or inactive",
+                )
+                return False
+            repo = repo_service.get_by_id(release.git_repo_id)
+            if not repo or not repo.is_active:
+                self._update_step(
+                    instance.instance_id,
+                    deployment_id,
+                    step,
+                    DeployStepStatus.failed,
+                    "Catalog release repo not found or inactive",
+                )
+                return False
+        else:
+            repo = repo_service.get_repo_for_instance(instance.instance_id)
 
-        # Version pinning: per-instance override > deployment arg > repo default > platform default
-        git_branch = git_ref or instance.git_branch or instance.git_tag
-        if not git_branch and repo:
-            git_branch = repo.default_branch
-        git_branch = git_branch or ps.get("dotmac_git_branch") or "main"
+        # Version pinning: catalog release > deployment override > instance override > defaults
+        if release:
+            git_branch = git_ref or release.git_ref
+        else:
+            git_branch = git_ref or instance.git_branch or instance.git_tag
+            if not git_branch and repo:
+                git_branch = repo.default_branch
+            git_branch = git_branch or ps.get("dotmac_git_branch") or "main"
 
         git_repo_url = None
         env_prefix = ""

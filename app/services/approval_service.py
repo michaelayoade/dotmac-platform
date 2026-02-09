@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -27,6 +27,7 @@ class ApprovalService:
         deployment_type: str = "full",
         git_ref: str | None = None,
         reason: str | None = None,
+        upgrade_id: UUID | None = None,
     ) -> DeployApproval:
         # Check no pending approval already exists
         existing = self._get_pending(instance_id)
@@ -35,6 +36,7 @@ class ApprovalService:
 
         approval = DeployApproval(
             instance_id=instance_id,
+            upgrade_id=upgrade_id,
             requested_by=requested_by,
             requested_by_name=requested_by_name,
             deployment_type=deployment_type,
@@ -89,6 +91,7 @@ class ApprovalService:
         return approval
 
     def get_pending(self, instance_id: UUID | None = None) -> list[DeployApproval]:
+        self.expire_pending(max_age_days=7)
         stmt = select(DeployApproval).where(DeployApproval.status == ApprovalStatus.pending)
         if instance_id:
             stmt = stmt.where(DeployApproval.instance_id == instance_id)
@@ -117,6 +120,27 @@ class ApprovalService:
             InstanceTag.value == "true",
         )
         return self.db.scalar(stmt) is not None
+
+    def is_upgrade_approved(self, upgrade_id: UUID) -> bool:
+        stmt = select(DeployApproval).where(
+            DeployApproval.upgrade_id == upgrade_id,
+            DeployApproval.status == ApprovalStatus.approved,
+        )
+        return self.db.scalar(stmt) is not None
+
+    def expire_pending(self, max_age_days: int = 7) -> int:
+        cutoff = datetime.now(UTC) - timedelta(days=max_age_days)
+        stmt = select(DeployApproval).where(
+            DeployApproval.status == ApprovalStatus.pending,
+            DeployApproval.created_at < cutoff,
+        )
+        approvals = list(self.db.scalars(stmt).all())
+        for approval in approvals:
+            approval.status = ApprovalStatus.expired
+            approval.resolved_at = datetime.now(UTC)
+        if approvals:
+            self.db.flush()
+        return len(approvals)
 
     def _get_pending(self, instance_id: UUID) -> DeployApproval | None:
         stmt = select(DeployApproval).where(

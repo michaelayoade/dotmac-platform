@@ -111,11 +111,12 @@ class CloneService:
                 currency=source.currency,
                 admin_email=source.admin_email,
                 admin_username=source.admin_username,
+                git_repo_id=source.git_repo_id,
+                catalog_item_id=source.catalog_item_id,
             )
             clone_instance.plan_id = source.plan_id
             clone_instance.git_branch = source.git_branch
             clone_instance.git_tag = source.git_tag
-            clone_instance.git_repo_id = source.git_repo_id
             op.target_instance_id = clone_instance.instance_id
             self._copy_modules(source.instance_id, clone_instance.instance_id)
             self._copy_flags(source.instance_id, clone_instance.instance_id)

@@ -14,6 +14,7 @@ from starlette.responses import Response
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.auth_flow import router as auth_flow_router
+from app.api.catalog import router as catalog_api_router
 from app.api.deps import require_role, require_user_auth
 from app.api.dr import router as dr_api_router
 from app.api.git_repos import router as git_repos_api_router
@@ -41,6 +42,7 @@ from app.web.alerts_web import router as alerts_web_router
 from app.web.approvals_web import router as approvals_web_router
 from app.web.audit_web import router as audit_web_router
 from app.web.auth_web import router as auth_web_router
+from app.web.catalog_web import router as catalog_web_router
 from app.web.clone_web import router as clone_web_router
 from app.web.dashboard import router as dashboard_router
 from app.web.domains_web import router as domains_web_router
@@ -245,6 +247,7 @@ _include_api_router(observability_api_router, dependencies=[Depends(require_user
 _include_api_router(ssh_keys_api_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(git_repos_api_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(dr_api_router, dependencies=[Depends(require_user_auth)])
+_include_api_router(catalog_api_router, dependencies=[Depends(require_user_auth)])
 
 app.include_router(auth_web_router)
 app.include_router(dashboard_router)
@@ -269,6 +272,7 @@ app.include_router(logs_web_router)
 app.include_router(ssh_keys_web_router)
 app.include_router(git_repos_web_router)
 app.include_router(dr_web_router)
+app.include_router(catalog_web_router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

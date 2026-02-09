@@ -25,6 +25,9 @@ class DeployApproval(Base):
     instance_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("instances.instance_id"), nullable=False, index=True
     )
+    upgrade_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("app_upgrades.upgrade_id"), nullable=True, index=True
+    )
     deployment_id: Mapped[str | None] = mapped_column(String(36))
     requested_by: Mapped[str] = mapped_column(String(36), nullable=False)
     requested_by_name: Mapped[str | None] = mapped_column(String(200))

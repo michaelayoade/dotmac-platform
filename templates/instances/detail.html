@@ -211,6 +211,48 @@
                 <dt class="text-[13px] text-surface-400 dark:text-surface-500">Deploy Path</dt>
                 <dd class="text-[12px] text-surface-500 dark:text-surface-400 font-mono">{{ instance.deploy_path or '(not set)' }}</dd>
             </div>
+            <div class="flex flex-col gap-2">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">Git Repository</dt>
+                <dd class="text-[12px] text-surface-600 dark:text-surface-300">
+                    {% if instance.git_repo_id %}
+                        {% for r in repos %}
+                            {% if r.repo_id == instance.git_repo_id %}
+                                <span class="font-medium">{{ r.label }}</span> — <span class="text-surface-400">{{ r.url }}</span>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-surface-400">Platform default</span>
+                    {% endif %}
+                </dd>
+                {% if not instance.catalog_item_id %}
+                <form method="POST" action="/instances/{{ instance.instance_id }}/git-repo" class="flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <select name="git_repo_id" required class="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                        <option value="">Select a repository...</option>
+                        {% for r in repos %}
+                        <option value="{{ r.repo_id }}" {% if instance.git_repo_id == r.repo_id %}selected{% endif %}>{{ r.label }} — {{ r.url }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="rounded-lg border border-surface-200 px-3 py-2 text-[12px] font-medium text-surface-600 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-300 dark:hover:bg-surface-800 transition">Update</button>
+                </form>
+                {% else %}
+                <p class="text-[11px] text-surface-400">Managed by catalog release.</p>
+                {% endif %}
+            </div>
+            <div class="flex flex-col gap-2">
+                <dt class="text-[13px] text-surface-400 dark:text-surface-500">Catalog Item</dt>
+                <dd class="text-[12px] text-surface-600 dark:text-surface-300">
+                    {% if instance.catalog_item_id %}
+                        {% for c in catalog_items %}
+                            {% if c.catalog_id == instance.catalog_item_id %}
+                                <span class="font-medium">{{ c.label }}</span>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-surface-400">--</span>
+                    {% endif %}
+                </dd>
+            </div>
             <div class="flex justify-between items-center">
                 <dt class="text-[13px] text-surface-400 dark:text-surface-500">Status</dt>
                 <dd>
@@ -372,6 +414,7 @@
         <button @click="activeTab = 'modules'" :class="activeTab === 'modules' ? 'bg-surface-900 text-white dark:bg-primary-500 dark:text-surface-950' : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'" class="rounded-lg px-4 py-2 text-[13px] font-medium transition">Modules</button>
         <button @click="activeTab = 'flags'" :class="activeTab === 'flags' ? 'bg-surface-900 text-white dark:bg-primary-500 dark:text-surface-950' : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'" class="rounded-lg px-4 py-2 text-[13px] font-medium transition">Feature Flags</button>
         <button @click="activeTab = 'plan'" :class="activeTab === 'plan' ? 'bg-surface-900 text-white dark:bg-primary-500 dark:text-surface-950' : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'" class="rounded-lg px-4 py-2 text-[13px] font-medium transition">Plan</button>
+        <button @click="activeTab = 'upgrades'" :class="activeTab === 'upgrades' ? 'bg-surface-900 text-white dark:bg-primary-500 dark:text-surface-950' : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'" class="rounded-lg px-4 py-2 text-[13px] font-medium transition">Upgrades</button>
         <button @click="activeTab = 'backups'" :class="activeTab === 'backups' ? 'bg-surface-900 text-white dark:bg-primary-500 dark:text-surface-950' : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'" class="rounded-lg px-4 py-2 text-[13px] font-medium transition">Backups</button>
         <button @click="activeTab = 'secrets'" :class="activeTab === 'secrets' ? 'bg-surface-900 text-white dark:bg-primary-500 dark:text-surface-950' : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'" class="rounded-lg px-4 py-2 text-[13px] font-medium transition">Secrets</button>
         <button @click="activeTab = 'domains'" :class="activeTab === 'domains' ? 'bg-surface-900 text-white dark:bg-primary-500 dark:text-surface-950' : 'text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200'" class="rounded-lg px-4 py-2 text-[13px] font-medium transition">Domains</button>
@@ -514,6 +557,81 @@
         {% else %}
         <p class="text-[13px] text-surface-400 dark:text-surface-500">No plans available.</p>
         {% endif %}
+    </div>
+
+    <div x-show="activeTab === 'upgrades'" x-cloak class="mt-4 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-5 flex items-center gap-2">
+            Upgrades
+            {% if pending_upgrade_ids %}
+                <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Approval Pending</span>
+            {% endif %}
+        </h2>
+        <form method="POST" action="/instances/{{ instance.instance_id }}/upgrades" class="grid gap-3 sm:grid-cols-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <select name="catalog_item_id" required class="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                <option value="">Select catalog item...</option>
+                {% for c in catalog_items %}
+                <option value="{{ c.catalog_id }}">{{ c.label }}</option>
+                {% endfor %}
+            </select>
+            <input type="datetime-local" name="scheduled_for" class="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            <button type="submit" class="rounded-lg bg-surface-900 px-4 py-2 text-[13px] font-semibold text-white dark:bg-primary-500 dark:text-surface-950">Schedule / Upgrade</button>
+        </form>
+        <p class="mt-2 text-[11px] text-surface-400">Leave schedule empty to run immediately.</p>
+
+        <div class="mt-4">
+            {% if upgrades %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-[12px]">
+                    <thead>
+                        <tr class="border-b border-surface-100 dark:border-surface-800/60 text-left">
+                            <th class="pb-2 pr-4 text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400">Catalog Item</th>
+                            <th class="pb-2 pr-4 text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400">Version</th>
+                            <th class="pb-2 pr-4 text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400">Status</th>
+                            <th class="pb-2 pr-4 text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400">Scheduled</th>
+                            <th class="pb-2 pr-4 text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400">Created</th>
+                            <th class="pb-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-surface-100 dark:divide-surface-800/60">
+                        {% for u in upgrades %}
+                        <tr>
+                            {% set cat = catalog_map.get(u.catalog_item_id) %}
+                            <td class="py-2 pr-4 text-surface-600">
+                                {{ cat.label if cat else '--' }}
+                            </td>
+                            <td class="py-2 pr-4 text-surface-500">
+                                {{ cat.release.version if cat and cat.release else '--' }}
+                            </td>
+                            <td class="py-2 pr-4 text-surface-500">
+                                {{ u.status.value }}
+                                {% if u.upgrade_id in pending_upgrade_ids %}
+                                    <span class="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Approval Pending</span>
+                                {% endif %}
+                                {% if u.status.value == 'cancelled' and u.cancelled_by_name %}
+                                    <span class="ml-2 text-[10px] text-surface-400">by {{ u.cancelled_by_name }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-2 pr-4 text-surface-500">{{ u.scheduled_for.strftime('%Y-%m-%d %H:%M') if u.scheduled_for else '--' }}</td>
+                            <td class="py-2 text-surface-500">{{ u.created_at.strftime('%Y-%m-%d %H:%M') if u.created_at else '--' }}</td>
+                            <td class="py-2 text-right">
+                                {% if u.status.value in ['scheduled', 'running'] %}
+                                <form method="POST" action="/instances/{{ instance.instance_id }}/upgrades/{{ u.upgrade_id }}/cancel" class="inline-flex items-center gap-2">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                    <input type="text" name="reason" placeholder="Reason (optional)" class="rounded-lg border border-surface-200 bg-white px-2 py-1 text-[11px] dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200" />
+                                    <button type="submit" class="rounded-lg border border-amber-200 px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-800/60 dark:text-amber-400">Cancel</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-[13px] text-surface-400">No upgrades scheduled.</p>
+            {% endif %}
+        </div>
     </div>
 
     {# ---- SECRETS TAB ---- #}

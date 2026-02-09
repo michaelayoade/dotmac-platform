@@ -22,7 +22,13 @@
                             {{ inst.org_code if inst else approval.instance_id }}
                         </p>
                         <p class="text-[12px] text-surface-400 dark:text-surface-500">
-                            {{ approval.deployment_type }} {% if approval.git_ref %}• {{ approval.git_ref }}{% endif %}
+                            {{ approval.deployment_type }}
+                            {% if approval.git_ref %}• {{ approval.git_ref }}{% endif %}
+                            {% if approval.upgrade_id and upgrade_map.get(approval.upgrade_id) %}
+                                {% set meta = upgrade_map.get(approval.upgrade_id) %}
+                                • {{ meta.catalog_label or 'Upgrade' }}
+                                {% if meta.release_version %}({{ meta.release_version }}){% endif %}
+                            {% endif %}
                         </p>
                         <p class="text-[12px] text-surface-400 dark:text-surface-500">
                             Requested by {{ approval.requested_by_name or approval.requested_by }}
@@ -66,6 +72,14 @@
                     </p>
                     <p class="text-surface-400 dark:text-surface-500">
                         {{ approval.status.value | title }} • {{ approval.deployment_type }}
+                        {% if approval.status.value == 'expired' %}
+                            <span class="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Expired</span>
+                        {% endif %}
+                        {% if approval.upgrade_id and upgrade_map.get(approval.upgrade_id) %}
+                            {% set meta = upgrade_map.get(approval.upgrade_id) %}
+                            • {{ meta.catalog_label or 'Upgrade' }}
+                            {% if meta.release_version %}({{ meta.release_version }}){% endif %}
+                        {% endif %}
                     </p>
                 </div>
                 <div class="text-surface-400 dark:text-surface-500">

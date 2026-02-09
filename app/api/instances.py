@@ -1064,6 +1064,7 @@ def list_pending_approvals(
         {
             "approval_id": str(a.approval_id),
             "instance_id": str(a.instance_id),
+            "upgrade_id": str(a.upgrade_id) if a.upgrade_id else None,
             "requested_by_name": a.requested_by_name,
             "deployment_type": a.deployment_type,
             "git_ref": a.git_ref,
@@ -1081,6 +1082,7 @@ def request_deploy_approval(
     deployment_type: str = "full",
     git_ref: str | None = None,
     reason: str | None = None,
+    upgrade_id: UUID | None = None,
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
@@ -1094,6 +1096,7 @@ def request_deploy_approval(
             deployment_type=deployment_type,
             git_ref=git_ref,
             reason=reason,
+            upgrade_id=upgrade_id,
         )
         db.commit()
         return {"approval_id": str(approval.approval_id), "status": approval.status.value}
@@ -1115,7 +1118,24 @@ def approve_deploy(
             approval_id,
             approved_by=str(auth.get("person_id", "")) if isinstance(auth, dict) else "unknown",
         )
+        upgrade_eta = None
+        upgrade_id = None
+        if approval.deployment_type == "upgrade" and approval.upgrade_id:
+            from app.models.app_upgrade import AppUpgrade
+
+            upgrade = db.get(AppUpgrade, approval.upgrade_id)
+            if upgrade:
+                upgrade_id = str(upgrade.upgrade_id)
+                upgrade_eta = upgrade.scheduled_for
+
         db.commit()
+        if upgrade_id:
+            from app.tasks.upgrade import run_upgrade
+
+            if upgrade_eta:
+                run_upgrade.apply_async(args=[upgrade_id], eta=upgrade_eta)
+            else:
+                run_upgrade.delay(upgrade_id)
         return {"approval_id": str(approval.approval_id), "status": approval.status.value}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1198,6 +1218,129 @@ def get_dr_status(
     from app.services.dr_service import DisasterRecoveryService
 
     return DisasterRecoveryService(db).get_dr_status(instance_id)
+
+
+# ──────────────────────────── Upgrades ───────────────────────────
+
+
+@router.get("/{instance_id}/upgrades")
+def list_upgrades(
+    instance_id: UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    auth=Depends(require_user_auth),
+):
+    from app.services.upgrade_service import UpgradeService
+
+    upgrades = UpgradeService(db).list_upgrades(instance_id, limit=limit, offset=offset)
+    return [
+        {
+            "upgrade_id": str(u.upgrade_id),
+            "catalog_item_id": str(u.catalog_item_id),
+            "status": u.status.value,
+            "scheduled_for": u.scheduled_for.isoformat() if u.scheduled_for else None,
+            "started_at": u.started_at.isoformat() if u.started_at else None,
+            "completed_at": u.completed_at.isoformat() if u.completed_at else None,
+            "cancelled_by": u.cancelled_by,
+            "cancelled_by_name": u.cancelled_by_name,
+            "error_message": u.error_message,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+        }
+        for u in upgrades
+    ]
+
+
+@router.post("/{instance_id}/upgrades", status_code=status.HTTP_202_ACCEPTED)
+def create_upgrade(
+    instance_id: UUID,
+    catalog_item_id: UUID,
+    scheduled_for: str | None = None,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from datetime import UTC as _UTC
+    from datetime import datetime
+
+    from app.services.upgrade_service import UpgradeService
+    from app.tasks.upgrade import run_upgrade
+
+    try:
+        scheduled_dt = None
+        if scheduled_for:
+            scheduled_dt = datetime.fromisoformat(scheduled_for)
+            if scheduled_dt.tzinfo is None:
+                scheduled_dt = scheduled_dt.replace(tzinfo=_UTC)
+
+        upgrade = UpgradeService(db).create_upgrade(
+            instance_id,
+            catalog_item_id,
+            scheduled_for=scheduled_dt,
+            requested_by=auth.get("person_id"),
+        )
+        from app.services.approval_service import ApprovalService
+        from app.services.catalog_service import CatalogService
+
+        approval_svc = ApprovalService(db)
+        catalog_item = CatalogService(db).get_catalog_item(catalog_item_id)
+        release = catalog_item.release if catalog_item else None
+        if approval_svc.requires_approval(instance_id):
+            reason = None
+            if catalog_item:
+                reason = f"Upgrade to {catalog_item.label}"
+                if release and release.version:
+                    reason = f"{reason} ({release.version})"
+            approval = approval_svc.request_approval(
+                instance_id,
+                requested_by=str(auth.get("person_id", "")),
+                deployment_type="upgrade",
+                git_ref=release.git_ref if release else None,
+                reason=reason,
+                upgrade_id=upgrade.upgrade_id,
+            )
+            db.commit()
+            return {
+                "upgrade_id": str(upgrade.upgrade_id),
+                "status": upgrade.status.value,
+                "approval_required": True,
+                "approval_id": str(approval.approval_id),
+            }
+
+        db.commit()
+        if scheduled_dt:
+            run_upgrade.apply_async(args=[str(upgrade.upgrade_id)], eta=scheduled_dt)
+        else:
+            run_upgrade.delay(str(upgrade.upgrade_id))
+        return {"upgrade_id": str(upgrade.upgrade_id), "status": upgrade.status.value, "approval_required": False}
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{instance_id}/upgrades/{upgrade_id}/cancel", status_code=status.HTTP_200_OK)
+def cancel_upgrade(
+    instance_id: UUID,
+    upgrade_id: UUID,
+    reason: str | None = None,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.upgrade_service import UpgradeService
+
+    try:
+        upgrade = UpgradeService(db).cancel_upgrade(
+            upgrade_id,
+            reason=reason,
+            cancelled_by=str(auth.get("person_id", "")),
+            cancelled_by_name=str(auth.get("user_name", "")) if isinstance(auth, dict) else None,
+        )
+        if upgrade.instance_id != instance_id:
+            raise HTTPException(status_code=400, detail="Upgrade does not match instance")
+        db.commit()
+        return {"upgrade_id": str(upgrade.upgrade_id), "status": upgrade.status.value}
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ──────────────────────────── Alerts ─────────────────────────────
