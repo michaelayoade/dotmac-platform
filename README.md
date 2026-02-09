@@ -299,6 +299,62 @@ pytest tests/test_auth_flow.py
 | `scripts/settings_sync.py` | Sync settings with database |
 | `scripts/settings_validate.py` | Validate settings configuration |
 
+## Releases & Versioning
+
+The project uses **semantic versioning** (`MAJOR.MINOR.PATCH`) for Docker image tags published to GHCR.
+
+### How It Works
+
+Every push to `main` builds and pushes:
+- `ghcr.io/michaelayoade/dotmac-platform:latest`
+- `ghcr.io/michaelayoade/dotmac-platform:<commit-sha>`
+
+When you tag a release, additional versioned tags are created:
+- `:1.2.3` — exact version (pin this in production)
+- `:1.2` — receives patch updates automatically
+- `:1` — receives minor + patch updates automatically
+
+### Cutting a Release
+
+```bash
+# Tag the current commit
+git tag v1.2.3 -m "v1.2.3 — Brief description of changes"
+
+# Push the tag (triggers CI build + versioned image push)
+git push origin v1.2.3
+```
+
+### Deploying a Specific Version
+
+```bash
+# Pull and run a pinned version
+docker pull ghcr.io/michaelayoade/dotmac-platform:1.2.3
+```
+
+Or in `docker-compose.yml` / `.env`:
+```yaml
+services:
+  app:
+    image: ghcr.io/michaelayoade/dotmac-platform:1.2.3
+```
+
+### Rolling Back
+
+```bash
+# Change the image tag to the previous known-good version
+# In docker-compose.yml or .env:
+#   IMAGE_TAG=1.1.0
+
+docker compose pull app
+docker compose up -d app
+```
+
+### Version History
+
+| Version | Date | Highlights |
+|---------|------|------------|
+| v1.0.0 | 2026-02-09 | First versioned release — SSH keys, git repos, DR plans, secret rotation, clone operations, metrics export, resource enforcement, observability, Caddy HTTPS, alert notifications |
+
 ## License
 
 [Add your license here]
