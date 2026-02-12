@@ -279,6 +279,15 @@ class SignupService:
 
         signup.instance_id = instance.instance_id
         signup.status = SignupStatus.provisioned
+
+        # Link the signup's admin person to the organization
+        from app.models.person import Person
+        from app.services.organization_service import OrganizationService
+
+        person = self.db.scalar(select(Person).where(Person.email == signup.email))
+        if person and instance.org_id:
+            OrganizationService(self.db).add_member(instance.org_id, person.id)
+
         self.db.flush()
 
         return {

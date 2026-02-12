@@ -220,7 +220,7 @@ class DeployService:
         )
         log = self.db.scalar(stmt)
         if not log or not log.deploy_secret:
-        return None
+            return None
 
     def get_deploy_log_bundle(self, instance_id: UUID, deployment_id: str | None = None) -> dict:
         from app.services.instance_service import InstanceService

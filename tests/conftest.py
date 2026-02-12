@@ -135,7 +135,7 @@ def person(db_session):
     db_session.commit()
     db_session.refresh(person)
     org = Organization(
-        org_code=f"ORG_{uuid.uuid4().hex[:6]}",
+        org_code=f"ORG_{uuid.uuid4().hex[:6].upper()}",
         org_name="Test Org",
         is_active=True,
     )
@@ -249,7 +249,7 @@ def _create_access_token(
 @pytest.fixture()
 def organization(db_session):
     org = Organization(
-        org_code=f"ORG_{uuid.uuid4().hex[:6]}",
+        org_code=f"ORG_{uuid.uuid4().hex[:6].upper()}",
         org_name="Test Org",
         is_active=True,
     )
@@ -264,7 +264,7 @@ def person_org_id(db_session, person):
     member = db_session.query(OrganizationMember).filter(OrganizationMember.person_id == person.id).first()
     if not member:
         org = Organization(
-            org_code=f"ORG_{uuid.uuid4().hex[:6]}",
+            org_code=f"ORG_{uuid.uuid4().hex[:6].upper()}",
             org_name="Test Org",
             is_active=True,
         )
@@ -339,7 +339,7 @@ def admin_person(db_session, admin_role):
     db_session.refresh(person)
 
     org = Organization(
-        org_code=f"ORG_{uuid.uuid4().hex[:6]}",
+        org_code=f"ORG_{uuid.uuid4().hex[:6].upper()}",
         org_name="Admin Org",
         is_active=True,
     )
@@ -362,7 +362,7 @@ def admin_org_id(db_session, admin_person):
     member = db_session.query(OrganizationMember).filter(OrganizationMember.person_id == admin_person.id).first()
     if not member:
         org = Organization(
-            org_code=f"ORG_{uuid.uuid4().hex[:6]}",
+            org_code=f"ORG_{uuid.uuid4().hex[:6].upper()}",
             org_name="Admin Org",
             is_active=True,
         )
