@@ -87,3 +87,13 @@ class TenantAuditService:
         if action:
             stmt = stmt.where(TenantAuditLog.action == action)
         return self.db.scalar(stmt) or 0
+
+    @staticmethod
+    def serialize_log(entry: TenantAuditLog) -> dict:
+        return {
+            "id": entry.id,
+            "action": entry.action,
+            "user_name": entry.user_name,
+            "details": entry.details,
+            "created_at": entry.created_at.isoformat() if entry.created_at else None,
+        }

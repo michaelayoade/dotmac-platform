@@ -69,6 +69,14 @@ class DriftService:
         )
         return self.db.scalar(stmt)
 
+    @staticmethod
+    def serialize_report(report: DriftReport) -> dict:
+        return {
+            "has_drift": report.has_drift,
+            "diffs": report.diffs,
+            "detected_at": report.detected_at.isoformat() if report.detected_at else None,
+        }
+
     def get_reports(self, instance_id: UUID, limit: int = 20) -> list[DriftReport]:
         stmt = (
             select(DriftReport)
@@ -77,6 +85,40 @@ class DriftService:
             .limit(limit)
         )
         return list(self.db.scalars(stmt).all())
+
+    def get_index_bundle(self, instance_id: UUID | None) -> dict:
+        from app.services.instance_service import InstanceService
+
+        instances = InstanceService(self.db).list_all()
+        if not instance_id and instances:
+            instance_id = instances[0].instance_id
+
+        reports = []
+        latest = None
+        if instance_id:
+            reports = self.get_reports(instance_id, limit=20)
+            latest = reports[0] if reports else None
+
+        return {
+            "instances": instances,
+            "instance_id": instance_id,
+            "reports": reports,
+            "latest": latest,
+        }
+
+    def detect_for_web(self, instance_id: UUID) -> tuple[bool, str | None]:
+        try:
+            report = self.detect_drift(instance_id)
+            self.db.commit()
+            if report.has_drift:
+                return True, "Drift detected. Review details below."
+            return True, "No drift detected."
+        except ValueError as exc:
+            self.db.rollback()
+            return False, str(exc)
+        except Exception:
+            self.db.rollback()
+            return False, "Drift detection failed."
 
     def detect_all_drift(self) -> int:
         """Run drift detection across all running instances."""

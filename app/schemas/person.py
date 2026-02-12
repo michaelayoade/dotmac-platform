@@ -33,7 +33,7 @@ class PersonBase(BaseModel):
 
 
 class PersonCreate(PersonBase):
-    pass
+    org_id: UUID | None = None
 
 
 class PersonUpdate(BaseModel):

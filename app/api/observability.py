@@ -55,11 +55,9 @@ def get_logs(
 
     svc = MetricsExportService(db)
     try:
-        entries = svc.export_instance_logs(instance_id, stream=stream, lines=lines, since=since)
+        return svc.get_logs_payload(instance_id, stream=stream, lines=lines, since=since)
     except ValueError as e:
         detail = str(e)
         if "not found" in detail.lower():
             raise HTTPException(status_code=404, detail=detail)
         raise HTTPException(status_code=400, detail=detail)
-
-    return {"stream": stream, "lines": lines, "since": since, "entries": entries}

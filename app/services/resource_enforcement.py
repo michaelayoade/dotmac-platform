@@ -146,6 +146,16 @@ class ResourceEnforcementService:
             "storage_over_limit": bool(max_storage_gb and current_storage_gb > max_storage_gb),
         }
 
+    @staticmethod
+    def serialize_violation(violation: PlanViolation) -> dict:
+        return {
+            "kind": violation.kind,
+            "message": violation.message,
+            "current": violation.current,
+            "limit": violation.limit,
+            "percent": violation.percent,
+        }
+
     def check_and_fire_alerts(self, instance_id: UUID) -> None:
         instance, plan = self._get_instance_and_plan(instance_id)
         if not instance or not plan:

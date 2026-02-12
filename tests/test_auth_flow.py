@@ -29,7 +29,7 @@ def _make_request(user_agent: str = "pytest"):
     return Request(scope)
 
 
-def test_login_and_refresh_reuse_detection(db_session, person, monkeypatch):
+def test_login_and_refresh_reuse_detection(db_session, person, person_org_code, monkeypatch):
     username = _unique_username()
     credential = UserCredential(
         person_id=person.id,
@@ -43,7 +43,7 @@ def test_login_and_refresh_reuse_detection(db_session, person, monkeypatch):
     db_session.refresh(credential)
 
     request = _make_request()
-    tokens = AuthFlow.login(db_session, username, "secret", request, None)
+    tokens = AuthFlow.login(db_session, username, "secret", request, None, person_org_code)
     old_refresh = tokens["refresh_token"]
 
     rotated = AuthFlow.refresh(db_session, old_refresh, request)

@@ -7,11 +7,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.person import Person, PersonStatus
-from app.models.rbac import PersonRole, Role
 from app.schemas.person import PersonCreate, PersonUpdate
 from app.schemas.rbac import PersonRoleCreate
 from app.web.deps import WebAuthContext, get_db, require_web_auth
@@ -28,6 +25,8 @@ def people_list(
     db: Session = Depends(get_db),
 ):
     require_admin(auth)
+    from app.services.person import people as people_service
+
     params = request.query_params
     q = (params.get("q") or "").strip()
     status = (params.get("status") or "").strip() or None
@@ -45,56 +44,15 @@ def people_list(
     except ValueError:
         page_size = 25
 
-    offset = (page - 1) * page_size
-    q_like = f"%{q}%" if q else None
-    stmt = select(Person)
-    if q_like:
-        stmt = stmt.where(
-            (Person.email.ilike(q_like))
-            | (Person.first_name.ilike(q_like))
-            | (Person.last_name.ilike(q_like))
-            | (Person.display_name.ilike(q_like))
-        )
-    if status:
-        try:
-            stmt = stmt.where(Person.status == PersonStatus(status))
-        except ValueError:
-            pass
-    if is_active_val is not None:
-        stmt = stmt.where(Person.is_active == is_active_val)
-
-    stmt = stmt.order_by(Person.created_at.desc()).limit(page_size).offset(offset)
-    items = list(db.scalars(stmt).all())
-
-    total_stmt = select(func.count(Person.id))
-    if q_like:
-        total_stmt = total_stmt.where(
-            (Person.email.ilike(q_like))
-            | (Person.first_name.ilike(q_like))
-            | (Person.last_name.ilike(q_like))
-            | (Person.display_name.ilike(q_like))
-        )
-    if status:
-        try:
-            total_stmt = total_stmt.where(Person.status == PersonStatus(status))
-        except ValueError:
-            pass
-    if is_active_val is not None:
-        total_stmt = total_stmt.where(Person.is_active == is_active_val)
-    total = db.scalar(total_stmt) or 0
-
-    # Role mapping for displayed people
-    person_ids = [p.id for p in items]
-    roles_map: dict[UUID, list[str]] = {pid: [] for pid in person_ids}
-    if person_ids:
-        roles_stmt = (
-            select(PersonRole.person_id, Role.name)
-            .join(Role, Role.id == PersonRole.role_id)
-            .where(PersonRole.person_id.in_(person_ids))
-        )
-        rows = db.execute(roles_stmt).all()
-        for person_id, role_name in rows:
-            roles_map.setdefault(person_id, []).append(role_name)
+    items, total, roles_map = people_service.list_for_web(
+        db,
+        q=q,
+        status=status,
+        is_active=is_active_val,
+        page=page,
+        page_size=page_size,
+        org_id=auth.org_id,
+    )
 
     return templates.TemplateResponse(
         "people/list.html",
@@ -138,6 +96,7 @@ def people_create(
         status=status,
         is_active=is_active,
         gender="unknown",
+        org_id=auth.org_id,
     )
     people_service.create(db, payload)
     return RedirectResponse("/people", status_code=302)
@@ -155,7 +114,7 @@ def people_detail(
     from app.services.rbac import person_roles as person_roles_service
     from app.services.rbac import roles as role_service
 
-    person = people_service.get(db, str(person_id))
+    person = people_service.get(db, str(person_id), org_id=auth.org_id)
     roles = role_service.list(db, is_active=None, order_by="name", order_dir="asc", limit=200, offset=0)
     assigned = person_roles_service.list(
         db, person_id=str(person_id), role_id=None, order_by="assigned_at", order_dir="desc", limit=200, offset=0
@@ -199,7 +158,7 @@ def people_update(
         status=status,
         is_active=is_active,
     )
-    people_service.update(db, str(person_id), payload)
+    people_service.update(db, str(person_id), payload, org_id=auth.org_id)
     return RedirectResponse(f"/people/{person_id}", status_code=302)
 
 

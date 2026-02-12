@@ -41,17 +41,8 @@ def domains_index(
 ):
     require_admin(auth)
     from app.services.domain_service import DomainService
-    from app.services.instance_service import InstanceService
 
-    instances = InstanceService(db).list_all()
-    if not instance_id and instances:
-        instance_id = instances[0].instance_id
-
-    domains = []
-    if instance_id:
-        domains = DomainService(db).list_for_instance(instance_id)
-
-    expiring = DomainService(db).get_expiring_certs(14)
+    bundle = DomainService(db).get_index_bundle(instance_id)
 
     return templates.TemplateResponse(
         "domains/index.html",
@@ -60,10 +51,10 @@ def domains_index(
             auth,
             "Domains",
             active_page="domains",
-            instances=instances,
-            instance_id=instance_id,
-            domains=domains,
-            expiring=expiring,
+            instances=bundle["instances"],
+            instance_id=bundle["instance_id"],
+            domains=bundle["domains"],
+            expiring=bundle["expiring"],
             message=message,
             error=error,
         ),

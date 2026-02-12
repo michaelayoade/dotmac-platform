@@ -115,6 +115,25 @@ class TestPollLocal:
         assert "refused" in check.error_message
 
 
+class TestPollRemote:
+    def test_invalid_json_marks_unhealthy(self, db_session):
+        from app.services.health_service import HealthService
+        from app.services.ssh_service import SSHResult
+
+        server = _make_server(db_session, is_local=False)
+        instance = _make_instance(db_session, server)
+
+        fake_ssh = MagicMock()
+        fake_ssh.exec_command.return_value = SSHResult(0, "not-json", "")
+
+        with patch("app.services.health_service.get_ssh_for_server", return_value=fake_ssh):
+            svc = HealthService(db_session)
+            check = svc.poll_instance(instance)
+
+        assert check.status == HealthStatus.unhealthy
+        assert "Invalid health JSON" in (check.error_message or "")
+
+
 class TestPruneOldChecks:
     @patch("app.services.health_service.platform_settings")
     def test_prune_keeps_n_latest(self, mock_settings, db_session):

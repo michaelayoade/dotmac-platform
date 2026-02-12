@@ -1,4 +1,5 @@
 import logging
+from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -288,6 +289,50 @@ class PersonRoles(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Person role not found")
         db.delete(link)
         db.flush()
+
+
+def get_rbac_index_bundle(db: Session, selected_role_id: str | None) -> dict:
+    roles_list = roles.list(db, is_active=None, order_by="name", order_dir="asc", limit=200, offset=0)
+    permissions_list = permissions.list(db, is_active=None, order_by="key", order_dir="asc", limit=500, offset=0)
+
+    if not selected_role_id and roles_list:
+        selected_role_id = str(roles_list[0].id)
+
+    role_permissions_list = []
+    if selected_role_id:
+        role_permissions_list = role_permissions.list(
+            db,
+            role_id=selected_role_id,
+            permission_id=None,
+            order_by="role_id",
+            order_dir="asc",
+            limit=500,
+            offset=0,
+        )
+
+    role_map = {r.id: r for r in roles_list}
+    perm_map = {p.id: p for p in permissions_list}
+
+    selected_role = None
+    selected_role_id_uuid = None
+    if selected_role_id:
+        try:
+            selected_role_id_uuid = UUID(selected_role_id)
+            selected_role = role_map.get(selected_role_id_uuid)
+        except ValueError:
+            selected_role_id_uuid = None
+            selected_role = None
+
+    return {
+        "roles": roles_list,
+        "permissions": permissions_list,
+        "role_permissions": role_permissions_list,
+        "selected_role_id": selected_role_id,
+        "selected_role_id_uuid": selected_role_id_uuid,
+        "selected_role": selected_role,
+        "role_map": role_map,
+        "perm_map": perm_map,
+    }
 
 
 roles = Roles()

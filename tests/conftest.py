@@ -77,11 +77,21 @@ from app.models.auth import (
     SessionStatus,
     UserCredential,
 )
+from app.models.catalog import AppBundle, AppCatalogItem, AppRelease  # noqa: F401
+from app.models.deployment_log import DeploymentLog  # noqa: F401
 from app.models.domain_settings import DomainSetting, SettingDomain
+from app.models.git_repository import GitRepository  # noqa: F401
+from app.models.health_check import HealthCheck, HealthStatus  # noqa: F401
+from app.models.instance import Instance  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
+from app.models.organization import Organization  # noqa: F401
+from app.models.organization_member import OrganizationMember  # noqa: F401
+from app.models.otel_config import OtelExportConfig  # noqa: F401
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role
 from app.models.scheduler import ScheduledTask, ScheduleType
+from app.models.server import Server  # noqa: F401
+from app.models.signup_request import SignupRequest  # noqa: F401
 
 # Create all tables
 TestBase.metadata.create_all(_test_engine)
@@ -124,6 +134,16 @@ def person(db_session):
     db_session.add(person)
     db_session.commit()
     db_session.refresh(person)
+    org = Organization(
+        org_code=f"ORG_{uuid.uuid4().hex[:6]}",
+        org_name="Test Org",
+        is_active=True,
+    )
+    db_session.add(org)
+    db_session.commit()
+    db_session.refresh(org)
+    db_session.add(OrganizationMember(org_id=org.org_id, person_id=person.id, is_active=True))
+    db_session.commit()
     return person
 
 
@@ -143,6 +163,9 @@ def _reset_rate_limiters():
         password_change_limiter,
         password_reset_limiter,
         refresh_limiter,
+        signup_limiter,
+        signup_resend_limiter,
+        signup_verify_limiter,
     )
 
     login_limiter._requests.clear()
@@ -150,6 +173,9 @@ def _reset_rate_limiters():
     mfa_verify_limiter._requests.clear()
     refresh_limiter._requests.clear()
     password_change_limiter._requests.clear()
+    signup_limiter._requests.clear()
+    signup_resend_limiter._requests.clear()
+    signup_verify_limiter._requests.clear()
 
 
 # ============ FastAPI Test Client Fixtures ============
@@ -199,6 +225,7 @@ def _create_access_token(
     session_id: str,
     roles: list[str] | None = None,
     scopes: list[str] | None = None,
+    org_id: str | None = None,
 ) -> str:
     """Create a JWT access token for testing."""
     secret = os.getenv("JWT_SECRET", "test-secret")
@@ -214,14 +241,54 @@ def _create_access_token(
         "exp": int(expire.timestamp()),
         "iat": int(now.timestamp()),
     }
+    if org_id:
+        payload["org_id"] = org_id
     return str(jwt.encode(payload, secret, algorithm=algorithm))
 
 
 @pytest.fixture()
-def auth_session(db_session, person):
+def organization(db_session):
+    org = Organization(
+        org_code=f"ORG_{uuid.uuid4().hex[:6]}",
+        org_name="Test Org",
+        is_active=True,
+    )
+    db_session.add(org)
+    db_session.commit()
+    db_session.refresh(org)
+    return org
+
+
+@pytest.fixture()
+def person_org_id(db_session, person):
+    member = db_session.query(OrganizationMember).filter(OrganizationMember.person_id == person.id).first()
+    if not member:
+        org = Organization(
+            org_code=f"ORG_{uuid.uuid4().hex[:6]}",
+            org_name="Test Org",
+            is_active=True,
+        )
+        db_session.add(org)
+        db_session.commit()
+        db_session.refresh(org)
+        member = OrganizationMember(org_id=org.org_id, person_id=person.id, is_active=True)
+        db_session.add(member)
+        db_session.commit()
+    return member.org_id
+
+
+@pytest.fixture()
+def person_org_code(db_session, person, person_org_id):
+    org = db_session.get(Organization, person_org_id)
+    return org.org_code if org else None
+
+
+@pytest.fixture()
+def auth_session(db_session, person, person_org_id):
     """Create an authenticated session for a person."""
     session = AuthSession(
         person_id=person.id,
+        org_id=person_org_id,
         token_hash="test-token-hash",
         status=SessionStatus.active,
         ip_address="127.0.0.1",
@@ -235,9 +302,9 @@ def auth_session(db_session, person):
 
 
 @pytest.fixture()
-def auth_token(person, auth_session):
+def auth_token(person, auth_session, person_org_id):
     """Create a valid JWT token for authenticated requests."""
-    return _create_access_token(str(person.id), str(auth_session.id))
+    return _create_access_token(str(person.id), str(auth_session.id), org_id=str(person_org_id))
 
 
 @pytest.fixture()
@@ -271,6 +338,17 @@ def admin_person(db_session, admin_role):
     db_session.commit()
     db_session.refresh(person)
 
+    org = Organization(
+        org_code=f"ORG_{uuid.uuid4().hex[:6]}",
+        org_name="Admin Org",
+        is_active=True,
+    )
+    db_session.add(org)
+    db_session.commit()
+    db_session.refresh(org)
+    db_session.add(OrganizationMember(org_id=org.org_id, person_id=person.id, is_active=True))
+    db_session.commit()
+
     # Assign admin role
     person_role = PersonRole(person_id=person.id, role_id=admin_role.id)
     db_session.add(person_role)
@@ -280,10 +358,35 @@ def admin_person(db_session, admin_role):
 
 
 @pytest.fixture()
-def admin_session(db_session, admin_person):
+def admin_org_id(db_session, admin_person):
+    member = db_session.query(OrganizationMember).filter(OrganizationMember.person_id == admin_person.id).first()
+    if not member:
+        org = Organization(
+            org_code=f"ORG_{uuid.uuid4().hex[:6]}",
+            org_name="Admin Org",
+            is_active=True,
+        )
+        db_session.add(org)
+        db_session.commit()
+        db_session.refresh(org)
+        member = OrganizationMember(org_id=org.org_id, person_id=admin_person.id, is_active=True)
+        db_session.add(member)
+        db_session.commit()
+    return member.org_id
+
+
+@pytest.fixture()
+def admin_org_code(db_session, admin_org_id):
+    org = db_session.get(Organization, admin_org_id)
+    return org.org_code if org else None
+
+
+@pytest.fixture()
+def admin_session(db_session, admin_person, admin_org_id):
     """Create an authenticated session for admin."""
     session = AuthSession(
         person_id=admin_person.id,
+        org_id=admin_org_id,
         token_hash="admin-token-hash",
         status=SessionStatus.active,
         ip_address="127.0.0.1",
@@ -297,13 +400,14 @@ def admin_session(db_session, admin_person):
 
 
 @pytest.fixture()
-def admin_token(admin_person, admin_session):
+def admin_token(admin_person, admin_session, admin_org_id):
     """Create a valid JWT token for admin requests."""
     return _create_access_token(
         str(admin_person.id),
         str(admin_session.id),
         roles=["admin"],
         scopes=["audit:read", "audit:*"],
+        org_id=str(admin_org_id),
     )
 
 

@@ -41,14 +41,7 @@ def notifications_badge(
     from app.services.notification_service import NotificationService
 
     svc = NotificationService(db)
-    count = svc.get_unread_count(_pid(auth))
-    if count == 0:
-        return ""
-    display = "99+" if count > 99 else str(count)
-    return (
-        f'<span class="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center '
-        f'rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{display}</span>'
-    )
+    return svc.get_badge_html(_pid(auth))
 
 
 @router.get("/panel", response_class=HTMLResponse)

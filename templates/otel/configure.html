@@ -1,0 +1,110 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl">
+    <div class="mb-8">
+        <div class="flex items-center gap-2 text-[12px] text-surface-400 dark:text-surface-500 mb-4">
+            <a href="/instances/{{ instance.instance_id }}" class="hover:text-primary-600 dark:hover:text-primary-400 transition">{{ instance.org_code }}</a>
+            <span>/</span>
+            <span>OTel Export</span>
+        </div>
+        <h2 class="text-2xl font-display text-surface-800 dark:text-surface-100">OpenTelemetry Export</h2>
+        <p class="mt-1 text-[13px] text-surface-500 dark:text-surface-400">Push instance metrics to your observability stack via OTLP.</p>
+    </div>
+
+    {% if config %}
+    <!-- Status -->
+    <div class="mb-6 rounded-xl border border-surface-200/80 bg-white p-5 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Status</p>
+                <p class="mt-1 text-[13px] font-medium {% if config.is_active %}text-emerald-600 dark:text-emerald-400{% else %}text-surface-500{% endif %}">
+                    {{ "Active" if config.is_active else "Inactive" }}
+                </p>
+            </div>
+            <div class="text-right">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Last export</p>
+                <p class="mt-1 text-[13px] text-surface-600 dark:text-surface-300 font-mono">
+                    {{ config.last_export_at.strftime('%Y-%m-%d %H:%M') if config.last_export_at else 'Never' }}
+                </p>
+            </div>
+        </div>
+        {% if config.last_error %}
+        <div class="mt-3 rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2 text-[12px] text-red-600 dark:text-red-400">
+            {{ config.last_error }}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Form -->
+    <form method="POST" action="/instances/{{ instance.instance_id }}/otel" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+        <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80 space-y-5">
+            <div>
+                <label class="block text-[12px] font-semibold text-surface-600 dark:text-surface-300 mb-1.5">OTLP Endpoint URL</label>
+                <input type="url" name="endpoint_url" value="{{ config.endpoint_url if config else '' }}" required
+                       placeholder="https://otel-collector.example.com:4318"
+                       class="w-full rounded-lg border border-surface-200 bg-white px-3.5 py-2.5 text-[13px] text-surface-800 placeholder-surface-400 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-100 dark:placeholder-surface-500 transition" />
+            </div>
+
+            <div>
+                <label class="block text-[12px] font-semibold text-surface-600 dark:text-surface-300 mb-1.5">Protocol</label>
+                <select name="protocol" class="w-full rounded-lg border border-surface-200 bg-white px-3.5 py-2.5 text-[13px] text-surface-800 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-100 transition">
+                    <option value="http/protobuf" {{ 'selected' if not config or config.protocol == 'http/protobuf' }}>HTTP/Protobuf</option>
+                    <option value="http/json" {{ 'selected' if config and config.protocol == 'http/json' }}>HTTP/JSON</option>
+                    <option value="grpc" {{ 'selected' if config and config.protocol == 'grpc' }}>gRPC</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-[12px] font-semibold text-surface-600 dark:text-surface-300 mb-1.5">Export Interval (seconds)</label>
+                <input type="number" name="export_interval_seconds" value="{{ config.export_interval_seconds if config else 60 }}" min="10" max="3600"
+                       class="w-full rounded-lg border border-surface-200 bg-white px-3.5 py-2.5 text-[13px] text-surface-800 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-100 transition" />
+            </div>
+
+            <div x-data="{ headers: [{ key: '', value: '' }] }">
+                <label class="block text-[12px] font-semibold text-surface-600 dark:text-surface-300 mb-1.5">Auth Headers (optional)</label>
+                <template x-for="(header, index) in headers" :key="index">
+                    <div class="flex gap-2 mb-2">
+                        <input type="text" :name="'header_key'" x-model="header.key" placeholder="Header name"
+                               class="flex-1 rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] text-surface-800 placeholder-surface-400 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-100 dark:placeholder-surface-500 transition" />
+                        <input type="text" :name="'header_value'" x-model="header.value" placeholder="Value"
+                               class="flex-1 rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] text-surface-800 placeholder-surface-400 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-100 dark:placeholder-surface-500 transition" />
+                        <button type="button" @click="headers.splice(index, 1)" x-show="headers.length > 1"
+                                class="rounded-md p-2 text-surface-400 hover:text-red-500 transition">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                </template>
+                <button type="button" @click="headers.push({ key: '', value: '' })"
+                        class="text-[12px] text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium">
+                    + Add header
+                </button>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-between">
+            {% if config %}
+            <form method="POST" action="/instances/{{ instance.instance_id }}/otel/test" hx-post="/instances/{{ instance.instance_id }}/otel/test" hx-swap="none"
+                  class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button type="button"
+                        hx-post="/api/v1/instances/{{ instance.instance_id }}/otel-export/test"
+                        hx-swap="none"
+                        hx-headers='{"Content-Type": "application/json"}'
+                        class="rounded-lg border border-surface-200 px-4 py-2.5 text-[13px] font-medium text-surface-600 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">
+                    Test Export
+                </button>
+            </form>
+            {% else %}
+            <div></div>
+            {% endif %}
+            <button type="submit" class="rounded-lg bg-surface-900 dark:bg-primary-500 px-5 py-2.5 text-[13px] font-medium text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 shadow-sm transition">
+                {{ "Update Configuration" if config else "Enable Export" }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

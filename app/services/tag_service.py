@@ -21,6 +21,10 @@ class TagService:
         stmt = select(InstanceTag).where(InstanceTag.instance_id == instance_id).order_by(InstanceTag.key)
         return list(self.db.scalars(stmt).all())
 
+    @staticmethod
+    def serialize_tag(tag: InstanceTag) -> dict:
+        return {"key": tag.key, "value": tag.value}
+
     def set_tag(self, instance_id: UUID, key: str, value: str) -> InstanceTag:
         key = key.strip().lower()
         if not key or len(key) > 60:

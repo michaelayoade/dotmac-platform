@@ -2,8 +2,6 @@
 Secrets — Web routes for secret resolution status.
 """
 
-import os
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -23,12 +21,9 @@ def secrets_index(
     db: Session = Depends(get_db),
 ):
     require_admin(auth)
-    addr = os.getenv("OPENBAO_ADDR") or os.getenv("VAULT_ADDR")
-    namespace = os.getenv("OPENBAO_NAMESPACE") or os.getenv("VAULT_NAMESPACE")
-    kv_version = os.getenv("OPENBAO_KV_VERSION", "2")
-    token = os.getenv("OPENBAO_TOKEN") or os.getenv("VAULT_TOKEN")
+    from app.services.secrets import get_openbao_status
 
-    configured = bool(addr and token)
+    status = get_openbao_status()
 
     return templates.TemplateResponse(
         "secrets/index.html",
@@ -37,10 +32,10 @@ def secrets_index(
             auth,
             "Secrets",
             active_page="secrets",
-            configured=configured,
-            addr=addr,
-            namespace=namespace,
-            kv_version=kv_version,
-            token_set=bool(token),
+            configured=status["configured"],
+            addr=status["addr"],
+            namespace=status["namespace"],
+            kv_version=status["kv_version"],
+            token_set=status["token_set"],
         ),
     )

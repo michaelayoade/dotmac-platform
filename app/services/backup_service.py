@@ -42,6 +42,26 @@ class BackupService:
         stmt = select(Backup).where(Backup.instance_id == instance_id).order_by(Backup.created_at.desc())
         return list(self.db.scalars(stmt).all())
 
+    @staticmethod
+    def serialize_backup(
+        backup: Backup,
+        *,
+        include_file_path: bool = False,
+        include_completed_at: bool = False,
+    ) -> dict:
+        payload = {
+            "backup_id": str(backup.backup_id),
+            "backup_type": backup.backup_type.value,
+            "status": backup.status.value,
+            "size_bytes": backup.size_bytes,
+            "created_at": backup.created_at.isoformat() if backup.created_at else None,
+        }
+        if include_file_path:
+            payload["file_path"] = backup.file_path
+        if include_completed_at:
+            payload["completed_at"] = backup.completed_at.isoformat() if backup.completed_at else None
+        return payload
+
     def get_by_id(self, backup_id: UUID) -> Backup | None:
         return self.db.get(Backup, backup_id)
 

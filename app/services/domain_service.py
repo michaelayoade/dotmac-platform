@@ -52,6 +52,20 @@ class DomainService:
         )
         return list(self.db.scalars(stmt).all())
 
+    @staticmethod
+    def serialize_domain(domain: InstanceDomain, *, include_token: bool = False) -> dict:
+        payload = {
+            "domain_id": str(domain.domain_id),
+            "domain": domain.domain,
+            "is_primary": domain.is_primary,
+            "status": domain.status.value,
+            "ssl_expires_at": domain.ssl_expires_at.isoformat() if domain.ssl_expires_at else None,
+            "created_at": domain.created_at.isoformat() if domain.created_at else None,
+        }
+        if include_token:
+            payload["verification_token"] = domain.verification_token
+        return payload
+
     def get_by_id(self, domain_id: UUID) -> InstanceDomain | None:
         return self.db.get(InstanceDomain, domain_id)
 
@@ -195,3 +209,23 @@ class DomainService:
             InstanceDomain.status == DomainStatus.active,
         )
         return list(self.db.scalars(stmt).all())
+
+    def get_index_bundle(self, instance_id: UUID | None) -> dict:
+        from app.services.instance_service import InstanceService
+
+        instances = InstanceService(self.db).list_all()
+        if not instance_id and instances:
+            instance_id = instances[0].instance_id
+
+        domains = []
+        if instance_id:
+            domains = self.list_for_instance(instance_id)
+
+        expiring = self.get_expiring_certs(14)
+
+        return {
+            "instances": instances,
+            "instance_id": instance_id,
+            "domains": domains,
+            "expiring": expiring,
+        }

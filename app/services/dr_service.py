@@ -32,6 +32,7 @@ class DisasterRecoveryService:
         instance = self.db.get(Instance, instance_id)
         if not instance:
             raise ValueError("Instance not found")
+        _validate_cron(backup_schedule_cron)
 
         plan = DisasterRecoveryPlan(
             instance_id=instance_id,
@@ -48,6 +49,8 @@ class DisasterRecoveryService:
         plan = self.get_by_id(dr_plan_id)
         if not plan:
             raise ValueError("DR plan not found")
+        if "backup_schedule_cron" in kwargs and kwargs["backup_schedule_cron"]:
+            _validate_cron(str(kwargs["backup_schedule_cron"]))
         for key, value in kwargs.items():
             if hasattr(plan, key) and value is not None:
                 setattr(plan, key, value)
@@ -64,6 +67,30 @@ class DisasterRecoveryService:
     def list_plans(self, limit: int = 200, offset: int = 0) -> list[DisasterRecoveryPlan]:
         stmt = select(DisasterRecoveryPlan).order_by(DisasterRecoveryPlan.created_at.desc()).limit(limit).offset(offset)
         return list(self.db.scalars(stmt).all())
+
+    def serialize_plan(self, plan: DisasterRecoveryPlan) -> dict:
+        return {
+            "dr_plan_id": str(plan.dr_plan_id),
+            "instance_id": str(plan.instance_id),
+            "backup_schedule_cron": plan.backup_schedule_cron,
+            "retention_days": plan.retention_days,
+            "target_server_id": str(plan.target_server_id) if plan.target_server_id else None,
+            "is_active": plan.is_active,
+            "last_backup_at": plan.last_backup_at.isoformat() if plan.last_backup_at else None,
+            "last_tested_at": plan.last_tested_at.isoformat() if plan.last_tested_at else None,
+            "last_test_status": plan.last_test_status.value if plan.last_test_status else None,
+            "last_test_message": plan.last_test_message,
+            "created_at": plan.created_at.isoformat() if plan.created_at else None,
+        }
+
+    def get_index_bundle(self) -> dict:
+        from app.services.instance_service import InstanceService
+        from app.services.server_service import ServerService
+
+        plans = self.list_plans(limit=200, offset=0)
+        instances = InstanceService(self.db).list_all()
+        servers = ServerService(self.db).list_all()
+        return {"plans": plans, "instances": instances, "servers": servers}
 
     def get_by_id(self, dr_plan_id: UUID) -> DisasterRecoveryPlan | None:
         return self.db.get(DisasterRecoveryPlan, dr_plan_id)
@@ -177,7 +204,8 @@ class DisasterRecoveryService:
             if not target_server_id:
                 raise ValueError("Target server not set for DR plan")
 
-            test_org_code = f"DRTEST{backup.backup_id.hex[:6]}".upper()
+            base_code = f"DRTEST{backup.backup_id.hex[:6]}".upper()
+            test_org_code = _next_available_org_code(self.db, base_code)
             instance = self.restore_to_server(
                 backup.backup_id,
                 target_server_id,
@@ -217,3 +245,58 @@ class DisasterRecoveryService:
             "last_test_message": plan.last_test_message,
             "is_active": plan.is_active,
         }
+
+
+def _next_available_org_code(db: Session, base: str) -> str:
+    candidate = base.upper()
+    for i in range(10):
+        exists = db.scalar(select(Instance).where(Instance.org_code == candidate))
+        if not exists:
+            return candidate
+        candidate = f"{base}_{i + 1}"
+    raise ValueError("Unable to allocate DR test org code")
+
+
+def _validate_cron(expr: str) -> None:
+    parts = (expr or "").strip().split()
+    if len(parts) != 5:
+        raise ValueError("Invalid cron expression: must have 5 fields")
+
+    ranges = [
+        (0, 59),  # minute
+        (0, 23),  # hour
+        (1, 31),  # day of month
+        (1, 12),  # month
+        (0, 6),  # day of week
+    ]
+
+    for idx, part in enumerate(parts):
+        _validate_cron_field(part, ranges[idx][0], ranges[idx][1])
+
+
+def _validate_cron_field(field: str, min_val: int, max_val: int) -> None:
+    for token in field.split(","):
+        token = token.strip()
+        if token == "*":
+            continue
+        if "/" in token:
+            base, step = token.split("/", 1)
+            if not step.isdigit() or int(step) < 1:
+                raise ValueError("Invalid cron step")
+            if base == "*":
+                continue
+            token = base
+        if "-" in token:
+            start, end = token.split("-", 1)
+            if not (start.isdigit() and end.isdigit()):
+                raise ValueError("Invalid cron range")
+            start_i = int(start)
+            end_i = int(end)
+            if start_i > end_i or start_i < min_val or end_i > max_val:
+                raise ValueError("Invalid cron range")
+            continue
+        if not token.isdigit():
+            raise ValueError("Invalid cron field")
+        value = int(token)
+        if value < min_val or value > max_val:
+            raise ValueError("Invalid cron value")

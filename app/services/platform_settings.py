@@ -26,6 +26,8 @@ PLATFORM_DEFAULTS: dict[str, str] = {
     "dotmac_git_branch": "main",
     "dotmac_source_path": "/opt/dotmac/src",
     "default_deploy_path": "/opt/dotmac/instances",
+    "server_selection_strategy": "least_instances",
+    "signup_token_ttl_hours": "48",
 }
 
 
@@ -49,6 +51,20 @@ class PlatformSettingsService:
                 return resolved
         return PLATFORM_DEFAULTS.get(key, "")
 
+    def get_json(self, key: str) -> dict | None:
+        """Get a JSON platform setting value if present."""
+        stmt = select(DomainSetting).where(
+            DomainSetting.domain == SettingDomain.platform,
+            DomainSetting.key == key,
+            DomainSetting.is_active.is_(True),
+        )
+        row = self.db.scalar(stmt)
+        if not row:
+            return None
+        if row.value_json is not None:
+            return row.value_json
+        return None
+
     def get_all(self) -> dict[str, str]:
         """Get all platform settings, merged with defaults."""
         result = dict(PLATFORM_DEFAULTS)
@@ -65,6 +81,8 @@ class PlatformSettingsService:
 
     def set(self, key: str, value: str) -> None:
         """Set a platform setting value (upsert)."""
+        if key not in PLATFORM_DEFAULTS:
+            raise ValueError(f"Unknown platform setting key: {key}")
         stmt = select(DomainSetting).where(
             DomainSetting.domain == SettingDomain.platform,
             DomainSetting.key == key,
@@ -87,5 +105,8 @@ class PlatformSettingsService:
 
     def set_many(self, settings: dict[str, str]) -> None:
         """Set multiple platform settings at once."""
+        unknown = [key for key in settings.keys() if key not in PLATFORM_DEFAULTS]
+        if unknown:
+            raise ValueError(f"Unknown platform setting keys: {', '.join(sorted(unknown))}")
         for key, value in settings.items():
             self.set(key, value)

@@ -13,6 +13,7 @@ import re
 import secrets
 import textwrap
 import uuid
+from datetime import UTC
 from uuid import UUID
 
 from sqlalchemy import select
@@ -26,6 +27,7 @@ from app.models.instance import (
 )
 from app.models.server import Server
 from app.services.ssh_service import get_ssh_for_server
+from app.services.view_models import InstanceListItem, PagedResult
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +109,208 @@ class InstanceService:
         stmt = select(Instance).where(Instance.status == InstanceStatus.running)
         return list(self.db.scalars(stmt).all())
 
+    def list_for_web(
+        self,
+        *,
+        q: str,
+        status_filter: str | None,
+        health_filter: str | None,
+        sort_key: str,
+        sort_dir: str,
+        page: int,
+        page_size: int,
+    ) -> PagedResult[InstanceListItem]:
+        """List instances for the web UI with health + catalog context."""
+        from datetime import datetime
+
+        from app.models.catalog import AppCatalogItem, AppRelease
+        from app.services.health_service import HealthService
+
+        instances = self.list_all()
+        instance_ids = [inst.instance_id for inst in instances]
+        health_svc = HealthService(self.db)
+        health_map = health_svc.get_latest_checks_batch(instance_ids)
+        now = datetime.now(UTC)
+
+        catalog_ids = {inst.catalog_item_id for inst in instances if inst.catalog_item_id}
+        item_map: dict[UUID, AppCatalogItem] = {}
+        release_map: dict[UUID, AppRelease] = {}
+        if catalog_ids:
+            items = list(
+                self.db.scalars(select(AppCatalogItem).where(AppCatalogItem.catalog_id.in_(catalog_ids))).all()
+            )
+            item_map = {item.catalog_id: item for item in items}
+            release_ids = {item.release_id for item in items}
+            if release_ids:
+                releases = list(self.db.scalars(select(AppRelease).where(AppRelease.release_id.in_(release_ids))).all())
+                release_map = {rel.release_id: rel for rel in releases}
+
+        rows: list[InstanceListItem] = []
+        for inst in instances:
+            check = health_map.get(inst.instance_id)
+            health_state = health_svc.classify_health(check, now) if inst.status.value == "running" else "n/a"
+            catalog_item = item_map.get(inst.catalog_item_id) if inst.catalog_item_id else None
+            release = release_map.get(catalog_item.release_id) if catalog_item else None
+            rows.append(
+                InstanceListItem(
+                    instance=inst,
+                    health=check,
+                    health_state=health_state,
+                    health_checked_at=check.checked_at if check else None,
+                    catalog_label=catalog_item.label if catalog_item else None,
+                    release_version=release.version if release else None,
+                )
+            )
+
+        if q:
+            q_lower = q.strip().lower()
+            rows = [
+                item
+                for item in rows
+                if q_lower in item.instance.org_code.lower() or q_lower in item.instance.org_name.lower()
+            ]
+
+        if status_filter:
+            status_filter = status_filter.strip().lower()
+            rows = [item for item in rows if item.instance.status.value.lower() == status_filter]
+
+        if health_filter:
+            health_filter = health_filter.strip().lower()
+            rows = [item for item in rows if item.health_state == health_filter]
+
+        health_rank = {"healthy": 0, "unhealthy": 1, "unknown": 2, "n/a": 3}
+
+        def _sort_value(item: InstanceListItem):
+            inst = item.instance
+            if sort_key == "status":
+                return inst.status.value
+            if sort_key == "health":
+                return health_rank.get(item.health_state, 99)
+            if sort_key == "last_check":
+                return item.health_checked_at or datetime.min.replace(tzinfo=UTC)
+            if sort_key == "port":
+                return inst.app_port or 0
+            return inst.org_code
+
+        reverse = sort_dir == "desc"
+        rows.sort(key=_sort_value, reverse=reverse)
+
+        total = len(rows)
+        start = (page - 1) * page_size
+        end = start + page_size
+        paginated = rows[start:end]
+
+        return PagedResult(items=paginated, total=total, page=page, page_size=page_size)
+
+    def get_detail_bundle(self, instance_id: UUID) -> dict:
+        """Collect instance detail data for the web UI."""
+        from app.services.approval_service import ApprovalService
+        from app.services.backup_service import BackupService
+        from app.services.catalog_service import CatalogService
+        from app.services.deploy_service import DeployService
+        from app.services.domain_service import DomainService
+        from app.services.feature_flag_service import FeatureFlagService
+        from app.services.git_repo_service import GitRepoService
+        from app.services.health_service import HealthService
+        from app.services.module_service import ModuleService
+        from app.services.plan_service import PlanService
+        from app.services.resource_enforcement import ResourceEnforcementService
+        from app.services.secret_rotation_service import SecretRotationService
+        from app.services.tenant_audit_service import TenantAuditService
+        from app.services.upgrade_service import UpgradeService
+
+        instance = self.get_or_404(instance_id)
+
+        health_svc = HealthService(self.db)
+        latest_health = health_svc.get_latest_check(instance_id)
+        recent_checks = health_svc.get_recent_checks(instance_id, limit=10)
+
+        deploy_svc = DeployService(self.db)
+        latest_deploy_id = deploy_svc.get_latest_deployment_id(instance_id)
+        deploy_logs = []
+        if latest_deploy_id:
+            deploy_logs = deploy_svc.get_deployment_logs(instance_id, latest_deploy_id)
+
+        modules = ModuleService(self.db).get_instance_modules(instance_id)
+        flags = FeatureFlagService(self.db).list_for_instance(instance_id)
+        plans = PlanService(self.db).list_all()
+        backups = BackupService(self.db).list_for_instance(instance_id)
+        domains = DomainService(self.db).list_for_instance(instance_id)
+        audit_logs = TenantAuditService(self.db).get_logs(instance_id, limit=20)
+        enforcement_svc = ResourceEnforcementService(self.db)
+        usage_summary = enforcement_svc.get_usage_summary(instance_id)
+        compliance_violations = enforcement_svc.check_plan_compliance(instance_id)
+        rotation_history = SecretRotationService(self.db).get_rotation_history(instance_id, limit=20)
+        repos = GitRepoService(self.db).list_repos(active_only=True)
+        catalog_items = CatalogService(self.db).list_catalog_items(active_only=True)
+        catalog_map = {item.catalog_id: item for item in catalog_items}
+        upgrades = UpgradeService(self.db).list_upgrades(instance_id, limit=20)
+
+        pending_upgrade_ids = {a.upgrade_id for a in ApprovalService(self.db).get_pending(instance_id) if a.upgrade_id}
+
+        return {
+            "instance": instance,
+            "latest_health": latest_health,
+            "recent_checks": recent_checks,
+            "deploy_logs": deploy_logs,
+            "latest_deploy_id": latest_deploy_id,
+            "modules": modules,
+            "flags": flags,
+            "plans": plans,
+            "backups": backups,
+            "domains": domains,
+            "audit_logs": audit_logs,
+            "usage_summary": usage_summary,
+            "compliance_violations": compliance_violations,
+            "rotation_history": rotation_history,
+            "repos": repos,
+            "catalog_items": catalog_items,
+            "catalog_map": catalog_map,
+            "upgrades": upgrades,
+            "pending_upgrade_ids": pending_upgrade_ids,
+        }
+
+    def resolve_catalog_repo(self, catalog_id: UUID) -> UUID:
+        from app.services.catalog_service import CatalogService
+        from app.services.git_repo_service import GitRepoService
+
+        catalog_item = CatalogService(self.db).get_catalog_item(catalog_id)
+        if not catalog_item or not catalog_item.is_active:
+            raise ValueError("Selected catalog item is invalid")
+        release = catalog_item.release
+        if not release or not release.is_active:
+            raise ValueError("Catalog release is invalid")
+        repo = GitRepoService(self.db).get_by_id(UUID(str(release.git_repo_id)))
+        if not repo or not repo.is_active:
+            raise ValueError("Catalog release repo is invalid")
+        return repo.repo_id
+
+    def set_git_repo(self, instance_id: UUID, git_repo_id: UUID) -> None:
+        from app.services.git_repo_service import GitRepoService
+
+        instance = self.get_or_404(instance_id)
+        repo = GitRepoService(self.db).get_by_id(git_repo_id)
+        if not repo or not repo.is_active:
+            raise ValueError("Selected git repository is invalid")
+        instance.git_repo_id = repo.repo_id
+
+    def set_git_refs(
+        self,
+        instance_id: UUID,
+        *,
+        git_branch: str | None = None,
+        git_tag: str | None = None,
+    ) -> Instance:
+        from app.services.common import validate_git_ref
+
+        instance = self.get_or_404(instance_id)
+        if git_branch:
+            instance.git_branch = validate_git_ref(git_branch, "git_branch")
+        if git_tag:
+            instance.git_tag = validate_git_ref(git_tag, "git_tag")
+        self.db.flush()
+        return instance
+
     def allocate_ports(self, server_id: UUID) -> tuple[int, int, int]:
         """Find next available ports for a server.
 
@@ -171,6 +375,10 @@ class InstanceService:
         ps = PlatformSettingsService(self.db)
         default_deploy = ps.get("default_deploy_path")
 
+        from app.services.organization_service import OrganizationService
+
+        org = OrganizationService(self.db).get_or_create(org_code, org_name)
+
         server = self.db.get(Server, server_id)
         deploy_path = os.path.join(default_deploy, slug)
 
@@ -185,6 +393,7 @@ class InstanceService:
 
         instance = Instance(
             server_id=server_id,
+            org_id=org.org_id,
             org_code=org_code,
             org_name=org_name,
             org_uuid=org_uuid,

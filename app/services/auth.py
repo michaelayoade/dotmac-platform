@@ -408,7 +408,9 @@ class Sessions(ListResponseMixin):
 
 class ApiKeys(ListResponseMixin):
     @staticmethod
-    def generate_with_rate_limit(db: Session, payload: ApiKeyGenerateRequest, request: Request | None):
+    def generate_with_rate_limit(
+        db: Session, payload: ApiKeyGenerateRequest, request: Request | None, org_id: str | None = None
+    ):
         client_ip = "unknown"
         if request is not None and request.client:
             client_ip = request.client.host
@@ -433,13 +435,15 @@ class ApiKeys(ListResponseMixin):
                 status_code=503,
                 detail="Rate limiting unavailable (Redis error)",
             ) from exc
-        api_key, raw_key = ApiKeys.generate(db, payload)
+        api_key, raw_key = ApiKeys.generate(db, payload, org_id=org_id)
         return {"key": raw_key, "api_key": api_key}
 
     @staticmethod
-    def generate(db: Session, payload: ApiKeyGenerateRequest):
+    def generate(db: Session, payload: ApiKeyGenerateRequest, org_id: str | None = None):
         raw_key = secrets.token_urlsafe(32)
         data = payload.model_dump()
+        if org_id:
+            data["org_id"] = coerce_uuid(org_id)
         data["key_hash"] = hash_api_key(raw_key)
         data.setdefault("is_active", True)
         if data.get("person_id"):
@@ -451,10 +455,12 @@ class ApiKeys(ListResponseMixin):
         return api_key, raw_key
 
     @staticmethod
-    def create(db: Session, payload: ApiKeyCreate):
+    def create(db: Session, payload: ApiKeyCreate, org_id: str | None = None):
         if payload.person_id:
             _ensure_person(db, str(payload.person_id))
         data = payload.model_dump(exclude={"key"})
+        if org_id:
+            data["org_id"] = coerce_uuid(org_id)
         data["key_hash"] = hash_api_key(payload.key)
         api_key = ApiKey(**data)
         db.add(api_key)
@@ -463,9 +469,11 @@ class ApiKeys(ListResponseMixin):
         return api_key
 
     @staticmethod
-    def get(db: Session, key_id: str):
+    def get(db: Session, key_id: str, org_id: str | None = None):
         api_key = db.get(ApiKey, coerce_uuid(key_id))
         if not api_key:
+            raise HTTPException(status_code=404, detail="API key not found")
+        if org_id and api_key.org_id and str(api_key.org_id) != str(org_id):
             raise HTTPException(status_code=404, detail="API key not found")
         return api_key
 
@@ -478,8 +486,11 @@ class ApiKeys(ListResponseMixin):
         order_dir: str,
         limit: int,
         offset: int,
+        org_id: str | None = None,
     ):
         stmt = select(ApiKey)
+        if org_id:
+            stmt = stmt.where(ApiKey.org_id == coerce_uuid(org_id))
         if person_id:
             stmt = stmt.where(ApiKey.person_id == coerce_uuid(person_id))
         if is_active is None:
@@ -496,9 +507,11 @@ class ApiKeys(ListResponseMixin):
         return list(db.scalars(stmt).all())
 
     @staticmethod
-    def update(db: Session, key_id: str, payload: ApiKeyUpdate):
+    def update(db: Session, key_id: str, payload: ApiKeyUpdate, org_id: str | None = None):
         api_key = db.get(ApiKey, coerce_uuid(key_id))
         if not api_key:
+            raise HTTPException(status_code=404, detail="API key not found")
+        if org_id and api_key.org_id and str(api_key.org_id) != str(org_id):
             raise HTTPException(status_code=404, detail="API key not found")
         data = payload.model_dump(exclude_unset=True)
         if "person_id" in data and data["person_id"] is not None:
@@ -510,9 +523,11 @@ class ApiKeys(ListResponseMixin):
         return api_key
 
     @staticmethod
-    def delete(db: Session, key_id: str):
+    def delete(db: Session, key_id: str, org_id: str | None = None):
         api_key = db.get(ApiKey, coerce_uuid(key_id))
         if not api_key:
+            raise HTTPException(status_code=404, detail="API key not found")
+        if org_id and api_key.org_id and str(api_key.org_id) != str(org_id):
             raise HTTPException(status_code=404, detail="API key not found")
         api_key.is_active = False
         api_key.revoked_at = datetime.now(UTC)

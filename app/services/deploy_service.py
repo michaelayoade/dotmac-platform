@@ -220,7 +220,28 @@ class DeployService:
         )
         log = self.db.scalar(stmt)
         if not log or not log.deploy_secret:
-            return None
+        return None
+
+    def get_deploy_log_bundle(self, instance_id: UUID, deployment_id: str | None = None) -> dict:
+        from app.services.instance_service import InstanceService
+
+        instance = InstanceService(self.db).get_or_404(instance_id)
+
+        if not deployment_id:
+            deployment_id = self.get_latest_deployment_id(instance_id)
+
+        logs: list[DeploymentLog] = []
+        if deployment_id:
+            logs = self.get_deployment_logs(instance_id, deployment_id)
+
+        is_running = any(log.status in (DeployStepStatus.pending, DeployStepStatus.running) for log in logs)
+
+        return {
+            "instance": instance,
+            "deployment_id": deployment_id,
+            "logs": logs,
+            "is_running": is_running,
+        }
         return _decrypt_deploy_secret(self.db, log.deploy_secret)
 
     def clear_deploy_secret(self, instance_id: UUID, deployment_id: str) -> None:

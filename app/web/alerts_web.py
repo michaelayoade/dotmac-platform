@@ -10,7 +10,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.models.alert_rule import AlertChannel, AlertMetric, AlertOperator
 from app.web.deps import WebAuthContext, get_db, require_web_auth
 from app.web.helpers import ctx, require_admin, validate_csrf_token
 
@@ -28,12 +27,9 @@ def alerts_index(
 ):
     require_admin(auth)
     from app.services.alert_service import AlertService
-    from app.services.instance_service import InstanceService
 
     svc = AlertService(db)
-    rules = svc.list_rules(active_only=False)
-    events = svc.get_events(limit=50)
-    instances = InstanceService(db).list_all()
+    bundle = svc.get_index_bundle()
 
     return templates.TemplateResponse(
         "alerts/index.html",
@@ -42,12 +38,12 @@ def alerts_index(
             auth,
             "Alerts",
             active_page="alerts",
-            rules=rules,
-            events=events,
-            instances=instances,
-            metrics=[m.value for m in AlertMetric],
-            operators=[o.value for o in AlertOperator],
-            channels=[c.value for c in AlertChannel],
+            rules=bundle["rules"],
+            events=bundle["events"],
+            instances=bundle["instances"],
+            metrics=bundle["metrics"],
+            operators=bundle["operators"],
+            channels=bundle["channels"],
         ),
     )
 
@@ -70,25 +66,18 @@ def alerts_create_rule(
     require_admin(auth)
     validate_csrf_token(request, csrf_token)
     from app.services.alert_service import AlertService
-    from app.services.common import coerce_uuid
-
-    channel_config: dict[str, list[str]] | None = None
-    if channel == "email" and email_recipients.strip():
-        channel_config = {
-            "recipients": [r.strip() for r in email_recipients.split(",") if r.strip()],
-        }
 
     svc = AlertService(db)
     try:
-        svc.create_rule(
-            name=name.strip(),
-            metric=AlertMetric(metric),
-            operator=AlertOperator(operator),
+        svc.create_rule_from_form(
+            name=name,
+            metric=metric,
+            operator=operator,
             threshold=threshold,
-            channel=AlertChannel(channel),
-            channel_config=channel_config,
-            instance_id=coerce_uuid(instance_id) if instance_id else None,
+            channel=channel,
+            instance_id=instance_id,
             cooldown_minutes=cooldown_minutes,
+            email_recipients=email_recipients,
         )
         db.commit()
     except ValueError:

@@ -27,12 +27,8 @@ def dr_index(
 ):
     require_admin(auth)
     from app.services.dr_service import DisasterRecoveryService
-    from app.services.instance_service import InstanceService
-    from app.services.server_service import ServerService
 
-    plans = DisasterRecoveryService(db).list_plans(limit=200, offset=0)
-    instances = InstanceService(db).list_all()
-    servers = ServerService(db).list_all()
+    bundle = DisasterRecoveryService(db).get_index_bundle()
     return templates.TemplateResponse(
         "dr/index.html",
         ctx(
@@ -40,9 +36,9 @@ def dr_index(
             auth,
             "Disaster Recovery",
             active_page="dr",
-            plans=plans,
-            instances=instances,
-            servers=servers,
+            plans=bundle["plans"],
+            instances=bundle["instances"],
+            servers=bundle["servers"],
         ),
     )
 

@@ -141,3 +141,24 @@ def send_password_reset_email(
     )
     body_text = f"Hi {name}, use this link to reset your password: {reset_link}"
     return send_email(db, to_email, subject, body_html, body_text)
+
+
+def send_signup_verification_email(
+    db: Session | None,
+    to_email: str,
+    signup_id: str,
+    token: str,
+    org_name: str | None = None,
+) -> bool:
+    name = org_name or "your organization"
+    safe_name = html.escape(name)
+    app_url = _env_value("APP_URL") or "http://localhost:8000"
+    verify_link = f"{app_url.rstrip('/')}/signup/verify?signup_id={signup_id}&token={token}"
+    subject = "Verify your email to continue"
+    body_html = (
+        f"<p>Hi {safe_name},</p>"
+        "<p>Please verify your email to continue your signup:</p>"
+        f'<p><a href="{verify_link}">Verify email</a></p>'
+    )
+    body_text = f"Hi {name}, verify your email to continue: {verify_link}"
+    return send_email(db, to_email, subject, body_html, body_text)

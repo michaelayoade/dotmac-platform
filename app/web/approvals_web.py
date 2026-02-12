@@ -8,10 +8,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.deploy_approval import DeployApproval
 from app.web.deps import WebAuthContext, get_db, require_web_auth
 from app.web.helpers import ctx, require_admin, validate_csrf_token
 
@@ -29,36 +27,8 @@ def approvals_list(
 ):
     require_admin(auth)
     from app.services.approval_service import ApprovalService
-    from app.services.instance_service import InstanceService
 
-    svc = ApprovalService(db)
-    pending = svc.get_pending()
-    history = list(db.scalars(select(DeployApproval).order_by(DeployApproval.created_at.desc()).limit(100)).all())
-
-    instances = InstanceService(db).list_all()
-    inst_map = {i.instance_id: i for i in instances}
-    upgrade_map: dict[UUID, dict] = {}
-    upgrade_ids = {a.upgrade_id for a in pending + history if a.upgrade_id}
-    if upgrade_ids:
-        from app.models.app_upgrade import AppUpgrade
-        from app.models.catalog import AppCatalogItem, AppRelease
-
-        upgrades = list(db.scalars(select(AppUpgrade).where(AppUpgrade.upgrade_id.in_(upgrade_ids))).all())
-        catalog_ids = {u.catalog_item_id for u in upgrades}
-        items = list(db.scalars(select(AppCatalogItem).where(AppCatalogItem.catalog_id.in_(catalog_ids))).all())
-        item_map = {i.catalog_id: i for i in items}
-        release_ids = {i.release_id for i in items}
-        releases = list(db.scalars(select(AppRelease).where(AppRelease.release_id.in_(release_ids))).all())
-        release_map = {r.release_id: r for r in releases}
-
-        for up in upgrades:
-            item = item_map.get(up.catalog_item_id)
-            release = release_map.get(item.release_id) if item else None
-            upgrade_map[up.upgrade_id] = {
-                "catalog_label": item.label if item else None,
-                "release_version": release.version if release else None,
-                "release_name": release.name if release else None,
-            }
+    bundle = ApprovalService(db).get_list_bundle(history_limit=100)
 
     return templates.TemplateResponse(
         "approvals/list.html",
@@ -67,10 +37,10 @@ def approvals_list(
             auth,
             "Approvals",
             active_page="approvals",
-            pending=pending,
-            history=history,
-            inst_map=inst_map,
-            upgrade_map=upgrade_map,
+            pending=bundle["pending"],
+            history=bundle["history"],
+            inst_map=bundle["inst_map"],
+            upgrade_map=bundle["upgrade_map"],
         ),
     )
 
@@ -92,15 +62,7 @@ def approvals_approve(
             raise HTTPException(status_code=401, detail="Unauthorized")
         svc = ApprovalService(db)
         approval = svc.approve(approval_id, auth.person_id, auth.user_name)
-        upgrade_eta = None
-        upgrade_id = None
-        if approval.deployment_type == "upgrade" and approval.upgrade_id:
-            from app.models.app_upgrade import AppUpgrade
-
-            upgrade = db.get(AppUpgrade, approval.upgrade_id)
-            if upgrade:
-                upgrade_id = str(upgrade.upgrade_id)
-                upgrade_eta = upgrade.scheduled_for
+        upgrade_id, upgrade_eta = svc.resolve_upgrade_schedule(approval)
         db.commit()
         if upgrade_id:
             from app.tasks.upgrade import run_upgrade

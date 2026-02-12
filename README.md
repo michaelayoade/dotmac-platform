@@ -1,6 +1,6 @@
-# Starter Template
+# DotMac Platform Management
 
-A production-ready FastAPI starter template with enterprise-grade features including authentication, RBAC, audit logging, background jobs, and full observability.
+A production-ready platform management control plane built on FastAPI. It includes enterprise-grade authentication, RBAC, audit logging, background jobs, observability, and a web UI for managing instances, servers, deployments, and platform settings.
 
 ## Features
 

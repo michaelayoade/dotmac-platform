@@ -2,6 +2,47 @@
 
 {% block content %}
 {% set testing = testing if testing is defined else false %}
+
+{% if show_onboarding and onboarding_checklist %}
+<!-- Onboarding Banner -->
+<div id="onboarding-banner" class="mb-8 rounded-xl border border-primary-200/60 bg-gradient-to-r from-primary-50 to-amber-50 p-5 dark:border-primary-900/40 dark:from-primary-950/30 dark:to-amber-950/20">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/10 dark:bg-primary-500/20">
+                <svg class="h-5 w-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456Z"/></svg>
+            </div>
+            <div>
+                <h3 class="text-[14px] font-semibold text-surface-800 dark:text-surface-100">Getting started</h3>
+                <p class="text-[12px] text-surface-500 dark:text-surface-400">{{ onboarding_checklist.completed_count }} of {{ onboarding_checklist.total_count }} steps completed</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <!-- Progress mini-bar -->
+            <div class="hidden sm:block w-32">
+                <div class="h-1.5 w-full rounded-full bg-surface-200 dark:bg-surface-700">
+                    <div class="h-1.5 rounded-full bg-primary-500 transition-all" style="width: {{ onboarding_checklist.percent }}%"></div>
+                </div>
+            </div>
+            <a href="/onboarding" class="rounded-lg bg-surface-900 dark:bg-primary-500 px-3.5 py-2 text-[12px] font-medium text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">
+                Continue
+            </a>
+            <form hx-post="/onboarding/dismiss" hx-swap="none" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button type="submit" class="rounded-md p-1.5 text-surface-400 hover:bg-surface-200/60 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-300 transition" title="Dismiss">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+    document.body.addEventListener('onboarding-dismissed', function() {
+        var banner = document.getElementById('onboarding-banner');
+        if (banner) banner.remove();
+    });
+</script>
+{% endif %}
+
 <!-- Stats Row -->
 <div class="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-10">
     <div class="group rounded-xl border border-surface-200/80 bg-white p-5 dark:border-surface-800/50 dark:bg-surface-900/80 card-lift">

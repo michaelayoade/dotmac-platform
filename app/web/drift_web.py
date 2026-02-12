@@ -41,18 +41,9 @@ def drift_index(
 ):
     require_admin(auth)
     from app.services.drift_service import DriftService
-    from app.services.instance_service import InstanceService
 
-    instances = InstanceService(db).list_all()
-    if not instance_id and instances:
-        instance_id = instances[0].instance_id
-
-    reports = []
-    latest = None
-    if instance_id:
-        svc = DriftService(db)
-        reports = svc.get_reports(instance_id, limit=20)
-        latest = reports[0] if reports else None
+    svc = DriftService(db)
+    bundle = svc.get_index_bundle(instance_id)
 
     return templates.TemplateResponse(
         "drift/index.html",
@@ -61,10 +52,10 @@ def drift_index(
             auth,
             "Config Drift",
             active_page="drift",
-            instances=instances,
-            instance_id=instance_id,
-            reports=reports,
-            latest=latest,
+            instances=bundle["instances"],
+            instance_id=bundle["instance_id"],
+            reports=bundle["reports"],
+            latest=bundle["latest"],
             message=message,
             error=error,
         ),
@@ -83,16 +74,7 @@ def drift_detect(
     validate_csrf_token(request, csrf_token)
     from app.services.drift_service import DriftService
 
-    svc = DriftService(db)
-    try:
-        report = svc.detect_drift(instance_id)
-        db.commit()
-        if report.has_drift:
-            return _redirect_with(instance_id, message="Drift detected. Review details below.")
-        return _redirect_with(instance_id, message="No drift detected.")
-    except ValueError as e:
-        db.rollback()
-        return _redirect_with(instance_id, error=str(e))
-    except Exception:
-        db.rollback()
-        return _redirect_with(instance_id, error="Drift detection failed.")
+    ok, message_or_error = DriftService(db).detect_for_web(instance_id)
+    if ok:
+        return _redirect_with(instance_id, message=message_or_error)
+    return _redirect_with(instance_id, error=message_or_error)

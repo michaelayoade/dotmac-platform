@@ -10,8 +10,8 @@ import json
 import logging
 import shlex
 import time
-from datetime import UTC, datetime
-from typing import TypedDict
+from datetime import UTC, datetime, timedelta
+from typing import Any, TypedDict
 from uuid import UUID
 
 import httpx
@@ -126,14 +126,20 @@ class HealthService:
                 try:
                     data = json.loads(result.stdout)
                 except (json.JSONDecodeError, ValueError):
-                    data = {}
-                check = HealthCheck(
-                    instance_id=instance.instance_id,
-                    status=HealthStatus.healthy,
-                    response_ms=response_ms,
-                    db_healthy=data.get("db", True),
-                    redis_healthy=data.get("redis", True),
-                )
+                    check = HealthCheck(
+                        instance_id=instance.instance_id,
+                        status=HealthStatus.unhealthy,
+                        response_ms=response_ms,
+                        error_message="Invalid health JSON response",
+                    )
+                else:
+                    check = HealthCheck(
+                        instance_id=instance.instance_id,
+                        status=HealthStatus.healthy,
+                        response_ms=response_ms,
+                        db_healthy=data.get("db", True),
+                        redis_healthy=data.get("redis", True),
+                    )
             else:
                 check = HealthCheck(
                     instance_id=instance.instance_id,
@@ -324,7 +330,7 @@ class HealthService:
         """Get aggregated health stats for the dashboard."""
         all_instances = list(self.db.scalars(select(Instance)).all())
 
-        stats = {
+        stats: dict[str, Any] = {
             "total_instances": len(all_instances),
             "running": 0,
             "stopped": 0,
@@ -363,6 +369,43 @@ class HealthService:
 
         stats["total_servers"] = self.db.scalar(select(func.count(Server.server_id))) or 0
 
+        # Version matrix: group by deployed_git_ref
+        version_matrix: dict[str, int] = {}
+        for inst in all_instances:
+            ref = inst.deployed_git_ref or "unset"
+            version_matrix[ref] = version_matrix.get(ref, 0) + 1
+        stats["version_matrix"] = version_matrix
+
+        # Server breakdown: count instances per server
+        server_map: dict[UUID, int] = {}
+        for inst in all_instances:
+            server_map[inst.server_id] = server_map.get(inst.server_id, 0) + 1
+        server_breakdown: list[dict] = []
+        for sid, count in server_map.items():
+            server = self.db.get(Server, sid)
+            server_breakdown.append(
+                {
+                    "server_id": str(sid),
+                    "name": server.name if server else "Unknown",
+                    "hostname": server.hostname if server else "",
+                    "instance_count": count,
+                }
+            )
+        stats["server_breakdown"] = server_breakdown
+
+        # Status timeline: health check counts in last 24h
+        cutoff = datetime.now(UTC) - timedelta(hours=24)
+        timeline_stmt = (
+            select(HealthCheck.status, func.count(HealthCheck.id))
+            .where(HealthCheck.checked_at >= cutoff)
+            .group_by(HealthCheck.status)
+        )
+        timeline_rows = self.db.execute(timeline_stmt).all()
+        status_timeline: dict[str, int] = {}
+        for row_status, row_count in timeline_rows:
+            status_timeline[row_status.value if hasattr(row_status, "value") else str(row_status)] = row_count
+        stats["status_timeline"] = status_timeline
+
         return stats
 
     def classify_health(self, check: HealthCheck | None, now: datetime | None = None) -> str:
@@ -378,6 +421,25 @@ class HealthService:
         if check.status == HealthStatus.healthy:
             return "healthy"
         return "unhealthy"
+
+    def get_badge_state(self, instance_id: UUID) -> dict:
+        """Return health badge data + ETag payload."""
+        import hashlib
+
+        check = self.get_latest_check(instance_id)
+
+        is_stale = False
+        if check and check.checked_at:
+            age = (datetime.now(UTC) - check.checked_at).total_seconds()
+            is_stale = age > platform_settings.health_stale_seconds
+
+        tag_parts = f"{check.status.value if check else 'none'}"
+        tag_parts += f":{check.response_ms if check else ''}"
+        tag_parts += f":{check.checked_at.isoformat() if check and check.checked_at else ''}"
+        tag_parts += f":{is_stale}"
+        etag = '"' + hashlib.md5(tag_parts.encode()).hexdigest()[:16] + '"'
+
+        return {"health": check, "is_stale": is_stale, "etag": etag}
 
     def get_top_resource_consumers(self, limit: int = 5) -> list[_ConsumerRow]:
         """Get instances with highest resource usage from latest health checks."""
@@ -405,3 +467,24 @@ class HealthService:
 
         consumers.sort(key=lambda x: x["cpu_percent"], reverse=True)
         return consumers[:limit]
+
+    @staticmethod
+    def serialize_consumer(row: _ConsumerRow) -> dict:
+        return {
+            "org_code": row["instance"].org_code,
+            "instance_id": str(row["instance"].instance_id),
+            "cpu_percent": row["cpu_percent"],
+            "memory_mb": row["memory_mb"],
+            "db_size_mb": row["db_size_mb"],
+            "active_connections": row["active_connections"],
+        }
+
+    @staticmethod
+    def serialize_check(check: HealthCheck) -> dict:
+        return {
+            "status": check.status.value,
+            "response_ms": check.response_ms,
+            "db_healthy": check.db_healthy,
+            "redis_healthy": check.redis_healthy,
+            "checked_at": check.checked_at.isoformat() if check.checked_at else None,
+        }

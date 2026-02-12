@@ -75,3 +75,18 @@ def resolve_secret(value: str | None) -> str | None:
     if is_openbao_ref(value):
         return resolve_openbao_ref(value)
     return value
+
+
+def get_openbao_status() -> dict:
+    addr = os.getenv("OPENBAO_ADDR") or os.getenv("VAULT_ADDR")
+    namespace = os.getenv("OPENBAO_NAMESPACE") or os.getenv("VAULT_NAMESPACE")
+    kv_version = os.getenv("OPENBAO_KV_VERSION", "2")
+    token = os.getenv("OPENBAO_TOKEN") or os.getenv("VAULT_TOKEN")
+    configured = bool(addr and token)
+    return {
+        "configured": configured,
+        "addr": addr,
+        "namespace": namespace,
+        "kv_version": kv_version,
+        "token_set": bool(token),
+    }

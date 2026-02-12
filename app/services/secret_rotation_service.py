@@ -74,34 +74,70 @@ class SecretRotationService:
             updates = {}
 
             if secret_name == "POSTGRES_PASSWORD":
+                old_password = env.get("POSTGRES_PASSWORD") or ""
                 new_password = secrets.token_urlsafe(16)
-                self._rotate_postgres_password(instance, ssh, new_password)
-                db_name = env.get("POSTGRES_DB") or f"dotmac_{instance.org_code.lower()}"
-                updates.update(
-                    {
-                        "POSTGRES_PASSWORD": new_password,
-                        "DATABASE_URL": f"postgresql+psycopg://postgres:{new_password}@db:5432/{db_name}",
-                    }
-                )
-                env_content = _update_env_content(env_content, updates)
-                ssh.sftp_put_string(env_content, env_path)
-                self._recreate_services(instance, ssh, ["app", "worker", "beat"])
+                rotated_db = False
+                env_written = False
+                try:
+                    self._rotate_postgres_password(instance, ssh, new_password)
+                    rotated_db = True
+                    db_name = env.get("POSTGRES_DB") or f"dotmac_{instance.org_code.lower()}"
+                    updates.update(
+                        {
+                            "POSTGRES_PASSWORD": new_password,
+                            "DATABASE_URL": f"postgresql+psycopg://postgres:{new_password}@db:5432/{db_name}",
+                        }
+                    )
+                    new_env = _update_env_content(env_content, updates)
+                    ssh.sftp_put_string(new_env, env_path)
+                    env_written = True
+                    self._recreate_services(instance, ssh, ["app", "worker", "beat"])
+                except Exception:
+                    if rotated_db and old_password:
+                        try:
+                            self._rotate_postgres_password(instance, ssh, old_password)
+                        except Exception:
+                            logger.warning("Failed to roll back Postgres password for %s", instance.org_code)
+                    if env_written:
+                        try:
+                            ssh.sftp_put_string(env_content, env_path)
+                        except Exception:
+                            logger.warning("Failed to roll back .env for %s", instance.org_code)
+                    raise
 
             elif secret_name == "REDIS_PASSWORD":
                 new_password = secrets.token_urlsafe(16)
                 old_password = env.get("REDIS_PASSWORD")
-                self._rotate_redis_password(instance, ssh, old_password, new_password)
-                updates.update(
-                    {
-                        "REDIS_PASSWORD": new_password,
-                        "REDIS_URL": f"redis://:{new_password}@redis:6379/0",
-                        "CELERY_BROKER_URL": f"redis://:{new_password}@redis:6379/0",
-                        "CELERY_RESULT_BACKEND": f"redis://:{new_password}@redis:6379/1",
-                    }
-                )
-                env_content = _update_env_content(env_content, updates)
-                ssh.sftp_put_string(env_content, env_path)
-                self._recreate_services(instance, ssh, ["app", "worker", "beat"])
+                rotated_redis = False
+                env_written = False
+                try:
+                    self._rotate_redis_password(instance, ssh, old_password, new_password)
+                    rotated_redis = True
+                    updates.update(
+                        {
+                            "REDIS_PASSWORD": new_password,
+                            "REDIS_URL": f"redis://:{new_password}@redis:6379/0",
+                            "CELERY_BROKER_URL": f"redis://:{new_password}@redis:6379/0",
+                            "CELERY_RESULT_BACKEND": f"redis://:{new_password}@redis:6379/1",
+                        }
+                    )
+                    new_env = _update_env_content(env_content, updates)
+                    ssh.sftp_put_string(new_env, env_path)
+                    env_written = True
+                    self._recreate_services(instance, ssh, ["app", "worker", "beat"])
+                except Exception:
+                    if rotated_redis:
+                        try:
+                            rollback_password = old_password or ""
+                            self._rotate_redis_password(instance, ssh, new_password, rollback_password)
+                        except Exception:
+                            logger.warning("Failed to roll back Redis password for %s", instance.org_code)
+                    if env_written:
+                        try:
+                            ssh.sftp_put_string(env_content, env_path)
+                        except Exception:
+                            logger.warning("Failed to roll back .env for %s", instance.org_code)
+                    raise
 
             elif secret_name == "JWT_SECRET":
                 new_secret = secrets.token_urlsafe(32)
@@ -184,6 +220,19 @@ class SecretRotationService:
         )
         return list(self.db.scalars(stmt).all())
 
+    @staticmethod
+    def serialize_log(log: SecretRotationLog) -> dict:
+        return {
+            "id": log.id,
+            "secret_name": log.secret_name,
+            "status": log.status.value,
+            "rotated_by": log.rotated_by,
+            "error_message": log.error_message,
+            "started_at": log.started_at.isoformat() if log.started_at else None,
+            "completed_at": log.completed_at.isoformat() if log.completed_at else None,
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+        }
+
     def _get_instance(self, instance_id: UUID) -> Instance:
         instance = self.db.get(Instance, instance_id)
         if not instance:
@@ -212,8 +261,12 @@ class SecretRotationService:
     def _rotate_postgres_password(self, instance: Instance, ssh, new_password: str) -> None:
         slug = _safe_slug(instance.org_code.lower())
         db_container = f"dotmac_{slug}_db"
-        alter_cmd = f"ALTER ROLE postgres WITH PASSWORD '{new_password}'"
-        cmd = f"docker exec {shlex.quote(db_container)} psql -U postgres -d postgres -c {shlex.quote(alter_cmd)}"
+        alter_cmd = "ALTER ROLE postgres WITH PASSWORD :'new_password'"
+        cmd = (
+            f"docker exec {shlex.quote(db_container)} "
+            f"psql -v ON_ERROR_STOP=1 -U postgres -d postgres "
+            f"-v new_password={shlex.quote(new_password)} -c {shlex.quote(alter_cmd)}"
+        )
         result = ssh.exec_command(cmd, timeout=60)
         if not result.ok:
             detail = (result.stderr or result.stdout or "Postgres password update failed")[:2000]

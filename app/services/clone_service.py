@@ -83,6 +83,20 @@ class CloneService:
         )
         return list(self.db.scalars(stmt).all())
 
+    @staticmethod
+    def serialize_operation(op: CloneOperation) -> dict:
+        return {
+            "clone_id": str(op.clone_id),
+            "source_instance_id": str(op.source_instance_id),
+            "target_instance_id": str(op.target_instance_id) if op.target_instance_id else None,
+            "status": op.status.value,
+            "progress_pct": op.progress_pct,
+            "current_step": op.current_step,
+            "error_message": op.error_message,
+            "created_at": op.created_at.isoformat() if op.created_at else None,
+            "completed_at": op.completed_at.isoformat() if op.completed_at else None,
+        }
+
     def run_clone(self, clone_id: UUID) -> dict:
         op = self.db.get(CloneOperation, clone_id)
         if not op:

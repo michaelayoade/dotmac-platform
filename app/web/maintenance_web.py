@@ -3,7 +3,6 @@ Maintenance — Web routes for maintenance windows.
 """
 
 import logging
-from datetime import time
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -29,15 +28,9 @@ def maintenance_list(
     error: str | None = None,
 ):
     require_admin(auth)
-    from app.services.instance_service import InstanceService
     from app.services.maintenance_service import MaintenanceService
 
-    instances = InstanceService(db).list_all()
-    if not instance_id and instances:
-        instance_id = instances[0].instance_id
-    windows = []
-    if instance_id:
-        windows = MaintenanceService(db).get_windows(instance_id)
+    bundle = MaintenanceService(db).get_index_bundle(instance_id)
 
     return templates.TemplateResponse(
         "maintenance/list.html",
@@ -46,9 +39,9 @@ def maintenance_list(
             auth,
             "Maintenance",
             active_page="maintenance",
-            instances=instances,
-            instance_id=instance_id,
-            windows=windows,
+            instances=bundle["instances"],
+            instance_id=bundle["instance_id"],
+            windows=bundle["windows"],
             error=error,
         ),
     )
@@ -70,14 +63,9 @@ def maintenance_set(
     validate_csrf_token(request, csrf_token)
     from app.services.maintenance_service import MaintenanceService
 
-    try:
-        start = time.fromisoformat(start_time)
-        end = time.fromisoformat(end_time)
-    except ValueError:
-        return maintenance_list(request, auth, db, instance_id, error="Invalid time format")
-
     svc = MaintenanceService(db)
     try:
+        start, end = svc.parse_times(start_time, end_time)
         svc.set_window(instance_id, day_of_week, start, end, timezone)
         db.commit()
     except ValueError as e:

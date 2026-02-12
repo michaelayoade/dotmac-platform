@@ -2,26 +2,44 @@
 Instance Management — Web routes for ERP instance CRUD, deployment, and operations.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import TypedDict
+from typing import TYPE_CHECKING
 from uuid import UUID
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
-from datetime import UTC
+    from app.models.catalog import AppCatalogItem
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.models.health_check import HealthCheck
-from app.models.instance import Instance
 from app.web.deps import WebAuthContext, get_db, require_web_auth
 from app.web.helpers import ctx, require_admin, validate_csrf_token
 
 templates = Jinja2Templates(directory="templates")
 router = APIRouter(prefix="/instances")
+
+
+def _build_catalog_map_json(catalog_items: Sequence[AppCatalogItem]) -> str:
+    """Build a JSON string mapping catalog_id -> summary for the instance form."""
+    import json
+
+    catalog_map: dict[str, dict[str, str | None]] = {}
+    for c in catalog_items:
+        catalog_map[str(c.catalog_id)] = {
+            "label": c.label,
+            "release_name": c.release.name if c.release else None,
+            "release_version": c.release.version if c.release else None,
+            "bundle_name": c.bundle.name if c.bundle else None,
+        }
+    return json.dumps(catalog_map)
 
 
 @router.get("", response_class=HTMLResponse)
@@ -30,96 +48,18 @@ def instance_list(
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
 ):
-    from sqlalchemy import select
-
-    from app.models.catalog import AppCatalogItem, AppRelease
-    from app.services.health_service import HealthService
     from app.services.instance_service import InstanceService
 
     svc = InstanceService(db)
-    health_svc = HealthService(db)
-    instances = svc.list_all()
-
-    # Batch-fetch latest health checks to avoid N+1
-    instance_ids = [inst.instance_id for inst in instances]
-    health_map = health_svc.get_latest_checks_batch(instance_ids)
-    from datetime import datetime
-
-    now = datetime.now(UTC)
-
-    class _InstanceRow(TypedDict):
-        instance: Instance
-        health: HealthCheck | None
-        health_state: str
-        health_checked_at: datetime | None
-        catalog_label: str | None
-        release_version: str | None
-
-    catalog_ids = {inst.catalog_item_id for inst in instances if inst.catalog_item_id}
-    item_map: dict[UUID, AppCatalogItem] = {}
-    release_map: dict[UUID, AppRelease] = {}
-    if catalog_ids:
-        items = list(db.scalars(select(AppCatalogItem).where(AppCatalogItem.catalog_id.in_(catalog_ids))).all())
-        item_map = {item.catalog_id: item for item in items}
-        release_ids = {item.release_id for item in items}
-        if release_ids:
-            releases = list(db.scalars(select(AppRelease).where(AppRelease.release_id.in_(release_ids))).all())
-            release_map = {rel.release_id: rel for rel in releases}
-
-    instance_data: list[_InstanceRow] = []
-    for inst in instances:
-        check = health_map.get(inst.instance_id)
-        health_state = health_svc.classify_health(check, now) if inst.status.value == "running" else "n/a"
-        catalog_item = item_map.get(inst.catalog_item_id) if inst.catalog_item_id else None
-        release = release_map.get(catalog_item.release_id) if catalog_item else None
-        instance_data.append(
-            {
-                "instance": inst,
-                "health": check,
-                "health_state": health_state,
-                "health_checked_at": check.checked_at if check else None,
-                "catalog_label": catalog_item.label if catalog_item else None,
-                "release_version": release.version if release else None,
-            }
-        )
 
     # Filters
     params = request.query_params
-    q = (params.get("q") or "").strip().lower()
-    status_filter = (params.get("status") or "").strip().lower()
-    health_filter = (params.get("health") or "").strip().lower()
+    q = (params.get("q") or "").strip()
+    status_filter = (params.get("status") or "").strip().lower() or None
+    health_filter = (params.get("health") or "").strip().lower() or None
     view = (params.get("view") or "table").strip().lower()
     sort_key = (params.get("sort") or "org_code").strip().lower()
     sort_dir = (params.get("dir") or "asc").strip().lower()
-
-    if q:
-        instance_data = [
-            item
-            for item in instance_data
-            if q in item["instance"].org_code.lower() or q in item["instance"].org_name.lower()
-        ]
-    if status_filter:
-        instance_data = [item for item in instance_data if item["instance"].status.value.lower() == status_filter]
-    if health_filter:
-        instance_data = [item for item in instance_data if item["health_state"] == health_filter]
-
-    # Sorting
-    health_rank = {"healthy": 0, "unhealthy": 1, "unknown": 2, "n/a": 3}
-
-    def _sort_value(item: _InstanceRow):
-        inst = item["instance"]
-        if sort_key == "status":
-            return inst.status.value
-        if sort_key == "health":
-            return health_rank.get(item["health_state"], 99)
-        if sort_key == "last_check":
-            return item["health_checked_at"] or datetime.min.replace(tzinfo=UTC)
-        if sort_key == "port":
-            return inst.app_port or 0
-        return inst.org_code
-
-    reverse = sort_dir == "desc"
-    instance_data.sort(key=_sort_value, reverse=reverse)
 
     # Pagination
     try:
@@ -131,10 +71,15 @@ def instance_list(
     except ValueError:
         page_size = 25
 
-    total = len(instance_data)
-    start = (page - 1) * page_size
-    end = start + page_size
-    paginated = instance_data[start:end]
+    result = svc.list_for_web(
+        q=q,
+        status_filter=status_filter,
+        health_filter=health_filter,
+        sort_key=sort_key,
+        sort_dir=sort_dir if sort_dir in {"asc", "desc"} else "asc",
+        page=page,
+        page_size=page_size,
+    )
 
     return templates.TemplateResponse(
         "instances/list.html",
@@ -143,13 +88,13 @@ def instance_list(
             auth,
             "Instances",
             active_page="instances",
-            instances=paginated,
-            total=total,
+            instances=result.items,
+            total=result.total,
             page=page,
             page_size=page_size,
             q=q,
-            status_filter=status_filter,
-            health_filter=health_filter,
+            status_filter=status_filter or "",
+            health_filter=health_filter or "",
             view=view if view in {"table", "cards"} else "table",
             sort=sort_key,
             sort_dir=sort_dir if sort_dir in {"asc", "desc"} else "asc",
@@ -165,12 +110,11 @@ def instance_form(
 ):
     require_admin(auth)
     from app.services.catalog_service import CatalogService
-    from app.services.git_repo_service import GitRepoService
     from app.services.server_service import ServerService
 
     servers = ServerService(db).list_all()
-    repos = GitRepoService(db).list_repos(active_only=True)
     catalog_items = CatalogService(db).list_catalog_items(active_only=True)
+    catalog_map_json = _build_catalog_map_json(catalog_items)
     return templates.TemplateResponse(
         "instances/form.html",
         ctx(
@@ -179,8 +123,8 @@ def instance_form(
             "New Instance",
             active_page="instances",
             servers=servers,
-            repos=repos,
             catalog_items=catalog_items,
+            catalog_map_json=catalog_map_json,
             errors=None,
         ),
     )
@@ -206,8 +150,6 @@ def instance_create(
     require_admin(auth)
     validate_csrf_token(request, csrf_token)
 
-    from app.services.catalog_service import CatalogService
-    from app.services.git_repo_service import GitRepoService
     from app.services.instance_service import InstanceService
     from app.services.server_service import ServerService
 
@@ -216,16 +158,7 @@ def instance_create(
         if not catalog_item_id:
             raise ValueError("Catalog item is required")
         catalog_id = UUID(catalog_item_id)
-        catalog_item = CatalogService(db).get_catalog_item(catalog_id)
-        if not catalog_item or not catalog_item.is_active:
-            raise ValueError("Selected catalog item is invalid")
-        release = catalog_item.release
-        if not release or not release.is_active:
-            raise ValueError("Catalog release is invalid")
-        git_repo_id = str(release.git_repo_id)
-        repo = GitRepoService(db).get_by_id(UUID(git_repo_id))
-        if not repo or not repo.is_active:
-            raise ValueError("Catalog release repo is invalid")
+        git_repo_id = svc.resolve_catalog_repo(catalog_id)
         instance = svc.create(
             server_id=UUID(server_id),
             org_code=org_code,
@@ -236,7 +169,7 @@ def instance_create(
             admin_email=admin_email or None,
             admin_username=admin_username or "admin",
             domain=domain or None,
-            git_repo_id=UUID(git_repo_id),
+            git_repo_id=git_repo_id,
             catalog_item_id=catalog_id,
         )
         db.commit()
@@ -244,6 +177,9 @@ def instance_create(
     except ValueError as e:
         db.rollback()
         servers = ServerService(db).list_all()
+        from app.services.catalog_service import CatalogService
+        from app.services.git_repo_service import GitRepoService
+
         repos = GitRepoService(db).list_repos(active_only=True)
         catalog_items = CatalogService(db).list_catalog_items(active_only=True)
         return templates.TemplateResponse(
@@ -256,6 +192,7 @@ def instance_create(
                 servers=servers,
                 repos=repos,
                 catalog_items=catalog_items,
+                catalog_map_json=_build_catalog_map_json(catalog_items),
                 errors=[str(e)],
             ),
         )
@@ -263,6 +200,9 @@ def instance_create(
         db.rollback()
         logger.exception("Failed to create instance")
         servers = ServerService(db).list_all()
+        from app.services.catalog_service import CatalogService
+        from app.services.git_repo_service import GitRepoService
+
         repos = GitRepoService(db).list_repos(active_only=True)
         catalog_items = CatalogService(db).list_catalog_items(active_only=True)
         return templates.TemplateResponse(
@@ -275,6 +215,7 @@ def instance_create(
                 servers=servers,
                 repos=repos,
                 catalog_items=catalog_items,
+                catalog_map_json=_build_catalog_map_json(catalog_items),
                 errors=["An unexpected error occurred. Please try again."],
             ),
         )
@@ -287,81 +228,39 @@ def instance_detail(
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
 ):
-    from app.services.backup_service import BackupService
-    from app.services.catalog_service import CatalogService
-    from app.services.deploy_service import DeployService
-    from app.services.domain_service import DomainService
-    from app.services.feature_flag_service import FeatureFlagService
-    from app.services.git_repo_service import GitRepoService
-    from app.services.health_service import HealthService
     from app.services.instance_service import InstanceService
-    from app.services.module_service import ModuleService
-    from app.services.plan_service import PlanService
-    from app.services.resource_enforcement import ResourceEnforcementService
-    from app.services.secret_rotation_service import SecretRotationService
-    from app.services.tenant_audit_service import TenantAuditService
-    from app.services.upgrade_service import UpgradeService
 
     svc = InstanceService(db)
-    instance = svc.get_or_404(instance_id)
     active_tab = (request.query_params.get("tab") or "modules").strip().lower()
-
-    health_svc = HealthService(db)
-    latest_health = health_svc.get_latest_check(instance_id)
-    recent_checks = health_svc.get_recent_checks(instance_id, limit=10)
-
-    deploy_svc = DeployService(db)
-    latest_deploy_id = deploy_svc.get_latest_deployment_id(instance_id)
-    deploy_logs = []
-    if latest_deploy_id:
-        deploy_logs = deploy_svc.get_deployment_logs(instance_id, latest_deploy_id)
-
-    # New feature data
-    modules = ModuleService(db).get_instance_modules(instance_id)
-    flags = FeatureFlagService(db).list_for_instance(instance_id)
-    plans = PlanService(db).list_all()
-    backups = BackupService(db).list_for_instance(instance_id)
-    domains = DomainService(db).list_for_instance(instance_id)
-    audit_logs = TenantAuditService(db).get_logs(instance_id, limit=20)
-    enforcement_svc = ResourceEnforcementService(db)
-    usage_summary = enforcement_svc.get_usage_summary(instance_id)
-    compliance_violations = enforcement_svc.check_plan_compliance(instance_id)
-    rotation_history = SecretRotationService(db).get_rotation_history(instance_id, limit=20)
-    repos = GitRepoService(db).list_repos(active_only=True)
-    catalog_items = CatalogService(db).list_catalog_items(active_only=True)
-    catalog_map = {item.catalog_id: item for item in catalog_items}
-    upgrades = UpgradeService(db).list_upgrades(instance_id, limit=20)
-    from app.services.approval_service import ApprovalService
-
-    pending_upgrade_ids = {a.upgrade_id for a in ApprovalService(db).get_pending(instance_id) if a.upgrade_id}
+    bundle = svc.get_detail_bundle(instance_id)
 
     return templates.TemplateResponse(
         "instances/detail.html",
         ctx(
             request,
             auth,
-            instance.org_code,
+            bundle["instance"].org_code,
             active_page="instances",
-            instance=instance,
-            latest_health=latest_health,
-            recent_checks=recent_checks,
-            deploy_logs=deploy_logs,
-            latest_deploy_id=latest_deploy_id,
-            modules=modules,
-            flags=flags,
-            plans=plans,
-            backups=backups,
-            domains=domains,
-            audit_logs=audit_logs,
-            usage_summary=usage_summary,
-            compliance_violations=compliance_violations,
-            rotation_history=rotation_history,
+            instance=bundle["instance"],
+            latest_health=bundle["latest_health"],
+            recent_checks=bundle["recent_checks"],
+            deploy_logs=bundle["deploy_logs"],
+            latest_deploy_id=bundle["latest_deploy_id"],
+            modules=bundle["modules"],
+            flags=bundle["flags"],
+            plans=bundle["plans"],
+            backups=bundle["backups"],
+            domains=bundle["domains"],
+            audit_logs=bundle["audit_logs"],
+            usage_summary=bundle["usage_summary"],
+            compliance_violations=bundle["compliance_violations"],
+            rotation_history=bundle["rotation_history"],
             active_tab=active_tab,
-            repos=repos,
-            catalog_items=catalog_items,
-            catalog_map=catalog_map,
-            upgrades=upgrades,
-            pending_upgrade_ids=pending_upgrade_ids,
+            repos=bundle["repos"],
+            catalog_items=bundle["catalog_items"],
+            catalog_map=bundle["catalog_map"],
+            upgrades=bundle["upgrades"],
+            pending_upgrade_ids=bundle["pending_upgrade_ids"],
         ),
     )
 
@@ -413,18 +312,12 @@ def instance_set_git_repo(
 ):
     require_admin(auth)
     validate_csrf_token(request, csrf_token)
-    from app.services.git_repo_service import GitRepoService
     from app.services.instance_service import InstanceService
 
-    svc = InstanceService(db)
-    instance = svc.get_or_404(instance_id)
     try:
         if not git_repo_id:
             raise ValueError("Git repository is required")
-        repo = GitRepoService(db).get_by_id(UUID(git_repo_id))
-        if not repo or not repo.is_active:
-            raise ValueError("Selected git repository is invalid")
-        instance.git_repo_id = repo.repo_id
+        InstanceService(db).set_git_repo(instance_id, UUID(git_repo_id))
         db.commit()
     except ValueError:
         db.rollback()
@@ -535,32 +428,20 @@ def instance_deploy_log(
     db: Session = Depends(get_db),
 ):
     from app.services.deploy_service import DeployService
-    from app.services.instance_service import InstanceService
 
-    instance = InstanceService(db).get_or_404(instance_id)
-    deploy_svc = DeployService(db)
-
-    if not deployment_id:
-        deployment_id = deploy_svc.get_latest_deployment_id(instance_id)
-
-    logs = []
-    if deployment_id:
-        logs = deploy_svc.get_deployment_logs(instance_id, deployment_id)
-
-    # Check if deployment is still running
-    is_running = any(log.status in ("pending", "running") for log in logs)
+    bundle = DeployService(db).get_deploy_log_bundle(instance_id, deployment_id)
 
     return templates.TemplateResponse(
         "instances/deploy_log.html",
         ctx(
             request,
             auth,
-            f"Deploy - {instance.org_code}",
+            f"Deploy - {bundle['instance'].org_code}",
             active_page="instances",
-            instance=instance,
-            logs=logs,
-            deployment_id=deployment_id,
-            is_running=is_running,
+            instance=bundle["instance"],
+            logs=bundle["logs"],
+            deployment_id=bundle["deployment_id"],
+            is_running=bundle["is_running"],
         ),
     )
 
@@ -686,28 +567,12 @@ def instance_health_badge(
     db: Session = Depends(get_db),
 ):
     """HTMX partial: health status badge with ETag caching."""
-    import hashlib
-    from datetime import datetime
-
     from fastapi.responses import Response
 
-    from app.config import settings as platform_settings
     from app.services.health_service import HealthService
 
-    svc = HealthService(db)
-    check = svc.get_latest_check(instance_id)
-
-    is_stale = False
-    if check and check.checked_at:
-        age = (datetime.now(UTC) - check.checked_at).total_seconds()
-        is_stale = age > platform_settings.health_stale_seconds
-
-    # Build a content fingerprint for ETag
-    tag_parts = f"{check.status.value if check else 'none'}"
-    tag_parts += f":{check.response_ms if check else ''}"
-    tag_parts += f":{check.checked_at.isoformat() if check and check.checked_at else ''}"
-    tag_parts += f":{is_stale}"
-    etag = '"' + hashlib.md5(tag_parts.encode()).hexdigest()[:16] + '"'
+    state = HealthService(db).get_badge_state(instance_id)
+    etag = state["etag"]
 
     # Return 304 if client already has this version
     if_none_match = request.headers.get("if-none-match")
@@ -716,7 +581,7 @@ def instance_health_badge(
 
     response = templates.TemplateResponse(
         "partials/health_badge.html",
-        {"request": request, "health": check, "is_stale": is_stale},
+        {"request": request, "health": state["health"], "is_stale": state["is_stale"]},
     )
     response.headers["ETag"] = etag
     return response

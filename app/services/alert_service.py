@@ -83,6 +83,79 @@ class AlertService:
             stmt = stmt.where(AlertRule.is_active.is_(True))
         return list(self.db.scalars(stmt).all())
 
+    def get_index_bundle(self) -> dict:
+        from app.services.instance_service import InstanceService
+
+        rules = self.list_rules(active_only=False)
+        events = self.get_events(limit=50)
+        instances = InstanceService(self.db).list_all()
+        return {
+            "rules": rules,
+            "events": events,
+            "instances": instances,
+            "metrics": [m.value for m in AlertMetric],
+            "operators": [o.value for o in AlertOperator],
+            "channels": [c.value for c in AlertChannel],
+        }
+
+    @staticmethod
+    def serialize_rule(rule: AlertRule) -> dict:
+        return {
+            "rule_id": str(rule.rule_id),
+            "name": rule.name,
+            "metric": rule.metric.value,
+            "operator": rule.operator.value,
+            "threshold": rule.threshold,
+            "channel": rule.channel.value,
+            "instance_id": str(rule.instance_id) if rule.instance_id else None,
+            "is_active": rule.is_active,
+            "cooldown_minutes": rule.cooldown_minutes,
+        }
+
+    @staticmethod
+    def serialize_event(event: AlertEvent) -> dict:
+        return {
+            "event_id": str(event.event_id),
+            "rule_id": str(event.rule_id),
+            "instance_id": str(event.instance_id) if event.instance_id else None,
+            "metric_value": event.metric_value,
+            "threshold": event.threshold,
+            "triggered_at": event.triggered_at.isoformat() if event.triggered_at else None,
+            "resolved_at": event.resolved_at.isoformat() if event.resolved_at else None,
+            "notified": event.notified,
+        }
+
+    def create_rule_from_form(
+        self,
+        *,
+        name: str,
+        metric: str,
+        operator: str,
+        threshold: float,
+        channel: str,
+        instance_id: str | None,
+        cooldown_minutes: int,
+        email_recipients: str,
+    ) -> AlertRule:
+        from app.services.common import coerce_uuid
+
+        channel_config: dict[str, list[str]] | None = None
+        if channel == "email" and email_recipients.strip():
+            channel_config = {
+                "recipients": [r.strip() for r in email_recipients.split(",") if r.strip()],
+            }
+
+        return self.create_rule(
+            name=name.strip(),
+            metric=AlertMetric(metric),
+            operator=AlertOperator(operator),
+            threshold=threshold,
+            channel=AlertChannel(channel),
+            channel_config=channel_config,
+            instance_id=coerce_uuid(instance_id) if instance_id else None,
+            cooldown_minutes=cooldown_minutes,
+        )
+
     def evaluate_all(self) -> int:
         """Evaluate all active rules against latest health data. Returns alert count."""
         rules = self.list_rules(active_only=True)
@@ -99,6 +172,8 @@ class AlertService:
         checks_map = health_svc.get_latest_checks_batch([i.instance_id for i in instances])
 
         alert_count = 0
+        evaluated_pairs: set[tuple[UUID, UUID]] = set()
+        triggered_pairs: set[tuple[UUID, UUID]] = set()
         for rule in rules:
             targets = instances
             if rule.instance_id:
@@ -112,14 +187,31 @@ class AlertService:
                 value = self._extract_metric(check, rule.metric)
                 if value is None:
                     continue
+                evaluated_pairs.add((rule.rule_id, inst.instance_id))
 
                 op_fn = OPERATOR_FNS.get(rule.operator)
                 if op_fn and op_fn(value, rule.threshold):
+                    triggered_pairs.add((rule.rule_id, inst.instance_id))
                     if not self._in_cooldown(rule.rule_id, inst.instance_id):
                         self._fire_alert(rule, inst.instance_id, value)
                         alert_count += 1
 
-        if alert_count:
+        resolved_count = 0
+        to_resolve = evaluated_pairs - triggered_pairs
+        if to_resolve:
+            now = datetime.now(UTC)
+            for rule_id, instance_id in to_resolve:
+                stmt = select(AlertEvent).where(
+                    AlertEvent.rule_id == rule_id,
+                    AlertEvent.instance_id == instance_id,
+                    AlertEvent.resolved_at.is_(None),
+                )
+                events = list(self.db.scalars(stmt).all())
+                for event in events:
+                    event.resolved_at = now
+                    resolved_count += 1
+
+        if alert_count or resolved_count:
             self.db.commit()
         return alert_count
 

@@ -83,6 +83,15 @@ class FeatureFlagService:
             )
         return result
 
+    @staticmethod
+    def serialize_flag_entry(entry: dict) -> dict:
+        return {
+            "key": entry.get("key"),
+            "description": entry.get("description"),
+            "value": entry.get("value"),
+            "is_custom": entry.get("is_custom"),
+        }
+
     def get_flag(self, instance_id: UUID, flag_key: str) -> str:
         """Get a single flag value, falling back to default."""
         stmt = select(InstanceFlag).where(

@@ -116,6 +116,13 @@ class SSHKeyService:
         stmt = stmt.order_by(SSHKey.created_at.desc())
         return list(self.db.scalars(stmt).all())
 
+    def get_index_bundle(self) -> dict:
+        from app.services.server_service import ServerService
+
+        keys = self.list_keys(active_only=False)
+        servers = ServerService(self.db).list_all()
+        return {"keys": keys, "servers": servers}
+
     def delete_key(self, key_id: UUID) -> None:
         key = self._get_key(key_id)
         in_use = self.db.scalar(select(Server).where(Server.ssh_key_id == key.key_id))

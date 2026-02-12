@@ -20,20 +20,9 @@ def list_releases(
 ):
     from app.services.catalog_service import CatalogService
 
-    releases = CatalogService(db).list_releases(active_only=active_only)
-    return [
-        {
-            "release_id": str(r.release_id),
-            "name": r.name,
-            "version": r.version,
-            "git_ref": r.git_ref,
-            "git_repo_id": str(r.git_repo_id),
-            "notes": r.notes,
-            "is_active": r.is_active,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-        }
-        for r in releases
-    ]
+    svc = CatalogService(db)
+    releases = svc.list_releases(active_only=active_only)
+    return [svc.serialize_release(r) for r in releases]
 
 
 @router.post("/releases", status_code=status.HTTP_201_CREATED)
@@ -82,19 +71,9 @@ def list_bundles(
 ):
     from app.services.catalog_service import CatalogService
 
-    bundles = CatalogService(db).list_bundles(active_only=active_only)
-    return [
-        {
-            "bundle_id": str(b.bundle_id),
-            "name": b.name,
-            "description": b.description,
-            "module_slugs": b.module_slugs or [],
-            "flag_keys": b.flag_keys or [],
-            "is_active": b.is_active,
-            "created_at": b.created_at.isoformat() if b.created_at else None,
-        }
-        for b in bundles
-    ]
+    svc = CatalogService(db)
+    bundles = svc.list_bundles(active_only=active_only)
+    return [svc.serialize_bundle(b) for b in bundles]
 
 
 @router.post("/bundles", status_code=status.HTTP_201_CREATED)
@@ -142,18 +121,9 @@ def list_catalog_items(
 ):
     from app.services.catalog_service import CatalogService
 
-    items = CatalogService(db).list_catalog_items(active_only=active_only)
-    return [
-        {
-            "catalog_id": str(i.catalog_id),
-            "label": i.label,
-            "release_id": str(i.release_id),
-            "bundle_id": str(i.bundle_id),
-            "is_active": i.is_active,
-            "created_at": i.created_at.isoformat() if i.created_at else None,
-        }
-        for i in items
-    ]
+    svc = CatalogService(db)
+    items = svc.list_catalog_items(active_only=active_only)
+    return [svc.serialize_item(i) for i in items]
 
 
 @router.post("/items", status_code=status.HTTP_201_CREATED)

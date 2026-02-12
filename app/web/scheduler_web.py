@@ -2,8 +2,6 @@
 Scheduler — Web routes for scheduled tasks.
 """
 
-import json
-
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -52,10 +50,9 @@ def scheduler_create(
     from app.services.scheduler import scheduled_tasks
 
     try:
-        args = json.loads(args_json) if args_json.strip() else None
-        kwargs = json.loads(kwargs_json) if kwargs_json.strip() else None
-    except json.JSONDecodeError:
-        return scheduler_list(request, auth, db, error="Invalid JSON for args/kwargs")
+        args, kwargs = scheduled_tasks.parse_args_kwargs(args_json, kwargs_json)
+    except ValueError as exc:
+        return scheduler_list(request, auth, db, error=str(exc))
 
     payload = ScheduledTaskCreate(
         name=name.strip(),

@@ -179,7 +179,7 @@ class TestConcurrentRefreshRotation:
         }
         return Request(scope)
 
-    def test_refresh_token_rotation(self, db_session, person):
+    def test_refresh_token_rotation(self, db_session, person, person_org_code):
         """Test that refresh rotates token and stores previous hash."""
         credential = UserCredential(
             person_id=person.id,
@@ -191,7 +191,7 @@ class TestConcurrentRefreshRotation:
         db_session.commit()
 
         request = self._make_request()
-        tokens = AuthFlow.login(db_session, credential.username, "password", request, None)
+        tokens = AuthFlow.login(db_session, credential.username, "password", request, None, person_org_code)
         original_refresh = tokens["refresh_token"]
 
         # Perform refresh
@@ -205,7 +205,7 @@ class TestConcurrentRefreshRotation:
         assert session.previous_token_hash is not None
         assert session.token_rotated_at is not None
 
-    def test_refresh_reuse_detection_revokes_session(self, db_session, person):
+    def test_refresh_reuse_detection_revokes_session(self, db_session, person, person_org_code):
         """Test that reusing old refresh token revokes the session."""
         credential = UserCredential(
             person_id=person.id,
@@ -217,7 +217,7 @@ class TestConcurrentRefreshRotation:
         db_session.commit()
 
         request = self._make_request()
-        tokens = AuthFlow.login(db_session, credential.username, "password", request, None)
+        tokens = AuthFlow.login(db_session, credential.username, "password", request, None, person_org_code)
         old_refresh = tokens["refresh_token"]
 
         # First refresh - should succeed
@@ -236,7 +236,7 @@ class TestConcurrentRefreshRotation:
         assert session.status == SessionStatus.revoked
         assert session.revoked_at is not None
 
-    def test_concurrent_refresh_first_wins(self, db_session, person):
+    def test_concurrent_refresh_first_wins(self, db_session, person, person_org_code):
         """Test concurrent refresh behavior - first request wins."""
         credential = UserCredential(
             person_id=person.id,
@@ -248,7 +248,7 @@ class TestConcurrentRefreshRotation:
         db_session.commit()
 
         request = self._make_request()
-        tokens = AuthFlow.login(db_session, credential.username, "password", request, None)
+        tokens = AuthFlow.login(db_session, credential.username, "password", request, None, person_org_code)
         shared_refresh = tokens["refresh_token"]
 
         # Simulate concurrent refresh by using same token twice
@@ -263,7 +263,7 @@ class TestConcurrentRefreshRotation:
             AuthFlow.refresh(db_session, shared_refresh, request)
         assert exc.value.status_code == 401
 
-    def test_refresh_updates_last_seen_and_ip(self, db_session, person):
+    def test_refresh_updates_last_seen_and_ip(self, db_session, person, person_org_code):
         """Test that refresh updates last_seen_at and ip_address."""
         credential = UserCredential(
             person_id=person.id,
@@ -275,7 +275,7 @@ class TestConcurrentRefreshRotation:
         db_session.commit()
 
         request1 = self._make_request(user_agent="client1")
-        tokens = AuthFlow.login(db_session, credential.username, "password", request1, None)
+        tokens = AuthFlow.login(db_session, credential.username, "password", request1, None, person_org_code)
 
         session = db_session.query(AuthSession).filter(AuthSession.person_id == person.id).first()
         original_last_seen = session.last_seen_at
@@ -292,7 +292,7 @@ class TestConcurrentRefreshRotation:
         assert session.user_agent == "client2"
         assert session.last_seen_at > original_last_seen
 
-    def test_refresh_expired_token_fails(self, db_session, person):
+    def test_refresh_expired_token_fails(self, db_session, person, person_org_code):
         """Test that expired refresh token fails."""
         credential = UserCredential(
             person_id=person.id,
@@ -304,7 +304,7 @@ class TestConcurrentRefreshRotation:
         db_session.commit()
 
         request = self._make_request()
-        tokens = AuthFlow.login(db_session, credential.username, "password", request, None)
+        tokens = AuthFlow.login(db_session, credential.username, "password", request, None, person_org_code)
 
         # Manually expire the session
         session = db_session.query(AuthSession).filter(AuthSession.person_id == person.id).first()

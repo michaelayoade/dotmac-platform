@@ -4,6 +4,8 @@ import uuid
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.models.health_check import HealthCheck, HealthStatus
 from app.models.instance import Instance, InstanceStatus
 from app.models.server import Server
@@ -124,3 +126,34 @@ def test_rotate_postgres_updates_database_url(db_session):
     assert log.status.value == "success"
     new_env = parse_env_file(fake_ssh.sftp_put_string.call_args.args[0])
     assert new_env["POSTGRES_PASSWORD"] in new_env["DATABASE_URL"]
+
+
+def test_rotate_postgres_rolls_back_on_restart_failure(db_session):
+    server = _make_server(db_session)
+    instance = _make_instance(db_session, server)
+    env_content = _base_env(instance)
+
+    fake_ssh = MagicMock()
+    fake_ssh.sftp_read_string.return_value = env_content
+    fake_ssh.exec_command.return_value = SSHResult(0, "ok", "")
+
+    with patch("app.services.secret_rotation_service.get_ssh_for_server", return_value=fake_ssh):
+        with patch("app.services.secret_rotation_service.time.sleep", return_value=None):
+            with patch("app.services.secret_rotation_service.secrets.token_urlsafe", return_value="newpass"):
+                with patch.object(SecretRotationService, "_rotate_postgres_password") as rotate_pg:
+                    with patch.object(SecretRotationService, "_recreate_services", side_effect=ValueError("boom")):
+                        with patch("app.services.health_service.HealthService") as mock_health:
+                            mock_health.return_value.poll_instance.return_value = HealthCheck(
+                                instance_id=instance.instance_id,
+                                status=HealthStatus.healthy,
+                                checked_at=datetime.now(UTC),
+                            )
+                            svc = SecretRotationService(db_session)
+                            with pytest.raises(ValueError):
+                                svc.rotate_secret(instance.instance_id, "POSTGRES_PASSWORD", rotated_by="tester")
+
+    passwords = [call.args[-1] for call in rotate_pg.call_args_list]
+    assert passwords == ["newpass", "oldpg"]
+
+    assert fake_ssh.sftp_put_string.call_count == 2
+    assert fake_ssh.sftp_put_string.call_args_list[-1].args[0] == env_content

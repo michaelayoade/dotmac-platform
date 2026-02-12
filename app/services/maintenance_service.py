@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, time
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -32,6 +33,16 @@ class MaintenanceService:
             .order_by(MaintenanceWindow.day_of_week)
         )
         return list(self.db.scalars(stmt).all())
+
+    @staticmethod
+    def serialize_window(window: MaintenanceWindow) -> dict:
+        return {
+            "window_id": str(window.window_id),
+            "day_of_week": window.day_of_week,
+            "start_time": window.start_time.isoformat(),
+            "end_time": window.end_time.isoformat(),
+            "timezone": window.timezone,
+        }
 
     def set_window(
         self,
@@ -78,23 +89,53 @@ class MaintenanceService:
         window.is_active = False
         self.db.flush()
 
+    def parse_times(self, start_time: str, end_time: str) -> tuple[time, time]:
+        try:
+            start = time.fromisoformat(start_time)
+            end = time.fromisoformat(end_time)
+        except ValueError as exc:
+            raise ValueError("Invalid time format") from exc
+        return start, end
+
+    def get_index_bundle(self, instance_id: UUID | None) -> dict:
+        from app.services.instance_service import InstanceService
+
+        instances = InstanceService(self.db).list_all()
+        if not instance_id and instances:
+            instance_id = instances[0].instance_id
+        windows = []
+        if instance_id:
+            windows = self.get_windows(instance_id)
+        return {
+            "instances": instances,
+            "instance_id": instance_id,
+            "windows": windows,
+        }
+
     def is_deploy_allowed(self, instance_id: UUID, now: datetime | None = None) -> bool:
         """Check if deployment is allowed for this instance right now.
 
         Returns True if:
         - No maintenance windows are configured (no restrictions)
-        - Current time falls within an active maintenance window
+        - Current time falls outside any maintenance window
         """
         windows = self.get_windows(instance_id)
         if not windows:
             return True  # No restrictions
 
         now = now or datetime.now(UTC)
-        current_day = now.weekday()
-        current_time = now.time()
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=UTC)
 
         for w in windows:
-            if w.day_of_week == current_day and w.start_time <= current_time <= w.end_time:
-                return True
+            tz = w.timezone or "UTC"
+            try:
+                local_now = now.astimezone(ZoneInfo(tz))
+            except Exception:
+                local_now = now.astimezone(UTC)
+            if local_now.weekday() == w.day_of_week:
+                local_time = local_now.time()
+                if w.start_time <= local_time <= w.end_time:
+                    return False
 
-        return False
+        return True

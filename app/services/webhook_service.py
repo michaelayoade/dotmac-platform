@@ -34,8 +34,8 @@ def _validate_webhook_url(url: str) -> None:
     from urllib.parse import urlparse
 
     parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        raise ValueError(f"Webhook URL scheme must be http or https, got {parsed.scheme!r}")
+    if parsed.scheme != "https":
+        raise ValueError(f"Webhook URL scheme must be https, got {parsed.scheme!r}")
     hostname = parsed.hostname or ""
     if hostname.lower() in _BLOCKED_HOSTNAMES:
         raise ValueError(f"Webhook URL hostname {hostname!r} is not allowed")
@@ -57,6 +57,28 @@ class WebhookService:
         if instance_id:
             stmt = stmt.where((WebhookEndpoint.instance_id == instance_id) | (WebhookEndpoint.instance_id.is_(None)))
         return list(self.db.scalars(stmt).all())
+
+    @staticmethod
+    def serialize_endpoint(endpoint: WebhookEndpoint) -> dict:
+        return {
+            "endpoint_id": str(endpoint.endpoint_id),
+            "url": endpoint.url,
+            "events": endpoint.events,
+            "description": endpoint.description,
+            "instance_id": str(endpoint.instance_id) if endpoint.instance_id else None,
+            "is_active": endpoint.is_active,
+        }
+
+    @staticmethod
+    def serialize_delivery(delivery: WebhookDelivery) -> dict:
+        return {
+            "delivery_id": str(delivery.delivery_id),
+            "event": delivery.event,
+            "status": delivery.status.value,
+            "response_code": delivery.response_code,
+            "attempts": delivery.attempts,
+            "created_at": delivery.created_at.isoformat() if delivery.created_at else None,
+        }
 
     def create_endpoint(
         self,
@@ -129,7 +151,11 @@ class WebhookService:
         """Attempt a single delivery; returns success."""
         _validate_webhook_url(ep.url)
         body = json.dumps(delivery.payload, default=str)
-        headers = {"Content-Type": "application/json", "X-Webhook-Event": delivery.event}
+        headers = {
+            "Content-Type": "application/json",
+            "X-Webhook-Event": delivery.event,
+            "Idempotency-Key": str(delivery.delivery_id),
+        }
         if ep.secret:
             sig = hmac.new(ep.secret.encode(), body.encode(), hashlib.sha256).hexdigest()
             headers["X-Webhook-Signature"] = f"sha256={sig}"

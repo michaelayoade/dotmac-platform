@@ -1,5 +1,6 @@
 """Tests for GitRepoService."""
 
+import os
 import uuid
 
 import pytest
@@ -7,7 +8,7 @@ import pytest
 from app.models.git_repository import GitAuthType
 from app.models.instance import Instance
 from app.models.server import Server
-from app.services.git_repo_service import GitRepoService
+from app.services.git_repo_service import GitRepoService, cleanup_temp_keys
 from tests.conftest import TestBase, _test_engine
 
 TestBase.metadata.create_all(_test_engine)
@@ -125,3 +126,39 @@ def test_get_clone_command_ssh_env(db_session):
     assert env
     assert "GIT_SSH_COMMAND" in env
     assert "/opt/dotmac/keys/repo.pem" in env["GIT_SSH_COMMAND"]
+
+
+def _extract_key_path(cmd: str) -> str:
+    parts = cmd.split()
+    for i, part in enumerate(parts):
+        if part == "-i" and i + 1 < len(parts):
+            return parts[i + 1]
+    raise AssertionError("ssh key path not found")
+
+
+def test_temp_ssh_key_is_unique_and_cleanable(db_session):
+    svc = GitRepoService(db_session)
+    repo = svc.create_repo(
+        label="ssh-temp",
+        url="git@github.com:acme/private.git",
+        auth_type=GitAuthType.ssh_key,
+        credential="-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----",
+    )
+
+    env1, _ = svc.get_repo_env(repo.repo_id)
+    env2, _ = svc.get_repo_env(repo.repo_id)
+    path1 = _extract_key_path(env1["GIT_SSH_COMMAND"])
+    path2 = _extract_key_path(env2["GIT_SSH_COMMAND"])
+
+    assert path1 != path2
+    assert path1.startswith("/tmp/")
+    assert path2.startswith("/tmp/")
+
+    for path in (path1, path2):
+        assert os.path.isfile(path)
+        mode = os.stat(path).st_mode & 0o777
+        assert mode == 0o600
+
+    cleanup_temp_keys()
+    assert not os.path.exists(path1)
+    assert not os.path.exists(path2)

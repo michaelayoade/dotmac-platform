@@ -37,27 +37,19 @@ def audit_list(
     page_size: int = Query(default=50, ge=10, le=200),
 ):
     require_admin(auth)
-    resolved_actor_type = audit_service.audit_events.parse_actor_type(actor_type)
-
-    # Normalize booleans
-    is_success_val = None
-    if is_success in {"true", "false"}:
-        is_success_val = is_success == "true"
-
-    events = audit_service.audit_events.list(
+    events, _, _ = audit_service.audit_events.list_for_web(
         db,
         actor_id=actor_id,
-        actor_type=resolved_actor_type,
+        actor_type=actor_type,
         action=action,
         entity_type=entity_type,
         request_id=request_id,
-        is_success=is_success_val,
+        is_success=is_success,
         status_code=status_code,
-        is_active=True,
         order_by=order_by,
         order_dir=order_dir,
-        limit=page_size,
-        offset=(page - 1) * page_size,
+        page=page,
+        page_size=page_size,
     )
 
     return templates.TemplateResponse(

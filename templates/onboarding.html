@@ -1,0 +1,67 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl">
+    <!-- Header -->
+    <div class="mb-10 text-center">
+        <h2 class="text-3xl font-display text-surface-800 dark:text-surface-100">Welcome to {{ brand.name }}</h2>
+        <p class="mt-2 text-[14px] text-surface-500 dark:text-surface-400">Complete these steps to set up your platform.</p>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="mb-10">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-[12px] font-semibold text-surface-500 dark:text-surface-400">{{ checklist.completed_count }} of {{ checklist.total_count }} completed</span>
+            <span class="text-[12px] font-semibold text-primary-600 dark:text-primary-400">{{ checklist.percent }}%</span>
+        </div>
+        <div class="h-2 w-full rounded-full bg-surface-200 dark:bg-surface-800">
+            <div class="h-2 rounded-full bg-primary-500 transition-all duration-500" style="width: {{ checklist.percent }}%"></div>
+        </div>
+    </div>
+
+    <!-- Steps -->
+    <div class="space-y-4">
+        {% for step in checklist.steps %}
+        <div class="rounded-xl border {{ 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20' if step.completed else 'border-surface-200/80 bg-white dark:border-surface-800/50 dark:bg-surface-900/80' }} p-5 transition-all">
+            <div class="flex items-start gap-4">
+                <!-- Check icon -->
+                <div class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full {{ 'bg-emerald-500 text-white' if step.completed else 'border-2 border-surface-300 dark:border-surface-600' }}">
+                    {% if step.completed %}
+                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                    {% endif %}
+                </div>
+
+                <!-- Content -->
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-[14px] font-semibold {{ 'text-emerald-700 dark:text-emerald-400 line-through' if step.completed else 'text-surface-800 dark:text-surface-100' }}">{{ step.title }}</h3>
+                    <p class="mt-1 text-[13px] {{ 'text-emerald-600/70 dark:text-emerald-500/70' if step.completed else 'text-surface-500 dark:text-surface-400' }}">{{ step.description }}</p>
+                </div>
+
+                <!-- CTA -->
+                {% if not step.completed %}
+                <a href="{{ step.url }}" class="shrink-0 rounded-lg bg-surface-900 dark:bg-primary-500 px-3.5 py-2 text-[12px] font-medium text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">
+                    Start
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Dismiss -->
+    <div class="mt-8 text-center">
+        <form hx-post="/onboarding/dismiss" hx-swap="none">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <button type="submit" class="text-[13px] text-surface-400 hover:text-surface-600 dark:text-surface-500 dark:hover:text-surface-300 transition">
+                Skip setup guide
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.body.addEventListener('onboarding-dismissed', function() {
+        window.location.href = '/dashboard';
+    });
+</script>
+{% endblock %}

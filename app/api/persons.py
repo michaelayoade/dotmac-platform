@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_role
@@ -24,17 +24,22 @@ def get_db():
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_role("admin"))],
 )
-def create_person(payload: PersonCreate, db: Session = Depends(get_db)):
+def create_person(payload: PersonCreate, request: Request, db: Session = Depends(get_db)):
+    org_id = getattr(request.state, "org_id", None)
+    if org_id and not payload.org_id:
+        payload = payload.model_copy(update={"org_id": org_id})
     return person_service.people.create(db, payload)
 
 
 @router.get("/{person_id}", response_model=PersonRead)
-def get_person(person_id: str, db: Session = Depends(get_db)):
-    return person_service.people.get(db, person_id)
+def get_person(person_id: str, request: Request, db: Session = Depends(get_db)):
+    org_id = getattr(request.state, "org_id", None)
+    return person_service.people.get(db, person_id, org_id=org_id)
 
 
 @router.get("", response_model=ListResponse[PersonRead])
 def list_people(
+    request: Request,
     email: str | None = None,
     status: str | None = None,
     is_active: bool | None = None,
@@ -44,7 +49,10 @@ def list_people(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
-    return person_service.people.list_response(db, email, status, is_active, order_by, order_dir, limit, offset)
+    org_id = getattr(request.state, "org_id", None)
+    return person_service.people.list_response(
+        db, email, status, is_active, order_by, order_dir, limit, offset, org_id=org_id
+    )
 
 
 @router.patch(
@@ -52,8 +60,9 @@ def list_people(
     response_model=PersonRead,
     dependencies=[Depends(require_role("admin"))],
 )
-def update_person(person_id: str, payload: PersonUpdate, db: Session = Depends(get_db)):
-    return person_service.people.update(db, person_id, payload)
+def update_person(person_id: str, payload: PersonUpdate, request: Request, db: Session = Depends(get_db)):
+    org_id = getattr(request.state, "org_id", None)
+    return person_service.people.update(db, person_id, payload, org_id=org_id)
 
 
 @router.delete(
@@ -61,5 +70,6 @@ def update_person(person_id: str, payload: PersonUpdate, db: Session = Depends(g
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_role("admin"))],
 )
-def delete_person(person_id: str, db: Session = Depends(get_db)):
-    person_service.people.delete(db, person_id)
+def delete_person(person_id: str, request: Request, db: Session = Depends(get_db)):
+    org_id = getattr(request.state, "org_id", None)
+    person_service.people.delete(db, person_id, org_id=org_id)

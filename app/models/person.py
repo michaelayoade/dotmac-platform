@@ -62,6 +62,7 @@ class Person(Base):
     status: Mapped[PersonStatus] = mapped_column(Enum(PersonStatus), default=PersonStatus.active)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     marketing_opt_in: Mapped[bool] = mapped_column(Boolean, default=False)
+    onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
 
     notes: Mapped[str | None] = mapped_column(Text)
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSON)

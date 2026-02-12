@@ -3,6 +3,7 @@ Deploy Task — Celery tasks for deployment pipeline and batch deployments.
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from celery import shared_task
 
@@ -64,11 +65,8 @@ def run_batch_deploy(batch_id: str) -> dict:
 
     with SessionLocal() as db:
         from app.services.batch_deploy_service import BatchDeployService
-        from app.services.deploy_service import DeployService
 
         batch_svc = BatchDeployService(db)
-        deploy_svc = DeployService(db)
-
         batch = batch_svc.get_by_id(UUID(batch_id))
         if not batch:
             return {"success": False, "error": "Batch not found"}
@@ -76,30 +74,63 @@ def run_batch_deploy(batch_id: str) -> dict:
         batch_svc.start_batch(UUID(batch_id))
         db.commit()
 
-        for instance_id_str in batch.instance_ids:
+        strategy = batch.strategy.value
+        instance_ids = list(batch.instance_ids or [])
+
+    if not instance_ids:
+        return {"success": False, "error": "No instances in batch"}
+
+    def _run_single(inst_id_str: str) -> tuple[str, bool]:
+        from uuid import UUID
+
+        with SessionLocal() as inner_db:
+            from app.services.batch_deploy_service import BatchDeployService
+            from app.services.deploy_service import DeployService
+
+            batch_svc_inner = BatchDeployService(inner_db)
+            deploy_svc = DeployService(inner_db)
             try:
-                iid = UUID(instance_id_str)
+                iid = UUID(inst_id_str)
                 deployment_id = deploy_svc.create_deployment(iid)
-                db.commit()
+                inner_db.commit()
 
                 admin_password = deploy_svc.get_deploy_secret(iid, deployment_id)
                 result = deploy_svc.run_deployment(iid, deployment_id, admin_password or "")
-                batch_svc.update_progress(UUID(batch_id), instance_id_str, result.get("success", False))
-                db.commit()
-
-                # For rolling strategy, stop on first failure
-                if batch.strategy.value == "rolling" and not result.get("success"):
-                    logger.warning(
-                        "Batch %s: stopping rolling deploy after failure on %s",
-                        batch_id,
-                        instance_id_str,
-                    )
-                    break
-
+                batch_svc_inner.update_progress(UUID(batch_id), inst_id_str, result.get("success", False))
+                inner_db.commit()
+                return inst_id_str, bool(result.get("success", False))
             except Exception:
-                logger.exception("Batch %s: deployment failed for %s", batch_id, instance_id_str)
-                batch_svc.update_progress(UUID(batch_id), instance_id_str, False)
-                db.commit()
+                logger.exception("Batch %s: deployment failed for %s", batch_id, inst_id_str)
+                batch_svc_inner.update_progress(UUID(batch_id), inst_id_str, False)
+                inner_db.commit()
+                return inst_id_str, False
+
+    if strategy == "parallel":
+        max_workers = min(4, max(1, len(instance_ids)))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(_run_single, inst_id) for inst_id in instance_ids]
+            for fut in as_completed(futures):
+                _ = fut.result()
+        logger.info("Batch deployment %s complete (parallel)", batch_id)
+        return {"success": True, "batch_id": batch_id}
+
+    if strategy == "canary":
+        first = instance_ids[0]
+        _, ok = _run_single(first)
+        if not ok:
+            logger.warning("Batch %s: canary failed on %s, aborting", batch_id, first)
+            return {"success": False, "batch_id": batch_id, "error": "canary failed"}
+        for inst_id in instance_ids[1:]:
+            _run_single(inst_id)
+        logger.info("Batch deployment %s complete (canary)", batch_id)
+        return {"success": True, "batch_id": batch_id}
+
+    # default: rolling/sequential
+    for inst_id in instance_ids:
+        _, ok = _run_single(inst_id)
+        if strategy == "rolling" and not ok:
+            logger.warning("Batch %s: stopping rolling deploy after failure on %s", batch_id, inst_id)
+            break
 
     logger.info("Batch deployment %s complete", batch_id)
     return {"success": True, "batch_id": batch_id}

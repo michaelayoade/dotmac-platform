@@ -96,9 +96,12 @@ def require_audit_auth(
                 if not expires_at or expires_at <= now:
                     raise HTTPException(status_code=401, detail="Session expired")
             actor_id = str(payload.get("sub"))
+            org_id = payload.get("org_id")
             request.state.actor_id = actor_id
             request.state.actor_type = "user"
-            return {"actor_type": "user", "actor_id": actor_id}
+            if org_id:
+                request.state.org_id = str(org_id)
+            return {"actor_type": "user", "actor_id": actor_id, "org_id": org_id}
         stmt = (
             select(AuthSession)
             .where(AuthSession.token_hash == hash_session_token(token))
@@ -110,7 +113,13 @@ def require_audit_auth(
         if session:
             request.state.actor_id = str(session.person_id)
             request.state.actor_type = "user"
-            return {"actor_type": "user", "actor_id": str(session.person_id)}
+            if session.org_id:
+                request.state.org_id = str(session.org_id)
+            return {
+                "actor_type": "user",
+                "actor_id": str(session.person_id),
+                "org_id": str(session.org_id) if session.org_id else None,
+            }
     if x_api_key:
         candidates = hash_api_key_candidates(x_api_key)
         api_key_stmt = (
@@ -124,7 +133,13 @@ def require_audit_auth(
         if api_key:
             request.state.actor_id = str(api_key.id)
             request.state.actor_type = "api_key"
-            return {"actor_type": "api_key", "actor_id": str(api_key.id)}
+            if api_key.org_id:
+                request.state.org_id = str(api_key.org_id)
+            return {
+                "actor_type": "api_key",
+                "actor_id": str(api_key.id),
+                "org_id": str(api_key.org_id) if api_key.org_id else None,
+            }
     raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -139,8 +154,11 @@ def require_user_auth(
     payload = decode_access_token(db, token)
     person_id = payload.get("sub")
     session_id = payload.get("session_id")
+    org_id = payload.get("org_id")
     if not person_id or not session_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    if not org_id:
+        raise HTTPException(status_code=401, detail="Organization context required")
 
     now = datetime.now(UTC)
     person_uuid = coerce_uuid(person_id)
@@ -156,6 +174,8 @@ def require_user_auth(
     session = db.scalar(stmt)
     if not session:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    if session.org_id and str(session.org_id) != str(org_id):
+        raise HTTPException(status_code=401, detail="Unauthorized")
     expires_at = _make_aware(session.expires_at)
     if expires_at and expires_at <= now:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -166,9 +186,11 @@ def require_user_auth(
     actor_id = str(person_id)
     request.state.actor_id = actor_id
     request.state.actor_type = "user"
+    request.state.org_id = str(org_id)
     return {
         "person_id": str(person_id),
         "session_id": str(session_id),
+        "org_id": str(org_id),
         "roles": roles,
         "scopes": scopes,
     }

@@ -34,12 +34,14 @@ class WebAuthContext:
         self,
         is_authenticated: bool = False,
         person_id: str | None = None,
+        org_id: str | None = None,
         user_name: str = "Guest",
         user_initials: str = "G",
         roles: list[str] | None = None,
     ):
         self.is_authenticated = is_authenticated
         self.person_id = person_id
+        self.org_id = org_id
         self.user_name = user_name
         self.user_initials = user_initials
         self.roles = roles or []
@@ -78,6 +80,7 @@ def require_web_auth(
 
         payload = decode_access_token(db, token)
         person_id = payload.get("sub")
+        org_id = payload.get("org_id")
         session_id = payload.get("session_id")
 
         if not person_id or not session_id:
@@ -105,6 +108,7 @@ def require_web_auth(
         return WebAuthContext(
             is_authenticated=True,
             person_id=person_id,
+            org_id=str(org_id) if org_id else None,
             user_name=name,
             user_initials=initials,
             roles=roles,

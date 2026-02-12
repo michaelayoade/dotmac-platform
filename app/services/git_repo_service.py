@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import atexit
 import os
 import shlex
+import tempfile
+import threading
 from uuid import UUID
 
 from sqlalchemy import select
@@ -111,6 +114,29 @@ class GitRepoService:
         stmt = stmt.order_by(GitRepository.created_at.desc())
         return list(self.db.scalars(stmt).all())
 
+    def list_for_web(self, active_only: bool = False) -> list[GitRepository]:
+        return self.list_repos(active_only=active_only)
+
+    def create_from_form(
+        self,
+        *,
+        label: str,
+        url: str,
+        auth_type: str,
+        credential: str | None,
+        default_branch: str,
+        is_platform_default: bool,
+    ) -> GitRepository:
+        auth_enum = GitAuthType(auth_type)
+        return self.create_repo(
+            label=label,
+            url=url,
+            auth_type=auth_enum,
+            credential=credential,
+            default_branch=default_branch,
+            is_platform_default=is_platform_default,
+        )
+
     def get_by_id(self, repo_id: UUID) -> GitRepository | None:
         return self.db.get(GitRepository, repo_id)
 
@@ -183,6 +209,27 @@ class GitRepoService:
                 continue
             repo.is_platform_default = False
 
+    @staticmethod
+    def serialize_repo(repo: GitRepository) -> dict:
+        return {
+            "repo_id": str(repo.repo_id),
+            "label": repo.label,
+            "url": repo.url,
+            "auth_type": repo.auth_type.value,
+            "default_branch": repo.default_branch,
+            "is_platform_default": repo.is_platform_default,
+            "is_active": repo.is_active,
+            "created_at": repo.created_at.isoformat() if repo.created_at else None,
+            "updated_at": repo.updated_at.isoformat() if repo.updated_at else None,
+        }
+
+    @staticmethod
+    def parse_auth_type(value: str) -> GitAuthType:
+        try:
+            return GitAuthType(value)
+        except ValueError as exc:
+            raise ValueError("Invalid auth_type") from exc
+
 
 def _inject_token(url: str, token: str) -> str:
     if "@" in url:
@@ -216,9 +263,43 @@ def format_env_prefix(env: dict[str, str]) -> str:
 
 
 def _write_temp_key(key: str) -> str:
-    path = f"/tmp/git_key_{abs(hash(key))}.pem"
-    if not os.path.isfile(path):
-        with open(path, "w") as f:
+    fd, path = tempfile.mkstemp(prefix="git_key_", suffix=".pem", dir="/tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
             f.write(key)
         os.chmod(path, 0o600)
+    except Exception:
+        try:
+            os.close(fd)
+        except Exception:
+            pass
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+        raise
+    _register_temp_key(path)
     return path
+
+
+_TEMP_KEY_PATHS: set[str] = set()
+_TEMP_KEY_LOCK = threading.Lock()
+
+
+def _register_temp_key(path: str) -> None:
+    with _TEMP_KEY_LOCK:
+        _TEMP_KEY_PATHS.add(path)
+
+
+def cleanup_temp_keys() -> None:
+    with _TEMP_KEY_LOCK:
+        paths = list(_TEMP_KEY_PATHS)
+        _TEMP_KEY_PATHS.clear()
+    for path in paths:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+atexit.register(cleanup_temp_keys)

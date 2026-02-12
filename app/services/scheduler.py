@@ -87,6 +87,17 @@ class ScheduledTasks(ListResponseMixin):
         db.delete(task)
         db.flush()
 
+    @staticmethod
+    def parse_args_kwargs(args_json: str, kwargs_json: str) -> tuple[list | None, dict | None]:
+        import json
+
+        try:
+            args = json.loads(args_json) if args_json.strip() else None
+            kwargs = json.loads(kwargs_json) if kwargs_json.strip() else None
+        except json.JSONDecodeError as exc:
+            raise ValueError("Invalid JSON for args/kwargs") from exc
+        return args, kwargs
+
 
 scheduled_tasks = ScheduledTasks()
 

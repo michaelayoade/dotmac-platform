@@ -78,12 +78,13 @@ def instance_logs_stream(
     logs: list[str] = []
     error: str | None = None
     try:
-        logs = MetricsExportService(db).export_instance_logs(
+        payload = MetricsExportService(db).get_logs_payload(
             instance_id,
             stream=stream,
             lines=lines,
             since=since,
         )
+        logs = payload["entries"]
     except ValueError as e:
         error = str(e)
     except Exception:

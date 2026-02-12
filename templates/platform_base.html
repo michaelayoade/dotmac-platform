@@ -1,7 +1,11 @@
 <!doctype html>
 <html lang="en"
-      x-data="{ darkMode: localStorage.getItem('darkMode') !== 'false', sidebarOpen: true }"
-      x-init="$watch('darkMode', val => localStorage.setItem('darkMode', val))"
+      x-data="{ darkMode: localStorage.getItem('darkMode') !== 'false', sidebarOpen: window.innerWidth >= 1024 }"
+      x-init="
+        $watch('darkMode', val => localStorage.setItem('darkMode', val));
+        const syncSidebar = () => { if (window.innerWidth >= 1024) { sidebarOpen = true; } };
+        window.addEventListener('resize', syncSidebar);
+      "
       :class="{ 'dark': darkMode }">
 <head>
     <meta charset="utf-8" />
@@ -61,15 +65,25 @@
     <link rel="stylesheet" href="/static/css/platform.css" />
     {% block head %}{% endblock %}
 </head>
-<body class="min-h-screen bg-surface-50 text-surface-900 dark:bg-surface-950 dark:text-surface-100 antialiased grain">
+<body class="min-h-screen bg-surface-50 text-surface-900 dark:bg-surface-950 dark:text-surface-100 antialiased grain"
+      x-effect="document.body.classList.toggle('overflow-hidden', sidebarOpen && window.innerWidth < 1024)">
 
 {% set brand_name = brand.name | default("DotMac Platform") %}
 {% set brand_mark = brand.mark | default("DP") %}
 {% set active = active_page | default("dashboard") %}
 
-<div class="flex h-screen overflow-hidden">
+<div class="flex h-screen overflow-hidden" @keydown.escape.window="sidebarOpen = false">
+    <div x-show="sidebarOpen && window.innerWidth < 1024"
+         class="fixed inset-0 z-40 bg-surface-900/40 backdrop-blur-sm"
+         @click="sidebarOpen = false"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"></div>
     <!-- ─── Sidebar ─── -->
-    <aside class="flex w-[260px] flex-col bg-white dark:bg-surface-900 border-r border-surface-200/80 dark:border-surface-800/60"
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col bg-white dark:bg-surface-900 border-r border-surface-200/80 dark:border-surface-800/60 lg:static lg:z-auto"
            x-show="sidebarOpen"
            x-transition:enter="transition ease-out duration-200"
            x-transition:enter-start="-translate-x-full"
@@ -87,26 +101,35 @@
                 <p class="truncate text-sm font-semibold text-surface-900 dark:text-surface-100">{{ brand_name }}</p>
                 <p class="text-[9px] font-medium uppercase tracking-[0.25em] text-surface-400 dark:text-surface-500">Control Plane</p>
             </div>
+            <button @click="sidebarOpen = false"
+                    class="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-md text-surface-400 hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-300 transition lg:hidden"
+                    aria-label="Close sidebar">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
         </div>
 
         <!-- Navigation -->
-        <nav class="flex-1 overflow-y-auto px-3 py-4">
-            <p class="mb-3 px-3 text-[9px] font-semibold uppercase tracking-[0.3em] text-surface-400 dark:text-surface-600">Overview</p>
+        <nav class="flex-1 overflow-y-auto px-3 py-4" aria-label="Primary">
+            <p class="mb-3 px-3 text-[9px] font-semibold uppercase tracking-[0.3em] text-surface-400 dark:text-surface-600">Core</p>
 
             <a href="/dashboard"
                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'dashboard' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                      {% if active == 'dashboard' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'dashboard' %}aria-current="page"{% endif %}>
                 <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25Z"/>
                 </svg>
-                Dashboard
+                Fleet Overview
             </a>
 
             <p class="mb-3 mt-6 px-3 text-[9px] font-semibold uppercase tracking-[0.3em] text-surface-400 dark:text-surface-600">Infrastructure</p>
 
             <a href="/servers"
                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'servers' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                      {% if active == 'servers' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'servers' %}aria-current="page"{% endif %}>
                 <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 17.25v-.228a4.5 4.5 0 0 0-.12-1.03l-2.268-9.64a3.375 3.375 0 0 0-3.285-2.602H7.923a3.375 3.375 0 0 0-3.285 2.602l-2.268 9.64a4.5 4.5 0 0 0-.12 1.03v.228m19.5 0a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3m19.5 0a3 3 0 0 0-3-3H5.25a3 3 0 0 0-3 3m16.5 0h.008v.008h-.008v-.008Zm-3 0h.008v.008h-.008v-.008Z"/>
                 </svg>
@@ -115,18 +138,104 @@
 
             <a href="/instances"
                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'instances' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                      {% if active == 'instances' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'instances' %}aria-current="page"{% endif %}>
                 <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/>
                 </svg>
                 Instances
             </a>
 
-            <p class="mb-3 mt-6 px-3 text-[9px] font-semibold uppercase tracking-[0.3em] text-surface-400 dark:text-surface-600">Identity</p>
+            <a href="/domains"
+               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
+                      {% if active == 'domains' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'domains' %}aria-current="page"{% endif %}>
+                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 12h9m-9 4.5h9m-9-9h9M3.75 6.75h.008v.008H3.75V6.75Zm0 4.5h.008v.008H3.75V11.25Zm0 4.5h.008v.008H3.75V15.75Z"/>
+                </svg>
+                Domains
+            </a>
+
+            <p class="mb-3 mt-6 px-3 text-[9px] font-semibold uppercase tracking-[0.3em] text-surface-400 dark:text-surface-600">Software</p>
+
+            <a href="/catalog"
+               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
+                      {% if active == 'catalog' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'catalog' %}aria-current="page"{% endif %}>
+                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 6.75h15m-15 4.5h15m-15 4.5h15"/>
+                </svg>
+                Catalog
+            </a>
+
+            <a href="/git-repos"
+               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
+                      {% if active == 'git_repos' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'git_repos' %}aria-current="page"{% endif %}>
+                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 15V6A1.5 1.5 0 0 1 6 4.5Zm-1.5 3h15M8.25 19.5h7.5"/>
+                </svg>
+                Git Repos
+            </a>
+
+            <p class="mb-3 mt-6 px-3 text-[9px] font-semibold uppercase tracking-[0.3em] text-surface-400 dark:text-surface-600">Operations</p>
+
+            <a href="/approvals"
+               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
+                      {% if active == 'approvals' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'approvals' %}aria-current="page"{% endif %}>
+                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+                </svg>
+                Approvals
+            </a>
+
+            <a href="/scheduler"
+               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
+                      {% if active == 'scheduler' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'scheduler' %}aria-current="page"{% endif %}>
+                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+                </svg>
+                Scheduler
+            </a>
+
+            <a href="/maintenance"
+               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
+                      {% if active == 'maintenance' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'maintenance' %}aria-current="page"{% endif %}>
+                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 12h12M6 12l4 4m-4-4l4-4"/>
+                </svg>
+                Maintenance
+            </a>
+
+            <a href="/alerts"
+               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
+                      {% if active == 'alerts' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'alerts' %}aria-current="page"{% endif %}>
+                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v4.5m0 3h.007v.008H12v-.008ZM21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+                </svg>
+                Alerts
+            </a>
+
+            <a href="/webhooks"
+               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
+                      {% if active == 'webhooks' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'webhooks' %}aria-current="page"{% endif %}>
+                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 7.5h9m-9 9h9M7.5 12h9M4.5 4.5h.008v.008H4.5V4.5Zm0 7.5h.008v.008H4.5V12Zm0 7.5h.008v.008H4.5v-.008Z"/>
+                </svg>
+                Webhooks
+            </a>
+
+            <p class="mb-3 mt-6 px-3 text-[9px] font-semibold uppercase tracking-[0.3em] text-surface-400 dark:text-surface-600">Security & Identity</p>
 
             <a href="/people"
                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'people' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                      {% if active == 'people' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'people' %}aria-current="page"{% endif %}>
                 <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"/>
                 </svg>
@@ -135,91 +244,50 @@
 
             <a href="/rbac"
                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'rbac' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                      {% if active == 'rbac' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'rbac' %}aria-current="page"{% endif %}>
                 <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 3.75l7.5 4.5v7.5l-7.5 4.5-7.5-4.5v-7.5L12 3.75Zm0 6.75a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5Z"/>
                 </svg>
                 Roles & Permissions
             </a>
 
-            <p class="mb-3 mt-6 px-3 text-[9px] font-semibold uppercase tracking-[0.3em] text-surface-400 dark:text-surface-600">System</p>
-
-            <a href="/settings"
-               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'settings' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
-                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
-                </svg>
-                Settings
-            </a>
-
-            <a href="/ssh-keys"
-               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'ssh_keys' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
-                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 0 1 0 4.243l-1.06 1.06m-2.12 2.12-2.47 2.47A2.25 2.25 0 0 1 8.37 16.5H6.75a2.25 2.25 0 0 1-2.25-2.25v-1.62a2.25 2.25 0 0 1 .66-1.59l2.47-2.47m6.12-3.84a3 3 0 1 1 4.242 4.243l-1.06 1.06m-6.12 6.12-2.12 2.12a3 3 0 1 1-4.243-4.243l2.12-2.12"/>
-                </svg>
-                SSH Keys
-            </a>
-
-            <a href="/git-repos"
-               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'git_repos' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
-                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 15V6A1.5 1.5 0 0 1 6 4.5Zm-1.5 3h15M8.25 19.5h7.5"/>
-                </svg>
-                Git Repos
-            </a>
-
-            <a href="/catalog"
-               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'catalog' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
-                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 6.75h15m-15 4.5h15m-15 4.5h15"/>
-                </svg>
-                Catalog
-            </a>
-
-            <a href="/usage"
-               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'usage' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
-                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7.5 15.75V10.5m4.5 5.25V7.5m4.5 8.25V4.5"/>
-                </svg>
-                Usage & Billing
-            </a>
-
-            <a href="/webhooks"
-               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'webhooks' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
-                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 7.5h9m-9 9h9M7.5 12h9M4.5 4.5h.008v.008H4.5V4.5Zm0 7.5h.008v.008H4.5V12Zm0 7.5h.008v.008H4.5v-.008Z"/>
-                </svg>
-                Webhooks
-            </a>
-
             <a href="/secrets"
                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'secrets' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                      {% if active == 'secrets' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'secrets' %}aria-current="page"{% endif %}>
                 <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V7.125a4.125 4.125 0 1 0-8.25 0V10.5m-.75 0h9a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 18v-6a1.5 1.5 0 0 1 1.5-1.5Z"/>
                 </svg>
                 Secrets
             </a>
 
-            <a href="/domains"
+            <a href="/ssh-keys"
                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'domains' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                      {% if active == 'ssh_keys' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'ssh_keys' %}aria-current="page"{% endif %}>
                 <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 12h9m-9 4.5h9m-9-9h9M3.75 6.75h.008v.008H3.75V6.75Zm0 4.5h.008v.008H3.75V11.25Zm0 4.5h.008v.008H3.75V15.75Z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 0 1 0 4.243l-1.06 1.06m-2.12 2.12-2.47 2.47A2.25 2.25 0 0 1 8.37 16.5H6.75a2.25 2.25 0 0 1-2.25-2.25v-1.62a2.25 2.25 0 0 1 .66-1.59l2.47-2.47m6.12-3.84a3 3 0 1 1 4.242 4.243l-1.06 1.06m-6.12 6.12-2.12 2.12a3 3 0 1 1-4.243-4.243l2.12-2.12"/>
                 </svg>
-                Domains
+                SSH Keys
             </a>
+
+            <a href="/audit"
+               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
+                      {% if active == 'audit' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'audit' %}aria-current="page"{% endif %}>
+                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+                </svg>
+                Audit Logs
+            </a>
+
+            <p class="mb-3 mt-6 px-3 text-[9px] font-semibold uppercase tracking-[0.3em] text-surface-400 dark:text-surface-600">Resilience</p>
 
             <a href="/drift"
                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'drift' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                      {% if active == 'drift' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'drift' %}aria-current="page"{% endif %}>
                 <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 12h9m-9 4.5h9m-9-9h9"/>
                     <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 6.75h.008v.008H4.5V6.75Zm0 4.5h.008v.008H4.5V11.25Zm0 4.5h.008v.008H4.5V15.75Z"/>
@@ -229,7 +297,8 @@
 
             <a href="/dr"
                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'dr' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                      {% if active == 'dr' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'dr' %}aria-current="page"{% endif %}>
                 <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 3.75c-4.556 0-8.25 3.694-8.25 8.25 0 4.556 3.694 8.25 8.25 8.25 4.556 0 8.25-3.694 8.25-8.25 0-4.556-3.694-8.25-8.25-8.25Zm0 4.5v4.5m0 3.75h.008"/>
                 </svg>
@@ -238,56 +307,35 @@
 
             <a href="/clone"
                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'clone' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                      {% if active == 'clone' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'clone' %}aria-current="page"{% endif %}>
                 <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 7.5h-6a2.25 2.25 0 0 0-2.25 2.25v6m8.25-8.25h2.25A2.25 2.25 0 0 1 21 9.75v8.25A2.25 2.25 0 0 1 18.75 20.25H10.5A2.25 2.25 0 0 1 8.25 18v-2.25"/>
                 </svg>
                 Clone Instance
             </a>
 
-            <a href="/audit"
+            <p class="mb-3 mt-6 px-3 text-[9px] font-semibold uppercase tracking-[0.3em] text-surface-400 dark:text-surface-600">System</p>
+
+            <a href="/usage"
                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'audit' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                      {% if active == 'usage' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'usage' %}aria-current="page"{% endif %}>
                 <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7.5 15.75V10.5m4.5 5.25V7.5m4.5 8.25V4.5"/>
                 </svg>
-                Audit Logs
+                Usage & Billing
             </a>
 
-            <a href="/approvals"
+            <a href="/settings"
                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'approvals' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
+                      {% if active == 'settings' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}"
+                {% if active == 'settings' %}aria-current="page"{% endif %}>
                 <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
                 </svg>
-                Approvals
-            </a>
-
-            <a href="/alerts"
-               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'alerts' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
-                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v4.5m0 3h.007v.008H12v-.008ZM21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
-                </svg>
-                Alerts
-            </a>
-
-            <a href="/scheduler"
-               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'scheduler' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
-                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
-                </svg>
-                Scheduler
-            </a>
-
-            <a href="/maintenance"
-               class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150
-                      {% if active == 'maintenance' %}nav-active bg-surface-50 text-surface-900 dark:bg-surface-800/50 dark:text-white{% else %}text-surface-500 hover:bg-surface-50 hover:text-surface-800 dark:text-surface-400 dark:hover:bg-surface-800/30 dark:hover:text-surface-200{% endif %}">
-                <svg class="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 12h12M6 12l4 4m-4-4l4-4"/>
-                </svg>
-                Maintenance
+                Settings
             </a>
         </nav>
 
@@ -321,7 +369,10 @@
         <!-- Top bar -->
         <header class="sticky top-0 z-30 flex h-[52px] items-center justify-between border-b border-surface-200/60 bg-white/90 px-6 backdrop-blur-xl dark:border-surface-800/40 dark:bg-surface-950/90">
             <div class="flex items-center gap-3">
-                <button @click="sidebarOpen = !sidebarOpen" class="rounded-md p-1.5 text-surface-400 hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-300 transition">
+                <button @click="sidebarOpen = !sidebarOpen"
+                        class="rounded-md p-1.5 text-surface-400 hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-300 transition"
+                        aria-controls="sidebar"
+                        :aria-expanded="sidebarOpen ? 'true' : 'false'">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
                 </button>
                 <h1 class="text-xl text-surface-800 dark:text-surface-100 font-display">{{ title | default("Dashboard") }}</h1>

@@ -121,6 +121,21 @@ class CatalogService:
         stmt = stmt.order_by(AppCatalogItem.created_at.desc())
         return list(self.db.scalars(stmt).all())
 
+    def get_index_bundle(self) -> dict:
+        from app.services.git_repo_service import GitRepoService
+
+        releases = self.list_releases(active_only=False)
+        bundles = self.list_bundles(active_only=False)
+        items = self.list_catalog_items(active_only=False)
+        repos = GitRepoService(self.db).list_repos(active_only=True)
+        return {"releases": releases, "bundles": bundles, "items": items, "repos": repos}
+
+    @staticmethod
+    def split_csv(value: str | None) -> list[str]:
+        if not value:
+            return []
+        return [v.strip() for v in value.split(",") if v.strip()]
+
     def get_catalog_item(self, catalog_id: UUID) -> AppCatalogItem | None:
         return self.db.get(AppCatalogItem, catalog_id)
 
@@ -130,3 +145,36 @@ class CatalogService:
             raise ValueError("Catalog item not found")
         item.is_active = False
         self.db.flush()
+
+    def serialize_release(self, release: AppRelease) -> dict:
+        return {
+            "release_id": str(release.release_id),
+            "name": release.name,
+            "version": release.version,
+            "git_ref": release.git_ref,
+            "git_repo_id": str(release.git_repo_id),
+            "notes": release.notes,
+            "is_active": release.is_active,
+            "created_at": release.created_at.isoformat() if release.created_at else None,
+        }
+
+    def serialize_bundle(self, bundle: AppBundle) -> dict:
+        return {
+            "bundle_id": str(bundle.bundle_id),
+            "name": bundle.name,
+            "description": bundle.description,
+            "module_slugs": bundle.module_slugs or [],
+            "flag_keys": bundle.flag_keys or [],
+            "is_active": bundle.is_active,
+            "created_at": bundle.created_at.isoformat() if bundle.created_at else None,
+        }
+
+    def serialize_item(self, item: AppCatalogItem) -> dict:
+        return {
+            "catalog_id": str(item.catalog_id),
+            "label": item.label,
+            "release_id": str(item.release_id),
+            "bundle_id": str(item.bundle_id),
+            "is_active": item.is_active,
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+        }

@@ -91,6 +91,18 @@ class PlanService:
     def list_all(self) -> list[Plan]:
         return list(self.db.scalars(select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.name)).all())
 
+    @staticmethod
+    def serialize_plan(plan: Plan) -> dict:
+        return {
+            "plan_id": str(plan.plan_id),
+            "name": plan.name,
+            "description": plan.description,
+            "max_users": plan.max_users,
+            "max_storage_gb": plan.max_storage_gb,
+            "allowed_modules": plan.allowed_modules,
+            "allowed_flags": plan.allowed_flags,
+        }
+
     def get_by_id(self, plan_id: UUID) -> Plan | None:
         return self.db.get(Plan, plan_id)
 

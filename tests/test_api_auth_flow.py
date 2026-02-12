@@ -16,7 +16,7 @@ from app.services.auth_flow import hash_password
 class TestLoginAPI:
     """Tests for the /auth/login endpoint."""
 
-    def test_login_success(self, client, db_session, person):
+    def test_login_success(self, client, db_session, person, person_org_code):
         """Test successful login."""
         # Create user credential
         credential = UserCredential(
@@ -28,7 +28,7 @@ class TestLoginAPI:
         db_session.add(credential)
         db_session.commit()
 
-        payload = {"username": credential.username, "password": "password123"}
+        payload = {"username": credential.username, "password": "password123", "org_code": person_org_code}
         response = client.post("/auth/login", json=payload)
         assert response.status_code == 200
         data = response.json()
@@ -384,7 +384,7 @@ class TestRefreshAPI:
         # Error handler transforms response to {"code": ..., "message": ..., "details": ...}
         assert "missing" in data["message"].lower() or "refresh" in data["message"].lower()
 
-    def test_refresh_v1_with_cookie(self, client, db_session, person):
+    def test_refresh_v1_with_cookie(self, client, db_session, person, person_org_code):
         """Test refresh using cookie on v1 endpoint."""
         credential = UserCredential(
             person_id=person.id,
@@ -395,7 +395,7 @@ class TestRefreshAPI:
         db_session.add(credential)
         db_session.commit()
 
-        login_payload = {"username": credential.username, "password": "password123"}
+        login_payload = {"username": credential.username, "password": "password123", "org_code": person_org_code}
         login_response = client.post("/auth/login", json=login_payload)
         assert login_response.status_code == 200
 
@@ -410,7 +410,7 @@ class TestRefreshAPI:
         data = response.json()
         assert "access_token" in data
 
-    def test_refresh_reuse_detected(self, client, db_session, person):
+    def test_refresh_reuse_detected(self, client, db_session, person, person_org_code):
         """Test refresh token reuse detection via API."""
         credential = UserCredential(
             person_id=person.id,
@@ -421,7 +421,7 @@ class TestRefreshAPI:
         db_session.add(credential)
         db_session.commit()
 
-        login_payload = {"username": credential.username, "password": "password123"}
+        login_payload = {"username": credential.username, "password": "password123", "org_code": person_org_code}
         login_response = client.post("/auth/login", json=login_payload)
         assert login_response.status_code == 200
 
@@ -514,7 +514,7 @@ class TestMFAAPI:
 class TestAuthFlowAPIV1:
     """Tests for the /api/v1/auth endpoints."""
 
-    def test_login_v1(self, client, db_session, person):
+    def test_login_v1(self, client, db_session, person, person_org_code):
         """Test login via v1 API."""
         credential = UserCredential(
             person_id=person.id,
@@ -525,7 +525,7 @@ class TestAuthFlowAPIV1:
         db_session.add(credential)
         db_session.commit()
 
-        payload = {"username": credential.username, "password": "password123"}
+        payload = {"username": credential.username, "password": "password123", "org_code": person_org_code}
         response = client.post("/api/v1/auth/login", json=payload)
         assert response.status_code == 200
 

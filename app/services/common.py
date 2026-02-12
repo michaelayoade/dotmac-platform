@@ -1,10 +1,13 @@
 import logging
+import re
 import uuid
 from typing import Any
 
 from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
+
+_GIT_REF_RE = re.compile(r"^[A-Za-z0-9._/-]{1,120}$")
 
 
 def coerce_uuid(value: str | uuid.UUID | None) -> uuid.UUID | None:
@@ -32,3 +35,13 @@ def apply_ordering(stmt: Any, order_by: str, order_dir: str, allowed_columns: di
 
 def apply_pagination(stmt: Any, limit: int, offset: int) -> Any:
     return stmt.limit(limit).offset(offset)
+
+
+def paginate_list(items: list, limit: int, offset: int) -> list:
+    return items[offset : offset + limit]
+
+
+def validate_git_ref(value: str, label: str) -> str:
+    if not _GIT_REF_RE.match(value) or ".." in value or value.startswith("-"):
+        raise HTTPException(status_code=400, detail=f"Invalid {label}")
+    return value

@@ -20,21 +20,9 @@ def list_repos(
 ):
     from app.services.git_repo_service import GitRepoService
 
-    repos = GitRepoService(db).list_repos(active_only=active_only)
-    return [
-        {
-            "repo_id": str(r.repo_id),
-            "label": r.label,
-            "url": r.url,
-            "auth_type": r.auth_type.value,
-            "default_branch": r.default_branch,
-            "is_platform_default": r.is_platform_default,
-            "is_active": r.is_active,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
-        }
-        for r in repos
-    ]
+    svc = GitRepoService(db)
+    repos = svc.list_repos(active_only=active_only)
+    return [svc.serialize_repo(r) for r in repos]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -48,13 +36,12 @@ def create_repo(
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
-    from app.models.git_repository import GitAuthType
     from app.services.git_repo_service import GitRepoService
 
     try:
-        auth_enum = GitAuthType(auth_type)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid auth_type")
+        auth_enum = GitRepoService.parse_auth_type(auth_type)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     try:
         repo = GitRepoService(db).create_repo(
@@ -66,7 +53,7 @@ def create_repo(
             is_platform_default=is_platform_default,
         )
         db.commit()
-        return {"repo_id": str(repo.repo_id), "label": repo.label}
+        return GitRepoService.serialize_repo(repo)
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -85,7 +72,6 @@ def update_repo(
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
-    from app.models.git_repository import GitAuthType
     from app.services.git_repo_service import GitRepoService
 
     kwargs: dict = {
@@ -98,14 +84,14 @@ def update_repo(
     }
     if auth_type is not None:
         try:
-            kwargs["auth_type"] = GitAuthType(auth_type)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid auth_type")
+            kwargs["auth_type"] = GitRepoService.parse_auth_type(auth_type)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     try:
         repo = GitRepoService(db).update_repo(repo_id, **kwargs)
         db.commit()
-        return {"repo_id": str(repo.repo_id), "label": repo.label}
+        return GitRepoService.serialize_repo(repo)
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))

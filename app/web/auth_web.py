@@ -9,7 +9,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.config import settings as platform_settings
 from app.rate_limit import login_limiter, password_reset_limiter
 from app.web.deps import WebAuthContext, get_db, optional_web_auth
 from app.web.helpers import ctx, validate_csrf_token
@@ -57,7 +56,8 @@ def login_submit(
         access_token = result.get("access_token")
         refresh_token = result.get("refresh_token")
 
-        _secure = not platform_settings.testing
+        scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+        _secure = scheme == "https"
         response = RedirectResponse("/dashboard", status_code=302)
         if access_token:
             response.set_cookie(

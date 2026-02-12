@@ -4,7 +4,6 @@ Instance API — Modules, feature flags, plans, backups, domains, lifecycle, and
 
 from __future__ import annotations
 
-import re
 from datetime import UTC
 from uuid import UUID
 
@@ -12,20 +11,70 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role, require_user_auth
+from app.schemas.instances import InstanceCreateRequest, InstanceCreateResponse
+from app.services.common import paginate_list
 
 router = APIRouter(prefix="/instances", tags=["instances"])
 
-_GIT_REF_RE = re.compile(r"^[A-Za-z0-9._/-]{1,120}$")
+
+# ──────────────────────────── Instance Creation ────────────────────────────
 
 
-def _validate_git_ref(value: str, label: str) -> str:
-    if not _GIT_REF_RE.match(value) or ".." in value or value.startswith("-"):
-        raise HTTPException(status_code=400, detail=f"Invalid {label}")
-    return value
+@router.post("", response_model=InstanceCreateResponse, status_code=status.HTTP_201_CREATED)
+def create_instance(
+    payload: InstanceCreateRequest,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.catalog_service import CatalogService
+    from app.services.git_repo_service import GitRepoService
+    from app.services.instance_service import InstanceService
 
+    svc = InstanceService(db)
+    try:
+        catalog_item = CatalogService(db).get_catalog_item(payload.catalog_item_id)
+        if not catalog_item or not catalog_item.is_active:
+            raise ValueError("Selected catalog item is invalid")
+        release = catalog_item.release
+        if not release or not release.is_active:
+            raise ValueError("Catalog release is invalid")
+        repo = GitRepoService(db).get_by_id(release.git_repo_id)
+        if not repo or not repo.is_active:
+            raise ValueError("Catalog release repo is invalid")
 
-def _paginate_list(items: list, limit: int, offset: int) -> list:
-    return items[offset : offset + limit]
+        instance = svc.create(
+            server_id=payload.server_id,
+            org_code=payload.org_code,
+            org_name=payload.org_name,
+            sector_type=payload.sector_type.value,
+            framework=payload.framework.value,
+            currency=payload.currency,
+            admin_email=payload.admin_email,
+            admin_username=payload.admin_username,
+            domain=payload.domain or None,
+            app_port=payload.app_port,
+            db_port=payload.db_port,
+            redis_port=payload.redis_port,
+            git_repo_id=release.git_repo_id,
+            catalog_item_id=payload.catalog_item_id,
+        )
+        db.commit()
+        return InstanceCreateResponse(
+            instance_id=instance.instance_id,
+            server_id=instance.server_id,
+            org_code=instance.org_code,
+            org_name=instance.org_name,
+            app_url=instance.app_url,
+            domain=instance.domain,
+            status=instance.status.value,
+            catalog_item_id=instance.catalog_item_id,
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        db.rollback()
+        raise
 
 
 # ──────────────────────────── Modules ────────────────────────────
@@ -43,7 +92,7 @@ def list_instance_modules(
 
     svc = ModuleService(db)
     modules = svc.get_instance_modules(instance_id)
-    return _paginate_list(modules, limit, offset)
+    return [svc.serialize_instance_module(m) for m in paginate_list(modules, limit, offset)]
 
 
 @router.put("/{instance_id}/modules/{module_id}")
@@ -76,18 +125,7 @@ def list_all_modules(
 
     svc = ModuleService(db)
     modules = svc.list_all()
-    return [
-        {
-            "module_id": str(m.module_id),
-            "name": m.name,
-            "slug": m.slug,
-            "description": m.description,
-            "schemas": m.schemas,
-            "dependencies": m.dependencies,
-            "is_core": m.is_core,
-        }
-        for m in _paginate_list(modules, limit, offset)
-    ]
+    return [svc.serialize_module(m) for m in paginate_list(modules, limit, offset)]
 
 
 # ──────────────────────────── Feature Flags ──────────────────────
@@ -105,7 +143,7 @@ def list_instance_flags(
 
     svc = FeatureFlagService(db)
     flags = svc.list_for_instance(instance_id)
-    return _paginate_list(flags, limit, offset)
+    return [svc.serialize_flag_entry(f) for f in paginate_list(flags, limit, offset)]
 
 
 @router.put("/{instance_id}/flags/{flag_key}")
@@ -153,18 +191,7 @@ def list_plans(
 
     svc = PlanService(db)
     plans = svc.list_all()
-    return [
-        {
-            "plan_id": str(p.plan_id),
-            "name": p.name,
-            "description": p.description,
-            "max_users": p.max_users,
-            "max_storage_gb": p.max_storage_gb,
-            "allowed_modules": p.allowed_modules,
-            "allowed_flags": p.allowed_flags,
-        }
-        for p in _paginate_list(plans, limit, offset)
-    ]
+    return [svc.serialize_plan(p) for p in paginate_list(plans, limit, offset)]
 
 
 @router.put("/{instance_id}/plan")
@@ -238,19 +265,7 @@ def secret_rotation_history(
     from app.services.secret_rotation_service import SecretRotationService
 
     logs = SecretRotationService(db).get_rotation_history(instance_id, limit=limit, offset=offset)
-    return [
-        {
-            "id": log.id,
-            "secret_name": log.secret_name,
-            "status": log.status.value,
-            "rotated_by": log.rotated_by,
-            "error_message": log.error_message,
-            "started_at": log.started_at.isoformat() if log.started_at else None,
-            "completed_at": log.completed_at.isoformat() if log.completed_at else None,
-            "created_at": log.created_at.isoformat() if log.created_at else None,
-        }
-        for log in logs
-    ]
+    return [SecretRotationService.serialize_log(log) for log in logs]
 
 
 # ──────────────────────────── Backups ────────────────────────────
@@ -268,16 +283,7 @@ def list_backups(
 
     svc = BackupService(db)
     backups = svc.list_for_instance(instance_id)
-    return [
-        {
-            "backup_id": str(b.backup_id),
-            "backup_type": b.backup_type.value,
-            "status": b.status.value,
-            "size_bytes": b.size_bytes,
-            "created_at": b.created_at.isoformat() if b.created_at else None,
-        }
-        for b in _paginate_list(backups, limit, offset)
-    ]
+    return [svc.serialize_backup(b) for b in paginate_list(backups, limit, offset)]
 
 
 @router.post("/{instance_id}/backups", status_code=status.HTTP_201_CREATED)
@@ -292,11 +298,7 @@ def create_backup(
     try:
         backup = svc.create_backup(instance_id)
         db.commit()
-        return {
-            "backup_id": str(backup.backup_id),
-            "status": backup.status.value,
-            "file_path": backup.file_path,
-        }
+        return svc.serialize_backup(backup, include_file_path=True)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -351,16 +353,7 @@ def list_domains(
 
     svc = DomainService(db)
     domains = svc.list_for_instance(instance_id)
-    return [
-        {
-            "domain_id": str(d.domain_id),
-            "domain": d.domain,
-            "is_primary": d.is_primary,
-            "status": d.status.value,
-            "ssl_expires_at": d.ssl_expires_at.isoformat() if d.ssl_expires_at else None,
-        }
-        for d in _paginate_list(domains, limit, offset)
-    ]
+    return [svc.serialize_domain(d) for d in paginate_list(domains, limit, offset)]
 
 
 @router.post("/{instance_id}/domains", status_code=status.HTTP_201_CREATED)
@@ -377,12 +370,7 @@ def add_domain(
     try:
         d = svc.add_domain(instance_id, domain, is_primary)
         db.commit()
-        return {
-            "domain_id": str(d.domain_id),
-            "domain": d.domain,
-            "verification_token": d.verification_token,
-            "status": d.status.value,
-        }
+        return svc.serialize_domain(d, include_token=True)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -552,15 +540,16 @@ def set_version(
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
-    from app.models.instance import Instance
+    from app.services.instance_service import InstanceService
 
-    instance = db.get(Instance, instance_id)
-    if not instance:
-        raise HTTPException(status_code=404, detail="Instance not found")
-    if git_branch is not None:
-        instance.git_branch = _validate_git_ref(git_branch, "git_branch")
-    if git_tag is not None:
-        instance.git_tag = _validate_git_ref(git_tag, "git_tag")
+    try:
+        instance = InstanceService(db).set_git_refs(
+            instance_id,
+            git_branch=git_branch,
+            git_tag=git_tag,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     db.commit()
     return {
         "git_branch": instance.git_branch,
@@ -612,18 +601,7 @@ def list_batch_deploys(
 
     svc = BatchDeployService(db)
     batches = svc.list_batches(limit=limit, offset=offset)
-    return [
-        {
-            "batch_id": str(b.batch_id),
-            "strategy": b.strategy.value,
-            "status": b.status.value,
-            "total_instances": b.total_instances,
-            "completed_count": b.completed_count,
-            "failed_count": b.failed_count,
-            "created_at": b.created_at.isoformat() if b.created_at else None,
-        }
-        for b in batches
-    ]
+    return [svc.serialize_batch(b) for b in batches]
 
 
 # ──────────────────────────── Resource Stats ─────────────────────
@@ -640,18 +618,8 @@ def get_resource_stats(
 
     svc = HealthService(db)
     consumers = svc.get_top_resource_consumers()
-    consumers = _paginate_list(consumers, limit, offset)
-    return [
-        {
-            "org_code": c["instance"].org_code,
-            "instance_id": str(c["instance"].instance_id),
-            "cpu_percent": c["cpu_percent"],
-            "memory_mb": c["memory_mb"],
-            "db_size_mb": c["db_size_mb"],
-            "active_connections": c["active_connections"],
-        }
-        for c in consumers
-    ]
+    consumers = paginate_list(consumers, limit, offset)
+    return [svc.serialize_consumer(c) for c in consumers]
 
 
 # ──────────────────────────── Webhooks ───────────────────────────
@@ -668,17 +636,7 @@ def list_webhooks(
 
     svc = WebhookService(db)
     endpoints = svc.list_endpoints()
-    return [
-        {
-            "endpoint_id": str(e.endpoint_id),
-            "url": e.url,
-            "events": e.events,
-            "description": e.description,
-            "instance_id": str(e.instance_id) if e.instance_id else None,
-            "is_active": e.is_active,
-        }
-        for e in _paginate_list(endpoints, limit, offset)
-    ]
+    return [svc.serialize_endpoint(e) for e in paginate_list(endpoints, limit, offset)]
 
 
 @router.post("/webhooks", status_code=status.HTTP_201_CREATED)
@@ -696,7 +654,7 @@ def create_webhook(
     svc = WebhookService(db)
     ep = svc.create_endpoint(url, events, secret, description, instance_id)
     db.commit()
-    return {"endpoint_id": str(ep.endpoint_id), "url": ep.url}
+    return svc.serialize_endpoint(ep)
 
 
 @router.delete("/webhooks/{endpoint_id}")
@@ -725,17 +683,7 @@ def list_webhook_deliveries(
 
     svc = WebhookService(db)
     deliveries = svc.get_deliveries(endpoint_id, limit=limit, offset=offset)
-    return [
-        {
-            "delivery_id": str(d.delivery_id),
-            "event": d.event,
-            "status": d.status.value,
-            "response_code": d.response_code,
-            "attempts": d.attempts,
-            "created_at": d.created_at.isoformat() if d.created_at else None,
-        }
-        for d in deliveries
-    ]
+    return [svc.serialize_delivery(d) for d in deliveries]
 
 
 # ──────────────────────────── Tenant Audit ───────────────────────
@@ -754,16 +702,7 @@ def get_tenant_audit_log(
 
     svc = TenantAuditService(db)
     logs = svc.get_logs(instance_id, action=action, limit=limit, offset=offset)
-    return [
-        {
-            "id": entry.id,
-            "action": entry.action,
-            "user_name": entry.user_name,
-            "details": entry.details,
-            "created_at": entry.created_at.isoformat() if entry.created_at else None,
-        }
-        for entry in logs
-    ]
+    return [svc.serialize_log(entry) for entry in logs]
 
 
 # ──────────────────────────── Instance Cloning ───────────────────
@@ -816,17 +755,7 @@ def get_clone_status(
     op = CloneService(db).get_clone_operation(clone_id)
     if not op or op.source_instance_id != instance_id:
         raise HTTPException(status_code=404, detail="Clone operation not found")
-    return {
-        "clone_id": str(op.clone_id),
-        "source_instance_id": str(op.source_instance_id),
-        "target_instance_id": str(op.target_instance_id) if op.target_instance_id else None,
-        "status": op.status.value,
-        "progress_pct": op.progress_pct,
-        "current_step": op.current_step,
-        "error_message": op.error_message,
-        "created_at": op.created_at.isoformat() if op.created_at else None,
-        "completed_at": op.completed_at.isoformat() if op.completed_at else None,
-    }
+    return CloneService.serialize_operation(op)
 
 
 # ──────────────────────────── Maintenance Windows ────────────────
@@ -844,16 +773,7 @@ def list_maintenance_windows(
 
     svc = MaintenanceService(db)
     windows = svc.get_windows(instance_id)
-    return [
-        {
-            "window_id": str(w.window_id),
-            "day_of_week": w.day_of_week,
-            "start_time": w.start_time.isoformat(),
-            "end_time": w.end_time.isoformat(),
-            "timezone": w.timezone,
-        }
-        for w in _paginate_list(windows, limit, offset)
-    ]
+    return [svc.serialize_window(w) for w in paginate_list(windows, limit, offset)]
 
 
 @router.post("/{instance_id}/maintenance-windows", status_code=status.HTTP_201_CREATED)
@@ -923,15 +843,7 @@ def get_instance_usage(
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid usage metric: {metric!r}")
     records = svc.get_usage(instance_id, metric=m)
-    return [
-        {
-            "metric": r.metric.value,
-            "value": r.value,
-            "period_start": r.period_start.isoformat(),
-            "period_end": r.period_end.isoformat(),
-        }
-        for r in _paginate_list(records, limit, offset)
-    ]
+    return [svc.serialize_record(r) for r in paginate_list(records, limit, offset)]
 
 
 @router.get("/{instance_id}/billing-summary")
@@ -961,17 +873,9 @@ def get_plan_compliance(
 ):
     from app.services.resource_enforcement import ResourceEnforcementService
 
-    violations = ResourceEnforcementService(db).check_plan_compliance(instance_id)
-    return [
-        {
-            "kind": v.kind,
-            "message": v.message,
-            "current": v.current,
-            "limit": v.limit,
-            "percent": v.percent,
-        }
-        for v in violations
-    ]
+    svc = ResourceEnforcementService(db)
+    violations = svc.check_plan_compliance(instance_id)
+    return [svc.serialize_violation(v) for v in violations]
 
 
 @router.get("/{instance_id}/usage-summary")
@@ -1003,13 +907,7 @@ def list_tags(
 
     svc = TagService(db)
     tags = svc.get_tags(instance_id)
-    return [
-        {
-            "key": t.key,
-            "value": t.value,
-        }
-        for t in _paginate_list(tags, limit, offset)
-    ]
+    return [svc.serialize_tag(t) for t in paginate_list(tags, limit, offset)]
 
 
 @router.put("/{instance_id}/tags/{key}")
@@ -1060,20 +958,7 @@ def list_pending_approvals(
 
     svc = ApprovalService(db)
     approvals = svc.get_pending()
-    return [
-        {
-            "approval_id": str(a.approval_id),
-            "instance_id": str(a.instance_id),
-            "upgrade_id": str(a.upgrade_id) if a.upgrade_id else None,
-            "requested_by_name": a.requested_by_name,
-            "deployment_type": a.deployment_type,
-            "git_ref": a.git_ref,
-            "reason": a.reason,
-            "status": a.status.value,
-            "created_at": a.created_at.isoformat() if a.created_at else None,
-        }
-        for a in _paginate_list(approvals, limit, offset)
-    ]
+    return [svc.serialize_approval(a) for a in paginate_list(approvals, limit, offset)]
 
 
 @router.post("/{instance_id}/approvals", status_code=status.HTTP_201_CREATED)
@@ -1118,15 +1003,7 @@ def approve_deploy(
             approval_id,
             approved_by=str(auth.get("person_id", "")) if isinstance(auth, dict) else "unknown",
         )
-        upgrade_eta = None
-        upgrade_id = None
-        if approval.deployment_type == "upgrade" and approval.upgrade_id:
-            from app.models.app_upgrade import AppUpgrade
-
-            upgrade = db.get(AppUpgrade, approval.upgrade_id)
-            if upgrade:
-                upgrade_id = str(upgrade.upgrade_id)
-                upgrade_eta = upgrade.scheduled_for
+        upgrade_id, upgrade_eta = svc.resolve_upgrade_schedule(approval)
 
         db.commit()
         if upgrade_id:
@@ -1178,11 +1055,7 @@ def get_drift_report(
     report = svc.get_latest_report(instance_id)
     if not report:
         return {"has_drift": None, "message": "No drift report yet"}
-    return {
-        "has_drift": report.has_drift,
-        "diffs": report.diffs,
-        "detected_at": report.detected_at.isoformat() if report.detected_at else None,
-    }
+    return svc.serialize_report(report)
 
 
 @router.post("/{instance_id}/drift/detect", status_code=status.HTTP_200_OK)
@@ -1197,11 +1070,7 @@ def detect_drift(
     try:
         report = svc.detect_drift(instance_id)
         db.commit()
-        return {
-            "has_drift": report.has_drift,
-            "diffs": report.diffs,
-            "detected_at": report.detected_at.isoformat() if report.detected_at else None,
-        }
+        return svc.serialize_report(report)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1233,22 +1102,9 @@ def list_upgrades(
 ):
     from app.services.upgrade_service import UpgradeService
 
-    upgrades = UpgradeService(db).list_upgrades(instance_id, limit=limit, offset=offset)
-    return [
-        {
-            "upgrade_id": str(u.upgrade_id),
-            "catalog_item_id": str(u.catalog_item_id),
-            "status": u.status.value,
-            "scheduled_for": u.scheduled_for.isoformat() if u.scheduled_for else None,
-            "started_at": u.started_at.isoformat() if u.started_at else None,
-            "completed_at": u.completed_at.isoformat() if u.completed_at else None,
-            "cancelled_by": u.cancelled_by,
-            "cancelled_by_name": u.cancelled_by_name,
-            "error_message": u.error_message,
-            "created_at": u.created_at.isoformat() if u.created_at else None,
-        }
-        for u in upgrades
-    ]
+    svc = UpgradeService(db)
+    upgrades = svc.list_upgrades(instance_id, limit=limit, offset=offset)
+    return [svc.serialize_upgrade(u) for u in upgrades]
 
 
 @router.post("/{instance_id}/upgrades", status_code=status.HTTP_202_ACCEPTED)
@@ -1357,20 +1213,7 @@ def list_alert_rules(
 
     svc = AlertService(db)
     rules = svc.list_rules()
-    return [
-        {
-            "rule_id": str(r.rule_id),
-            "name": r.name,
-            "metric": r.metric.value,
-            "operator": r.operator.value,
-            "threshold": r.threshold,
-            "channel": r.channel.value,
-            "instance_id": str(r.instance_id) if r.instance_id else None,
-            "is_active": r.is_active,
-            "cooldown_minutes": r.cooldown_minutes,
-        }
-        for r in _paginate_list(rules, limit, offset)
-    ]
+    return [svc.serialize_rule(r) for r in paginate_list(rules, limit, offset)]
 
 
 @router.post("/alerts/rules", status_code=status.HTTP_201_CREATED)
@@ -1439,19 +1282,7 @@ def list_alert_events(
 
     svc = AlertService(db)
     events = svc.get_events(instance_id=instance_id, limit=limit, offset=offset)
-    return [
-        {
-            "event_id": str(e.event_id),
-            "rule_id": str(e.rule_id),
-            "instance_id": str(e.instance_id) if e.instance_id else None,
-            "metric_value": e.metric_value,
-            "threshold": e.threshold,
-            "triggered_at": e.triggered_at.isoformat() if e.triggered_at else None,
-            "resolved_at": e.resolved_at.isoformat() if e.resolved_at else None,
-            "notified": e.notified,
-        }
-        for e in events
-    ]
+    return [svc.serialize_event(e) for e in events]
 
 
 # ──────────────────────────── Tenant Self-Service ────────────────
@@ -1469,16 +1300,7 @@ def tenant_health(
 
     svc = HealthService(db)
     checks = svc.get_recent_checks(instance_id, limit=limit)
-    return [
-        {
-            "status": c.status.value,
-            "response_ms": c.response_ms,
-            "db_healthy": c.db_healthy,
-            "redis_healthy": c.redis_healthy,
-            "checked_at": c.checked_at.isoformat() if c.checked_at else None,
-        }
-        for c in checks
-    ]
+    return [svc.serialize_check(c) for c in checks]
 
 
 @router.get("/{instance_id}/self-service/flags")
@@ -1494,7 +1316,7 @@ def tenant_flags(
 
     svc = FeatureFlagService(db)
     flags = svc.list_for_instance(instance_id)
-    return _paginate_list(flags, limit, offset)
+    return [svc.serialize_flag_entry(f) for f in paginate_list(flags, limit, offset)]
 
 
 @router.get("/{instance_id}/self-service/backups")
@@ -1510,13 +1332,4 @@ def tenant_backups(
 
     svc = BackupService(db)
     backups = svc.list_for_instance(instance_id)
-    return [
-        {
-            "backup_id": str(b.backup_id),
-            "backup_type": b.backup_type.value,
-            "status": b.status.value,
-            "size_bytes": b.size_bytes,
-            "created_at": b.created_at.isoformat() if b.created_at else None,
-        }
-        for b in _paginate_list(backups, limit, offset)
-    ]
+    return [svc.serialize_backup(b) for b in paginate_list(backups, limit, offset)]

@@ -31,24 +31,7 @@ def list_notifications(
 
     pid = _person_id(auth)
     svc = NotificationService(db)
-    notifications = svc.get_recent(pid, limit=limit, offset=offset)
-    unread_count = svc.get_unread_count(pid)
-    return {
-        "unread_count": unread_count,
-        "notifications": [
-            {
-                "notification_id": str(n.notification_id),
-                "category": n.category.value,
-                "severity": n.severity.value,
-                "title": n.title,
-                "message": n.message,
-                "link": n.link,
-                "is_read": n.is_read,
-                "created_at": n.created_at.isoformat() if n.created_at else None,
-            }
-            for n in notifications
-        ],
-    }
+    return svc.get_api_payload(pid, limit=limit, offset=offset)
 
 
 @router.get("/unread-count")

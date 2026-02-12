@@ -54,6 +54,20 @@ class BatchDeployService:
         stmt = select(DeploymentBatch).order_by(DeploymentBatch.created_at.desc()).limit(limit).offset(offset)
         return list(self.db.scalars(stmt).all())
 
+    @staticmethod
+    def serialize_batch(batch: DeploymentBatch) -> dict:
+        return {
+            "batch_id": str(batch.batch_id),
+            "strategy": batch.strategy.value,
+            "status": batch.status.value,
+            "total_instances": batch.total_instances,
+            "completed_count": batch.completed_count,
+            "failed_count": batch.failed_count,
+            "created_at": batch.created_at.isoformat() if batch.created_at else None,
+            "started_at": batch.started_at.isoformat() if batch.started_at else None,
+            "completed_at": batch.completed_at.isoformat() if batch.completed_at else None,
+        }
+
     def get_by_id(self, batch_id: UUID) -> DeploymentBatch | None:
         return self.db.get(DeploymentBatch, batch_id)
 

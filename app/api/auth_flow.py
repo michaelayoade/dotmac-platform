@@ -1,9 +1,11 @@
 from datetime import UTC, datetime
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_role
 from app.db import SessionLocal
 from app.models.auth import Session as AuthSession
 from app.models.auth import SessionStatus, UserCredential
@@ -14,6 +16,9 @@ from app.rate_limit import (
     password_change_limiter,
     password_reset_limiter,
     refresh_limiter,
+    signup_limiter,
+    signup_resend_limiter,
+    signup_verify_limiter,
 )
 from app.schemas.auth import MFAMethodRead
 from app.schemas.auth_flow import (
@@ -40,6 +45,17 @@ from app.schemas.auth_flow import (
     SessionListResponse,
     SessionRevokeResponse,
     TokenResponse,
+)
+from app.schemas.signup import (
+    SignupBillingConfirmRequest,
+    SignupBillingConfirmResponse,
+    SignupProvisionResponse,
+    SignupResendRequest,
+    SignupResendResponse,
+    SignupStartRequest,
+    SignupStartResponse,
+    SignupVerifyRequest,
+    SignupVerifyResponse,
 )
 from app.services import auth_flow as auth_flow_service
 from app.services import avatar as avatar_service
@@ -88,7 +104,145 @@ def get_db():
 )
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
     login_limiter.check(request)
-    return auth_flow_service.auth_flow.login_response(db, payload.username, payload.password, request, payload.provider)
+    return auth_flow_service.auth_flow.login_response(
+        db,
+        payload.username,
+        payload.password,
+        request,
+        payload.provider,
+        payload.org_code,
+    )
+
+
+@router.post(
+    "/signup",
+    response_model=SignupStartResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={400: {"model": ErrorResponse}},
+)
+def signup_start(payload: SignupStartRequest, request: Request, db: Session = Depends(get_db)):
+    signup_limiter.check(request)
+    from app.services.signup_service import SignupService
+
+    svc = SignupService(db)
+    try:
+        signup, token = svc.safe_start_signup(
+            org_name=payload.org_name,
+            org_code=payload.org_code,
+            catalog_item_id=payload.catalog_item_id,
+            admin_email=str(payload.admin_email),
+            admin_username=payload.admin_username,
+            admin_password=payload.admin_password,
+            domain=payload.domain,
+            server_id=payload.server_id,
+            trial_days=payload.trial_days,
+        )
+        sent = svc.send_verification(signup, token)
+        if not sent:
+            raise ValueError("Unable to send verification email")
+        db.commit()
+        return SignupStartResponse(signup_id=signup.signup_id, status=signup.status.value, email_sent=True)
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail={"code": "SIGNUP_FAILED", "message": str(e)})
+
+
+@router.post(
+    "/signup/resend",
+    response_model=SignupResendResponse,
+    status_code=status.HTTP_200_OK,
+    responses={400: {"model": ErrorResponse}},
+)
+def signup_resend(payload: SignupResendRequest, request: Request, db: Session = Depends(get_db)):
+    signup_resend_limiter.check(request)
+    from app.services.signup_service import SignupService
+
+    svc = SignupService(db)
+    try:
+        signup, token = svc.resend_verification(signup_id=payload.signup_id)
+        sent = svc.send_verification(signup, token)
+        if not sent:
+            raise ValueError("Unable to send verification email")
+        db.commit()
+        return SignupResendResponse(signup_id=signup.signup_id, status=signup.status.value, email_sent=True)
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail={"code": "SIGNUP_RESEND_FAILED", "message": str(e)})
+
+
+@router.post(
+    "/signup/verify",
+    response_model=SignupVerifyResponse,
+    status_code=status.HTTP_200_OK,
+    responses={400: {"model": ErrorResponse}},
+)
+def signup_verify(payload: SignupVerifyRequest, request: Request, db: Session = Depends(get_db)):
+    signup_verify_limiter.check(request)
+    from app.services.signup_service import SignupService
+
+    svc = SignupService(db)
+    try:
+        signup = svc.verify(signup_id=payload.signup_id, token=payload.token)
+        db.commit()
+        return SignupVerifyResponse(
+            signup_id=signup.signup_id,
+            status=signup.status.value,
+            verified_at=signup.email_verified_at,
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail={"code": "SIGNUP_VERIFY_FAILED", "message": str(e)})
+
+
+@router.post(
+    "/signup/{signup_id}/confirm-billing",
+    response_model=SignupBillingConfirmResponse,
+    status_code=status.HTTP_200_OK,
+    responses={400: {"model": ErrorResponse}},
+)
+def signup_confirm_billing(
+    signup_id: UUID,
+    payload: SignupBillingConfirmRequest,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.signup_service import SignupService
+
+    svc = SignupService(db)
+    try:
+        signup = svc.confirm_billing(signup_id=signup_id, billing_reference=payload.billing_reference)
+        db.commit()
+        return SignupBillingConfirmResponse(
+            signup_id=signup.signup_id,
+            status=signup.status.value,
+            billing_confirmed_at=signup.billing_confirmed_at,
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail={"code": "SIGNUP_BILLING_FAILED", "message": str(e)})
+
+
+@router.post(
+    "/signup/{signup_id}/provision",
+    response_model=SignupProvisionResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={400: {"model": ErrorResponse}},
+)
+def signup_provision(
+    signup_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.signup_service import SignupService
+
+    svc = SignupService(db)
+    try:
+        result = svc.provision(signup_id=signup_id)
+        db.commit()
+        return SignupProvisionResponse(**result)
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail={"code": "SIGNUP_PROVISION_FAILED", "message": str(e)})
 
 
 @router.post(

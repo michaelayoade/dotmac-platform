@@ -5,9 +5,11 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_role, require_user_auth
+from app.api.deps import get_db, require_instance_access, require_role, require_user_auth
+from app.models.instance import Instance
 
 router = APIRouter(prefix="/dr/plans", tags=["disaster-recovery"])
 
@@ -24,6 +26,7 @@ def create_dr_plan(
     from app.services.dr_service import DisasterRecoveryService
 
     try:
+        require_instance_access(instance_id, db=db, auth=auth)
         plan = DisasterRecoveryService(db).create_dr_plan(
             instance_id,
             backup_schedule_cron=backup_schedule_cron,
@@ -44,24 +47,23 @@ def list_dr_plans(
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
+    from app.models.dr_plan import DisasterRecoveryPlan
     from app.services.dr_service import DisasterRecoveryService
 
-    plans = DisasterRecoveryService(db).list_plans(limit=limit, offset=offset)
-    return [
-        {
-            "dr_plan_id": str(p.dr_plan_id),
-            "instance_id": str(p.instance_id),
-            "backup_schedule_cron": p.backup_schedule_cron,
-            "retention_days": p.retention_days,
-            "target_server_id": str(p.target_server_id) if p.target_server_id else None,
-            "last_backup_at": p.last_backup_at.isoformat() if p.last_backup_at else None,
-            "last_tested_at": p.last_tested_at.isoformat() if p.last_tested_at else None,
-            "last_test_status": p.last_test_status.value if p.last_test_status else None,
-            "last_test_message": p.last_test_message,
-            "is_active": p.is_active,
-        }
-        for p in plans
-    ]
+    svc = DisasterRecoveryService(db)
+    org_id = auth.get("org_id")
+    if not org_id:
+        raise HTTPException(status_code=401, detail="Organization context required")
+    stmt = (
+        select(DisasterRecoveryPlan)
+        .join(Instance, Instance.instance_id == DisasterRecoveryPlan.instance_id)
+        .where(Instance.org_id == UUID(org_id))
+        .order_by(DisasterRecoveryPlan.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    plans = list(db.scalars(stmt).all())
+    return [svc.serialize_plan(p) for p in plans]
 
 
 @router.get("/{dr_plan_id}")
@@ -72,21 +74,12 @@ def get_dr_plan(
 ):
     from app.services.dr_service import DisasterRecoveryService
 
-    plan = DisasterRecoveryService(db).get_by_id(dr_plan_id)
+    svc = DisasterRecoveryService(db)
+    plan = svc.get_by_id(dr_plan_id)
     if not plan:
         raise HTTPException(status_code=404, detail="DR plan not found")
-    return {
-        "dr_plan_id": str(plan.dr_plan_id),
-        "instance_id": str(plan.instance_id),
-        "backup_schedule_cron": plan.backup_schedule_cron,
-        "retention_days": plan.retention_days,
-        "target_server_id": str(plan.target_server_id) if plan.target_server_id else None,
-        "last_backup_at": plan.last_backup_at.isoformat() if plan.last_backup_at else None,
-        "last_tested_at": plan.last_tested_at.isoformat() if plan.last_tested_at else None,
-        "last_test_status": plan.last_test_status.value if plan.last_test_status else None,
-        "last_test_message": plan.last_test_message,
-        "is_active": plan.is_active,
-    }
+    require_instance_access(plan.instance_id, db=db, auth=auth)
+    return svc.serialize_plan(plan)
 
 
 @router.put("/{dr_plan_id}")
@@ -102,7 +95,12 @@ def update_dr_plan(
     from app.services.dr_service import DisasterRecoveryService
 
     try:
-        plan = DisasterRecoveryService(db).update_dr_plan(
+        svc = DisasterRecoveryService(db)
+        existing = svc.get_by_id(dr_plan_id)
+        if not existing:
+            raise ValueError("DR plan not found")
+        require_instance_access(existing.instance_id, db=db, auth=auth)
+        plan = svc.update_dr_plan(
             dr_plan_id,
             backup_schedule_cron=backup_schedule_cron,
             retention_days=retention_days,
@@ -125,7 +123,12 @@ def delete_dr_plan(
     from app.services.dr_service import DisasterRecoveryService
 
     try:
-        DisasterRecoveryService(db).delete_dr_plan(dr_plan_id)
+        svc = DisasterRecoveryService(db)
+        existing = svc.get_by_id(dr_plan_id)
+        if not existing:
+            raise ValueError("DR plan not found")
+        require_instance_access(existing.instance_id, db=db, auth=auth)
+        svc.delete_dr_plan(dr_plan_id)
         db.commit()
         return {"deleted": str(dr_plan_id)}
     except ValueError as e:
@@ -139,8 +142,13 @@ def trigger_dr_backup(
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
+    from app.services.dr_service import DisasterRecoveryService
     from app.tasks.dr import run_dr_backup
 
+    plan = DisasterRecoveryService(db).get_by_id(dr_plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="DR plan not found")
+    require_instance_access(plan.instance_id, db=db, auth=auth)
     run_dr_backup.delay(str(dr_plan_id))
     return {"queued": True, "dr_plan_id": str(dr_plan_id)}
 
@@ -151,8 +159,13 @@ def trigger_dr_test(
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
+    from app.services.dr_service import DisasterRecoveryService
     from app.tasks.dr import run_dr_test
 
+    plan = DisasterRecoveryService(db).get_by_id(dr_plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="DR plan not found")
+    require_instance_access(plan.instance_id, db=db, auth=auth)
     run_dr_test.delay(str(dr_plan_id))
     return {"queued": True, "dr_plan_id": str(dr_plan_id)}
 
@@ -168,8 +181,13 @@ def trigger_dr_restore(
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
+    from app.services.dr_service import DisasterRecoveryService
     from app.tasks.dr import run_dr_restore
 
+    plan = DisasterRecoveryService(db).get_by_id(dr_plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="DR plan not found")
+    require_instance_access(plan.instance_id, db=db, auth=auth)
     run_dr_restore.delay(
         str(backup_id),
         str(target_server_id),

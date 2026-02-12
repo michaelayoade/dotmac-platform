@@ -28,7 +28,7 @@ def git_repos_index(
     require_admin(auth)
     from app.services.git_repo_service import GitRepoService
 
-    repos = GitRepoService(db).list_repos(active_only=False)
+    repos = GitRepoService(db).list_for_web(active_only=False)
     return templates.TemplateResponse(
         "git_repos/index.html",
         ctx(
@@ -56,15 +56,13 @@ def git_repos_create(
 ):
     require_admin(auth)
     validate_csrf_token(request, csrf_token)
-    from app.models.git_repository import GitAuthType
     from app.services.git_repo_service import GitRepoService
 
     try:
-        auth_enum = GitAuthType(auth_type)
-        GitRepoService(db).create_repo(
+        GitRepoService(db).create_from_form(
             label=label,
             url=url,
-            auth_type=auth_enum,
+            auth_type=auth_type,
             credential=credential,
             default_branch=default_branch,
             is_platform_default=is_platform_default,

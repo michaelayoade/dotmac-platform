@@ -154,3 +154,42 @@ class ServerService:
             .group_by(Instance.server_id)
         ).all()
         return {row[0]: row[1] for row in rows}
+
+    def get_list_bundle(self) -> list[dict]:
+        from app.services.ssh_key_service import SSHKeyService
+
+        servers = self.list_all()
+        counts = self.instance_counts_batch([s.server_id for s in servers])
+        keys = SSHKeyService(self.db).list_keys(active_only=False)
+        key_labels = {k.key_id: k.label for k in keys}
+        return [
+            {
+                "server": s,
+                "instance_count": counts.get(s.server_id, 0),
+                "ssh_key_label": key_labels.get(s.ssh_key_id),
+            }
+            for s in servers
+        ]
+
+    def get_detail_bundle(self, server_id: UUID) -> dict:
+        from app.models.ssh_key import SSHKey
+        from app.services.instance_service import InstanceService
+        from app.services.ssh_key_service import SSHKeyService
+
+        server = self.get_or_404(server_id)
+        instances = InstanceService(self.db).list_for_server(server_id)
+        ssh_key = None
+        ssh_key_label = None
+        if server.ssh_key_id:
+            try:
+                ssh_key = SSHKeyService(self.db).get_public_key(server.ssh_key_id)
+                key_row = self.db.get(SSHKey, server.ssh_key_id)
+                ssh_key_label = key_row.label if key_row else None
+            except Exception:
+                ssh_key = None
+        return {
+            "server": server,
+            "instances": instances,
+            "ssh_key": ssh_key,
+            "ssh_key_label": ssh_key_label,
+        }

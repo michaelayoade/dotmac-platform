@@ -2,8 +2,6 @@
 RBAC — Web routes for roles and permissions management.
 """
 
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -24,44 +22,9 @@ def rbac_index(
     db: Session = Depends(get_db),
 ):
     require_admin(auth)
-    from app.services.rbac import permissions as permissions_service
-    from app.services.rbac import role_permissions as rp_service
-    from app.services.rbac import roles as roles_service
+    from app.services.rbac import get_rbac_index_bundle
 
-    roles = roles_service.list(db, is_active=None, order_by="name", order_dir="asc", limit=200, offset=0)
-    permissions = permissions_service.list(db, is_active=None, order_by="key", order_dir="asc", limit=500, offset=0)
-
-    selected_role_id = request.query_params.get("role_id")
-    if not selected_role_id and roles:
-        selected_role_id = str(roles[0].id)
-
-    role_permissions = []
-    if selected_role_id:
-        role_permissions = rp_service.list(
-            db,
-            role_id=selected_role_id,
-            permission_id=None,
-            order_by="role_id",
-            order_dir="asc",
-            limit=500,
-            offset=0,
-        )
-
-    role_map = {r.id: r for r in roles}
-    perm_map = {p.id: p for p in permissions}
-
-    selected_role = None
-    if selected_role_id:
-        try:
-            selected_role = role_map.get(UUID(selected_role_id))
-        except ValueError:
-            selected_role = None
-    selected_role_id_uuid = None
-    if selected_role_id:
-        try:
-            selected_role_id_uuid = UUID(selected_role_id)
-        except ValueError:
-            selected_role_id_uuid = None
+    bundle = get_rbac_index_bundle(db, request.query_params.get("role_id"))
     return templates.TemplateResponse(
         "rbac/index.html",
         ctx(
@@ -69,14 +32,14 @@ def rbac_index(
             auth,
             "RBAC",
             active_page="rbac",
-            roles=roles,
-            permissions=permissions,
-            role_permissions=role_permissions,
-            selected_role_id=selected_role_id,
-            selected_role_id_uuid=selected_role_id_uuid,
-            selected_role=selected_role,
-            role_map=role_map,
-            perm_map=perm_map,
+            roles=bundle["roles"],
+            permissions=bundle["permissions"],
+            role_permissions=bundle["role_permissions"],
+            selected_role_id=bundle["selected_role_id"],
+            selected_role_id_uuid=bundle["selected_role_id_uuid"],
+            selected_role=bundle["selected_role"],
+            role_map=bundle["role_map"],
+            perm_map=bundle["perm_map"],
         ),
     )
 

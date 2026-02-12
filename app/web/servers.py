@@ -26,22 +26,8 @@ def server_list(
     db: Session = Depends(get_db),
 ):
     from app.services.server_service import ServerService
-    from app.services.ssh_key_service import SSHKeyService
 
-    svc = ServerService(db)
-    servers = svc.list_all()
-    # Batch-fetch instance counts to avoid N+1
-    counts = svc.instance_counts_batch([s.server_id for s in servers])
-    keys = SSHKeyService(db).list_keys(active_only=False)
-    key_labels = {k.key_id: k.label for k in keys}
-    server_data = [
-        {
-            "server": s,
-            "instance_count": counts.get(s.server_id, 0),
-            "ssh_key_label": key_labels.get(s.ssh_key_id),
-        }
-        for s in servers
-    ]
+    server_data = ServerService(db).get_list_bundle()
 
     return templates.TemplateResponse(
         "servers/list.html", ctx(request, auth, "Servers", active_page="servers", servers=server_data)
@@ -123,35 +109,21 @@ def server_detail(
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
 ):
-    from app.models.ssh_key import SSHKey
-    from app.services.instance_service import InstanceService
     from app.services.server_service import ServerService
-    from app.services.ssh_key_service import SSHKeyService
 
-    svc = ServerService(db)
-    server = svc.get_or_404(server_id)
-    instances = InstanceService(db).list_for_server(server_id)
-    ssh_key = None
-    ssh_key_label = None
-    if server.ssh_key_id:
-        try:
-            ssh_key = SSHKeyService(db).get_public_key(server.ssh_key_id)
-            key_row = db.get(SSHKey, server.ssh_key_id)
-            ssh_key_label = key_row.label if key_row else None
-        except Exception:
-            ssh_key = None
+    bundle = ServerService(db).get_detail_bundle(server_id)
 
     return templates.TemplateResponse(
         "servers/detail.html",
         ctx(
             request,
             auth,
-            server.name,
+            bundle["server"].name,
             active_page="servers",
-            server=server,
-            instances=instances,
-            ssh_key=ssh_key,
-            ssh_key_label=ssh_key_label,
+            server=bundle["server"],
+            instances=bundle["instances"],
+            ssh_key=bundle["ssh_key"],
+            ssh_key_label=bundle["ssh_key_label"],
         ),
     )
 
@@ -230,7 +202,6 @@ def server_delete(
     require_admin(auth)
     validate_csrf_token(request, csrf_token)
 
-    from app.services.instance_service import InstanceService
     from app.services.server_service import ServerService
 
     svc = ServerService(db)
@@ -240,17 +211,16 @@ def server_delete(
         return RedirectResponse("/servers", status_code=302)
     except ValueError:
         db.rollback()
-        server = svc.get_or_404(server_id)
-        instances = InstanceService(db).list_for_server(server_id)
+        bundle = svc.get_detail_bundle(server_id)
         return templates.TemplateResponse(
             "servers/detail.html",
             ctx(
                 request,
                 auth,
-                server.name,
+                bundle["server"].name,
                 active_page="servers",
-                server=server,
-                instances=instances,
+                server=bundle["server"],
+                instances=bundle["instances"],
                 errors=["Cannot delete server while it has instances. Remove all instances first."],
             ),
         )

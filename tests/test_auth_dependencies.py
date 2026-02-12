@@ -296,10 +296,11 @@ class TestSessionExpiry:
             )
         assert exc.value.status_code == 401
 
-    def test_require_user_auth_session_expired(self, db_session, person):
+    def test_require_user_auth_session_expired(self, db_session, person, person_org_id):
         """Test require_user_auth rejects expired sessions via query filter."""
         session = AuthSession(
             person_id=person.id,
+            org_id=person_org_id,
             token_hash="user-expired-session",
             status=SessionStatus.active,
             ip_address="127.0.0.1",
@@ -314,6 +315,7 @@ class TestSessionExpiry:
         payload = {
             "sub": str(person.id),
             "session_id": str(session.id),
+            "org_id": str(person_org_id),
             "typ": "access",
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(hours=1)).timestamp()),

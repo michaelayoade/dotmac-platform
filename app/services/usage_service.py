@@ -68,6 +68,15 @@ class UsageService:
         stmt = stmt.order_by(UsageRecord.period_end.desc()).limit(limit)
         return list(self.db.scalars(stmt).all())
 
+    @staticmethod
+    def serialize_record(record: UsageRecord) -> dict:
+        return {
+            "metric": record.metric.value,
+            "value": record.value,
+            "period_start": record.period_start.isoformat(),
+            "period_end": record.period_end.isoformat(),
+        }
+
     def get_current_period_total(
         self,
         instance_id: UUID,
@@ -133,3 +142,33 @@ class UsageService:
             key = r.metric.value
             summary[key] = summary.get(key, 0) + r.value
         return summary
+
+    def get_index_bundle(self, instance_id: UUID | None, days: int) -> dict:
+        from datetime import timedelta
+
+        from app.services.instance_service import InstanceService
+
+        instances = InstanceService(self.db).list_all()
+        if not instance_id and instances:
+            instance_id = instances[0].instance_id
+
+        now = datetime.now(UTC)
+        period_start = now - timedelta(days=max(days, 1))
+        period_end = now
+
+        summary = {}
+        records = []
+        if instance_id:
+            summary = self.get_billing_summary(instance_id, period_start, period_end)
+            records = self.get_usage(instance_id, metric=None, since=period_start, limit=200)
+
+        return {
+            "instances": instances,
+            "instance_id": instance_id,
+            "summary": summary,
+            "records": records,
+            "days": days,
+            "metrics": [m.value for m in UsageMetric],
+            "period_start": period_start,
+            "period_end": period_end,
+        }

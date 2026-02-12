@@ -30,10 +30,11 @@ def _make_server(db_session) -> Server:
     return server
 
 
-def _make_instance(db_session, server: Server) -> Instance:
+def _make_instance(db_session, server: Server, org_id) -> Instance:
     code = f"ORG{uuid.uuid4().hex[:6].upper()}"
     instance = Instance(
         server_id=server.server_id,
+        org_id=org_id,
         org_code=code,
         org_name=f"Org {code}",
         app_port=8080,
@@ -92,9 +93,9 @@ def _make_plan(db_session) -> Plan:
 
 
 class TestH1BackupFilePath:
-    def test_file_path_not_in_backup_list(self, client, db_session, admin_headers):
+    def test_file_path_not_in_backup_list(self, client, db_session, admin_headers, admin_org_id):
         server = _make_server(db_session)
-        instance = _make_instance(db_session, server)
+        instance = _make_instance(db_session, server, admin_org_id)
         _make_backup(db_session, instance)
 
         resp = client.get(f"/instances/{instance.instance_id}/backups", headers=admin_headers)
@@ -111,9 +112,9 @@ class TestH1BackupFilePath:
 
 
 class TestH2DomainVerificationToken:
-    def test_verification_token_not_in_domain_list(self, client, db_session, admin_headers):
+    def test_verification_token_not_in_domain_list(self, client, db_session, admin_headers, admin_org_id):
         server = _make_server(db_session)
-        instance = _make_instance(db_session, server)
+        instance = _make_instance(db_session, server, admin_org_id)
         _make_domain(db_session, instance)
 
         resp = client.get(f"/instances/{instance.instance_id}/domains", headers=admin_headers)
@@ -180,9 +181,9 @@ class TestM1BatchDeployValidation:
 
 
 class TestM2MaintenanceWindowBounds:
-    def test_day_of_week_out_of_range(self, client, db_session, admin_headers):
+    def test_day_of_week_out_of_range(self, client, db_session, admin_headers, admin_org_id):
         server = _make_server(db_session)
-        instance = _make_instance(db_session, server)
+        instance = _make_instance(db_session, server, admin_org_id)
         resp = client.post(
             f"/instances/{instance.instance_id}/maintenance-windows",
             params={"day_of_week": 7, "start_hour": 2},
@@ -190,9 +191,9 @@ class TestM2MaintenanceWindowBounds:
         )
         assert resp.status_code == 422
 
-    def test_start_hour_out_of_range(self, client, db_session, admin_headers):
+    def test_start_hour_out_of_range(self, client, db_session, admin_headers, admin_org_id):
         server = _make_server(db_session)
-        instance = _make_instance(db_session, server)
+        instance = _make_instance(db_session, server, admin_org_id)
         resp = client.post(
             f"/instances/{instance.instance_id}/maintenance-windows",
             params={"day_of_week": 1, "start_hour": 25},
@@ -200,9 +201,9 @@ class TestM2MaintenanceWindowBounds:
         )
         assert resp.status_code == 422
 
-    def test_minute_out_of_range(self, client, db_session, admin_headers):
+    def test_minute_out_of_range(self, client, db_session, admin_headers, admin_org_id):
         server = _make_server(db_session)
-        instance = _make_instance(db_session, server)
+        instance = _make_instance(db_session, server, admin_org_id)
         resp = client.post(
             f"/instances/{instance.instance_id}/maintenance-windows",
             params={"day_of_week": 1, "start_hour": 2, "start_minute": 60},
@@ -215,9 +216,9 @@ class TestM2MaintenanceWindowBounds:
 
 
 class TestM3UsageMetricValidation:
-    def test_invalid_metric_returns_400(self, client, db_session, admin_headers):
+    def test_invalid_metric_returns_400(self, client, db_session, admin_headers, admin_org_id):
         server = _make_server(db_session)
-        instance = _make_instance(db_session, server)
+        instance = _make_instance(db_session, server, admin_org_id)
         resp = client.get(
             f"/instances/{instance.instance_id}/usage",
             params={"metric": "not_a_real_metric"},
@@ -231,9 +232,9 @@ class TestM3UsageMetricValidation:
 
 
 class TestM4PlanIdValidation:
-    def test_nonexistent_plan_returns_404(self, client, db_session, admin_headers):
+    def test_nonexistent_plan_returns_404(self, client, db_session, admin_headers, admin_org_id):
         server = _make_server(db_session)
-        instance = _make_instance(db_session, server)
+        instance = _make_instance(db_session, server, admin_org_id)
         fake_plan_id = str(uuid.uuid4())
         resp = client.put(
             f"/instances/{instance.instance_id}/plan",
@@ -243,9 +244,9 @@ class TestM4PlanIdValidation:
         assert resp.status_code == 404
         assert "Plan not found" in resp.json()["message"]
 
-    def test_valid_plan_id_succeeds(self, client, db_session, admin_headers):
+    def test_valid_plan_id_succeeds(self, client, db_session, admin_headers, admin_org_id):
         server = _make_server(db_session)
-        instance = _make_instance(db_session, server)
+        instance = _make_instance(db_session, server, admin_org_id)
         plan = _make_plan(db_session)
         resp = client.put(
             f"/instances/{instance.instance_id}/plan",

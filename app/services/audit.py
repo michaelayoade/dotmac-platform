@@ -94,6 +94,43 @@ class AuditEvents(ListResponseMixin):
         return list(db.scalars(stmt).all())
 
     @staticmethod
+    def list_for_web(
+        db: Session,
+        actor_id: str | None,
+        actor_type: str | None,
+        action: str | None,
+        entity_type: str | None,
+        request_id: str | None,
+        is_success: str | None,
+        status_code: int | None,
+        order_by: str,
+        order_dir: str,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[AuditEvent], bool | None, AuditActorType | None]:
+        resolved_actor_type = AuditEvents.parse_actor_type(actor_type)
+        is_success_val = None
+        if is_success in {"true", "false"}:
+            is_success_val = is_success == "true"
+
+        events = AuditEvents.list(
+            db,
+            actor_id=actor_id,
+            actor_type=resolved_actor_type,
+            action=action,
+            entity_type=entity_type,
+            request_id=request_id,
+            is_success=is_success_val,
+            status_code=status_code,
+            is_active=True,
+            order_by=order_by,
+            order_dir=order_dir,
+            limit=page_size,
+            offset=(page - 1) * page_size,
+        )
+        return events, is_success_val, resolved_actor_type
+
+    @staticmethod
     def log_request(db: Session, request: Request, response: Response):
         actor_id = getattr(request.state, "actor_id", None)
         actor_type = getattr(request.state, "actor_type", None) or AuditActorType.system.value

@@ -117,6 +117,17 @@ class MetricsExportService:
             "last_backup_at": backup.completed_at.isoformat() if backup and backup.completed_at else None,
         }
 
+    def get_logs_payload(
+        self,
+        instance_id: UUID,
+        *,
+        stream: str,
+        lines: int,
+        since: str | None,
+    ) -> dict:
+        entries = self.export_instance_logs(instance_id, stream=stream, lines=lines, since=since)
+        return {"stream": stream, "lines": lines, "since": since, "entries": entries}
+
     def export_instance_logs(
         self,
         instance_id: UUID,

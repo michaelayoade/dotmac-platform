@@ -218,8 +218,9 @@ def delete_session(session_id: str, db: Session = Depends(get_db)):
     status_code=status.HTTP_201_CREATED,
     tags=["api-keys"],
 )
-def create_api_key(payload: ApiKeyCreate, db: Session = Depends(get_db)):
-    return auth_service.api_keys.create(db, payload)
+def create_api_key(payload: ApiKeyCreate, request: Request, db: Session = Depends(get_db)):
+    org_id = getattr(request.state, "org_id", None)
+    return auth_service.api_keys.create(db, payload, org_id=org_id)
 
 
 @router.post(
@@ -233,7 +234,8 @@ def generate_api_key(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    return auth_service.api_keys.generate_with_rate_limit(db, payload, request)
+    org_id = getattr(request.state, "org_id", None)
+    return auth_service.api_keys.generate_with_rate_limit(db, payload, request, org_id=org_id)
 
 
 @router.get(
@@ -241,8 +243,9 @@ def generate_api_key(
     response_model=ApiKeyRead,
     tags=["api-keys"],
 )
-def get_api_key(key_id: str, db: Session = Depends(get_db)):
-    return auth_service.api_keys.get(db, key_id)
+def get_api_key(key_id: str, request: Request, db: Session = Depends(get_db)):
+    org_id = getattr(request.state, "org_id", None)
+    return auth_service.api_keys.get(db, key_id, org_id=org_id)
 
 
 @router.get(
@@ -251,6 +254,7 @@ def get_api_key(key_id: str, db: Session = Depends(get_db)):
     tags=["api-keys"],
 )
 def list_api_keys(
+    request: Request,
     person_id: str | None = None,
     is_active: bool | None = None,
     order_by: str = Query(default="created_at"),
@@ -259,7 +263,17 @@ def list_api_keys(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
-    return auth_service.api_keys.list_response(db, person_id, is_active, order_by, order_dir, limit, offset)
+    org_id = getattr(request.state, "org_id", None)
+    return auth_service.api_keys.list_response(
+        db,
+        person_id,
+        is_active,
+        order_by,
+        order_dir,
+        limit,
+        offset,
+        org_id=org_id,
+    )
 
 
 @router.patch(
@@ -267,8 +281,9 @@ def list_api_keys(
     response_model=ApiKeyRead,
     tags=["api-keys"],
 )
-def update_api_key(key_id: str, payload: ApiKeyUpdate, db: Session = Depends(get_db)):
-    return auth_service.api_keys.update(db, key_id, payload)
+def update_api_key(key_id: str, payload: ApiKeyUpdate, request: Request, db: Session = Depends(get_db)):
+    org_id = getattr(request.state, "org_id", None)
+    return auth_service.api_keys.update(db, key_id, payload, org_id=org_id)
 
 
 @router.delete(
@@ -276,5 +291,6 @@ def update_api_key(key_id: str, payload: ApiKeyUpdate, db: Session = Depends(get
     status_code=status.HTTP_204_NO_CONTENT,
     tags=["api-keys"],
 )
-def delete_api_key(key_id: str, db: Session = Depends(get_db)):
-    auth_service.api_keys.revoke(db, key_id)
+def delete_api_key(key_id: str, request: Request, db: Session = Depends(get_db)):
+    org_id = getattr(request.state, "org_id", None)
+    auth_service.api_keys.delete(db, key_id, org_id=org_id)

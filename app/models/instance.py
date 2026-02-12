@@ -39,6 +39,9 @@ class Instance(Base):
     server_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("servers.server_id"), nullable=False, index=True
     )
+    org_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.org_id"), nullable=True, index=True
+    )
     org_code: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
     org_name: Mapped[str] = mapped_column(String(200), nullable=False)
     org_uuid: Mapped[str | None] = mapped_column(String(36))

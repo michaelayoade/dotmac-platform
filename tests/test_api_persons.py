@@ -11,7 +11,7 @@ class TestPersonsAPI:
             "last_name": "Doe",
             "email": f"john.doe.{uuid.uuid4().hex[:8]}@example.com",
         }
-        response = client.post("/people", json=payload, headers=admin_headers)
+        response = client.post("/api/v1/people", json=payload, headers=admin_headers)
         assert response.status_code == 201
         data = response.json()
         assert data["first_name"] == "John"
@@ -29,7 +29,7 @@ class TestPersonsAPI:
             "locale": "en-US",
             "timezone": "America/New_York",
         }
-        response = client.post("/people", json=payload, headers=admin_headers)
+        response = client.post("/api/v1/people", json=payload, headers=admin_headers)
         assert response.status_code == 201
         data = response.json()
         assert data["first_name"] == "Jane"
@@ -43,12 +43,12 @@ class TestPersonsAPI:
             "last_name": "User",
             "email": "test@example.com",
         }
-        response = client.post("/people", json=payload)
+        response = client.post("/api/v1/people", json=payload)
         assert response.status_code == 401
 
     def test_get_person(self, client, auth_headers, person):
         """Test getting a person by ID."""
-        response = client.get(f"/people/{person.id}", headers=auth_headers)
+        response = client.get(f"/api/v1/people/{person.id}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == str(person.id)
@@ -57,12 +57,12 @@ class TestPersonsAPI:
     def test_get_person_not_found(self, client, auth_headers):
         """Test getting a non-existent person."""
         fake_id = str(uuid.uuid4())
-        response = client.get(f"/people/{fake_id}", headers=auth_headers)
+        response = client.get(f"/api/v1/people/{fake_id}", headers=auth_headers)
         assert response.status_code == 404
 
     def test_list_people(self, client, auth_headers, person):
         """Test listing people."""
-        response = client.get("/people", headers=auth_headers)
+        response = client.get("/api/v1/people", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "items" in data
@@ -83,27 +83,27 @@ class TestPersonsAPI:
             db_session.add(p)
         db_session.commit()
 
-        response = client.get("/people?limit=2&offset=0", headers=auth_headers)
+        response = client.get("/api/v1/people?limit=2&offset=0", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) <= 2
 
     def test_list_people_with_filters(self, client, auth_headers, person):
         """Test listing people with email filter."""
-        response = client.get(f"/people?email={person.email}", headers=auth_headers)
+        response = client.get(f"/api/v1/people?email={person.email}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) >= 1
 
     def test_list_people_with_ordering(self, client, auth_headers):
         """Test listing people with custom ordering."""
-        response = client.get("/people?order_by=last_name&order_dir=asc", headers=auth_headers)
+        response = client.get("/api/v1/people?order_by=last_name&order_dir=asc", headers=auth_headers)
         assert response.status_code == 200
 
     def test_update_person(self, client, admin_headers, person):
         """Test updating a person (admin only)."""
         payload = {"first_name": "Updated"}
-        response = client.patch(f"/people/{person.id}", json=payload, headers=admin_headers)
+        response = client.patch(f"/api/v1/people/{person.id}", json=payload, headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["first_name"] == "Updated"
@@ -115,7 +115,7 @@ class TestPersonsAPI:
             "last_name": "UpdatedLast",
             "phone": "+9876543210",
         }
-        response = client.patch(f"/people/{person.id}", json=payload, headers=admin_headers)
+        response = client.patch(f"/api/v1/people/{person.id}", json=payload, headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["first_name"] == "UpdatedFirst"
@@ -126,11 +126,12 @@ class TestPersonsAPI:
         """Test updating a non-existent person."""
         fake_id = str(uuid.uuid4())
         payload = {"first_name": "Updated"}
-        response = client.patch(f"/people/{fake_id}", json=payload, headers=admin_headers)
+        response = client.patch(f"/api/v1/people/{fake_id}", json=payload, headers=admin_headers)
         assert response.status_code == 404
 
-    def test_delete_person(self, client, admin_headers, db_session):
+    def test_delete_person(self, client, admin_headers, db_session, admin_org_id):
         """Test deleting a person (admin only)."""
+        from app.models.organization_member import OrganizationMember
         from app.models.person import Person
 
         # Create a person to delete
@@ -142,14 +143,16 @@ class TestPersonsAPI:
         db_session.add(person)
         db_session.commit()
         db_session.refresh(person)
+        db_session.add(OrganizationMember(org_id=admin_org_id, person_id=person.id, is_active=True))
+        db_session.commit()
 
-        response = client.delete(f"/people/{person.id}", headers=admin_headers)
+        response = client.delete(f"/api/v1/people/{person.id}", headers=admin_headers)
         assert response.status_code == 204
 
     def test_delete_person_not_found(self, client, admin_headers):
         """Test deleting a non-existent person."""
         fake_id = str(uuid.uuid4())
-        response = client.delete(f"/people/{fake_id}", headers=admin_headers)
+        response = client.delete(f"/api/v1/people/{fake_id}", headers=admin_headers)
         assert response.status_code == 404
 
     def test_create_person_forbidden_non_admin(self, client, auth_headers):
@@ -159,18 +162,18 @@ class TestPersonsAPI:
             "last_name": "User",
             "email": f"forbidden_{uuid.uuid4().hex[:8]}@example.com",
         }
-        response = client.post("/people", json=payload, headers=auth_headers)
+        response = client.post("/api/v1/people", json=payload, headers=auth_headers)
         assert response.status_code == 403
 
     def test_update_person_forbidden_non_admin(self, client, auth_headers, person):
         """Test that non-admin cannot update a person."""
         payload = {"first_name": "Forbidden"}
-        response = client.patch(f"/people/{person.id}", json=payload, headers=auth_headers)
+        response = client.patch(f"/api/v1/people/{person.id}", json=payload, headers=auth_headers)
         assert response.status_code == 403
 
     def test_delete_person_forbidden_non_admin(self, client, auth_headers, person):
         """Test that non-admin cannot delete a person."""
-        response = client.delete(f"/people/{person.id}", headers=auth_headers)
+        response = client.delete(f"/api/v1/people/{person.id}", headers=auth_headers)
         assert response.status_code == 403
 
 

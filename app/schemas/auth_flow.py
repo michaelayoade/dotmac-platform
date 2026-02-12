@@ -12,6 +12,7 @@ class LoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=150)
     password: str = Field(min_length=1, max_length=255)
     provider: AuthProvider | None = None
+    org_code: str | None = Field(default=None, max_length=40)
 
 
 class TokenResponse(BaseModel):

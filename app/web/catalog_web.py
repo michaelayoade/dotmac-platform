@@ -28,13 +28,7 @@ def catalog_index(
     require_admin(auth)
     from app.services.catalog_service import CatalogService
 
-    svc = CatalogService(db)
-    releases = svc.list_releases(active_only=False)
-    bundles = svc.list_bundles(active_only=False)
-    items = svc.list_catalog_items(active_only=False)
-    from app.services.git_repo_service import GitRepoService
-
-    repos = GitRepoService(db).list_repos(active_only=True)
+    bundle = CatalogService(db).get_index_bundle()
     return templates.TemplateResponse(
         "catalog/index.html",
         ctx(
@@ -42,10 +36,10 @@ def catalog_index(
             auth,
             "Catalog",
             active_page="catalog",
-            releases=releases,
-            bundles=bundles,
-            items=items,
-            repos=repos,
+            releases=bundle["releases"],
+            bundles=bundle["bundles"],
+            items=bundle["items"],
+            repos=bundle["repos"],
         ),
     )
 
@@ -90,17 +84,12 @@ def catalog_create_bundle(
     validate_csrf_token(request, csrf_token)
     from app.services.catalog_service import CatalogService
 
-    def _split(value: str | None) -> list[str]:
-        if not value:
-            return []
-        return [v.strip() for v in value.split(",") if v.strip()]
-
     try:
         CatalogService(db).create_bundle(
             name,
             description,
-            module_slugs=_split(module_slugs),
-            flag_keys=_split(flag_keys),
+            module_slugs=CatalogService.split_csv(module_slugs),
+            flag_keys=CatalogService.split_csv(flag_keys),
         )
         db.commit()
     except Exception as e:

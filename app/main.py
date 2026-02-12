@@ -15,10 +15,11 @@ from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.auth_flow import router as auth_flow_router
 from app.api.catalog import router as catalog_api_router
-from app.api.deps import require_role, require_user_auth
+from app.api.deps import require_instance_access_from_path, require_role, require_user_auth
 from app.api.dr import router as dr_api_router
 from app.api.git_repos import router as git_repos_api_router
 from app.api.observability import router as observability_api_router
+from app.api.organizations import router as organizations_api_router
 from app.api.persons import router as people_router
 from app.api.rbac import router as rbac_router
 from app.api.scheduler import router as scheduler_router
@@ -104,12 +105,13 @@ async def csrf_middleware(request: Request, call_next):
     response = await call_next(request)
     # Issue CSRF session cookie for anonymous users.
     if not request.cookies.get("access_token") and not request.cookies.get(CSRF_COOKIE_NAME):
+        scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
         response.set_cookie(
             CSRF_COOKIE_NAME,
             request.state.csrf_session,
             httponly=True,
             samesite="lax",
-            secure=not settings.testing,
+            secure=scheme == "https",
             max_age=3600 * 4,
         )
     return response
@@ -231,26 +233,37 @@ def _include_api_router(router, dependencies=None):
 _include_api_router(auth_router, dependencies=[Depends(require_role("admin"))])
 _include_api_router(auth_flow_router)
 _include_api_router(rbac_router, dependencies=[Depends(require_user_auth)])
-_include_api_router(people_router, dependencies=[Depends(require_user_auth)])
+# people API only at /api/v1 — root /people is the web UI
+app.include_router(people_router, prefix="/api/v1", dependencies=[Depends(require_user_auth)])
 _include_api_router(audit_router)
 _include_api_router(settings_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(scheduler_router, dependencies=[Depends(require_user_auth)])
+_include_api_router(organizations_api_router, dependencies=[Depends(require_user_auth)])
 
 from app.api.instances import router as instances_api_router
 
-_include_api_router(instances_api_router, dependencies=[Depends(require_user_auth)])
+_include_api_router(instances_api_router, dependencies=[Depends(require_instance_access_from_path)])
 
 from app.api.notifications import router as notifications_api_router
 
 _include_api_router(notifications_api_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(observability_api_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(ssh_keys_api_router, dependencies=[Depends(require_user_auth)])
-_include_api_router(git_repos_api_router, dependencies=[Depends(require_user_auth)])
+# git-repos API only at /api/v1 — root /git-repos is the web UI
+app.include_router(git_repos_api_router, prefix="/api/v1", dependencies=[Depends(require_user_auth)])
 _include_api_router(dr_api_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(catalog_api_router, dependencies=[Depends(require_user_auth)])
 
+from app.api.otel import router as otel_api_router  # noqa: E402
+
+_include_api_router(otel_api_router, dependencies=[Depends(require_user_auth)])
+
 app.include_router(auth_web_router)
 app.include_router(dashboard_router)
+
+from app.web.onboarding_web import router as onboarding_web_router  # noqa: E402
+
+app.include_router(onboarding_web_router)
 app.include_router(servers_router)
 app.include_router(instances_router)
 app.include_router(platform_settings_router)
@@ -273,6 +286,10 @@ app.include_router(ssh_keys_web_router)
 app.include_router(git_repos_web_router)
 app.include_router(dr_web_router)
 app.include_router(catalog_web_router)
+
+from app.web.otel_web import router as otel_web_router  # noqa: E402
+
+app.include_router(otel_web_router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

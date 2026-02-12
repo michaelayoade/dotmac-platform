@@ -32,6 +32,8 @@ from app.models.auth import (
     Session as AuthSession,
 )
 from app.models.domain_settings import DomainSetting, SettingDomain
+from app.models.organization import Organization
+from app.models.organization_member import OrganizationMember
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.schemas.auth_flow import LoginResponse, LogoutResponse, TokenResponse
@@ -194,6 +196,7 @@ def _issue_access_token(
     db: Session | None,
     person_id: str,
     session_id: str,
+    org_id: str | None = None,
     roles: list[str] | None = None,
     permissions: list[str] | None = None,
 ) -> str:
@@ -205,6 +208,8 @@ def _issue_access_token(
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=_access_ttl_minutes(db))).timestamp()),
     }
+    if org_id:
+        payload["org_id"] = org_id
     if roles:
         payload["roles"] = roles
     if permissions:
@@ -212,7 +217,7 @@ def _issue_access_token(
     return cast(str, jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db)))
 
 
-def _issue_mfa_token(db: Session | None, person_id: str) -> str:
+def _issue_mfa_token(db: Session | None, person_id: str, org_id: str | None = None) -> str:
     now = _now()
     payload = {
         "sub": person_id,
@@ -220,6 +225,8 @@ def _issue_mfa_token(db: Session | None, person_id: str) -> str:
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=5)).timestamp()),
     }
+    if org_id:
+        payload["org_id"] = org_id
     return cast(str, jwt.encode(payload, _jwt_secret(db), algorithm=_jwt_algorithm(db)))
 
 
@@ -271,6 +278,43 @@ def _person_or_404(db: Session, person_id: str) -> Person:
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
     return person
+
+
+def _resolve_org_for_login(db: Session, person_id: str, org_code: str | None) -> Organization:
+    person_uuid = coerce_uuid(person_id)
+    if org_code:
+        org = db.scalar(
+            select(Organization)
+            .where(Organization.org_code == org_code.strip().upper())
+            .where(Organization.is_active.is_(True))
+        )
+        if not org:
+            raise HTTPException(status_code=401, detail="Organization not found")
+        member = db.scalar(
+            select(OrganizationMember)
+            .where(OrganizationMember.org_id == org.org_id)
+            .where(OrganizationMember.person_id == person_uuid)
+            .where(OrganizationMember.is_active.is_(True))
+        )
+        if not member:
+            raise HTTPException(status_code=403, detail="User not in organization")
+        return org
+
+    members = list(
+        db.scalars(
+            select(OrganizationMember)
+            .where(OrganizationMember.person_id == person_uuid)
+            .where(OrganizationMember.is_active.is_(True))
+        ).all()
+    )
+    if not members:
+        raise HTTPException(status_code=403, detail="User has no organization access")
+    if len(members) > 1:
+        raise HTTPException(status_code=400, detail="Organization required")
+    org = db.get(Organization, members[0].org_id)
+    if not org or not org.is_active:
+        raise HTTPException(status_code=401, detail="Organization not found")
+    return org
 
 
 def _load_rbac_claims(db: Session, person_id: str):
@@ -407,8 +451,9 @@ class AuthFlow(ListResponseMixin):
         password: str,
         request: Request,
         provider: AuthProvider | str | None,
+        org_code: str | None = None,
     ):
-        result = AuthFlow.login(db, username, password, request, provider)
+        result = AuthFlow.login(db, username, password, request, provider, org_code)
         if result.get("refresh_token"):
             return AuthFlow._response_with_refresh_cookie(db, result, LoginResponse, status.HTTP_200_OK)
         return result
@@ -420,6 +465,7 @@ class AuthFlow(ListResponseMixin):
         password: str,
         request: Request,
         provider: AuthProvider | str | None,
+        org_code: str | None = None,
     ):
         if isinstance(provider, AuthProvider):
             provider_value = provider.value
@@ -464,13 +510,15 @@ class AuthFlow(ListResponseMixin):
         credential.last_login_at = now
         db.commit()
 
+        org = _resolve_org_for_login(db, str(credential.person_id), org_code)
+
         if _primary_totp_method(db, str(credential.person_id)):
             return {
                 "mfa_required": True,
-                "mfa_token": _issue_mfa_token(db, str(credential.person_id)),
+                "mfa_token": _issue_mfa_token(db, str(credential.person_id), str(org.org_id)),
             }
 
-        return AuthFlow._issue_tokens(db, str(credential.person_id), request)
+        return AuthFlow._issue_tokens(db, str(credential.person_id), request, str(org.org_id))
 
     @staticmethod
     def mfa_setup(db: Session, person_id: str, label: str | None):
@@ -554,6 +602,7 @@ class AuthFlow(ListResponseMixin):
         person_id = payload.get("sub")
         if not person_id:
             raise HTTPException(status_code=401, detail="Invalid MFA token")
+        org_id = payload.get("org_id")
 
         method = _primary_totp_method(db, str(person_id))
         if not method:
@@ -570,7 +619,7 @@ class AuthFlow(ListResponseMixin):
 
         method.last_used_at = now
         db.commit()
-        return AuthFlow._issue_tokens(db, person_id, request)
+        return AuthFlow._issue_tokens(db, person_id, request, org_id)
 
     @staticmethod
     def mfa_verify_response(db: Session, mfa_token: str, code: str, request: Request):
@@ -631,7 +680,8 @@ class AuthFlow(ListResponseMixin):
         db.commit()
 
         roles, permissions = _load_rbac_claims(db, str(session.person_id))
-        access_token = _issue_access_token(db, str(session.person_id), str(session.id), roles, permissions)
+        org_id = str(session.org_id) if session.org_id else None
+        access_token = _issue_access_token(db, str(session.person_id), str(session.id), org_id, roles, permissions)
         return {"access_token": access_token, "refresh_token": new_refresh}
 
     @staticmethod
@@ -682,12 +732,13 @@ class AuthFlow(ListResponseMixin):
         }
 
     @staticmethod
-    def _issue_tokens(db: Session, person_id: str, request: Request):
+    def _issue_tokens(db: Session, person_id: str, request: Request, org_id: str | None = None):
         person_uuid = coerce_uuid(person_id)
         refresh_token = secrets.token_urlsafe(48)
         now = _now()
         expires_at = now + timedelta(days=_refresh_ttl_days(db))
         session = AuthSession(
+            org_id=coerce_uuid(org_id) if org_id else None,
             person_id=person_uuid,
             status=SessionStatus.active,
             token_hash=_hash_token(refresh_token),
@@ -708,7 +759,7 @@ class AuthFlow(ListResponseMixin):
         db.commit()
         db.refresh(session)
         roles, permissions = _load_rbac_claims(db, str(person_uuid))
-        access_token = _issue_access_token(db, str(person_uuid), str(session.id), roles, permissions)
+        access_token = _issue_access_token(db, str(person_uuid), str(session.id), org_id, roles, permissions)
         return {"access_token": access_token, "refresh_token": refresh_token}
 
 

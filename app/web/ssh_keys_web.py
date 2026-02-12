@@ -26,11 +26,9 @@ def ssh_keys_index(
     db: Session = Depends(get_db),
 ):
     require_admin(auth)
-    from app.services.server_service import ServerService
     from app.services.ssh_key_service import SSHKeyService
 
-    keys = SSHKeyService(db).list_keys(active_only=False)
-    servers = ServerService(db).list_all()
+    bundle = SSHKeyService(db).get_index_bundle()
 
     return templates.TemplateResponse(
         "ssh_keys/index.html",
@@ -39,8 +37,8 @@ def ssh_keys_index(
             auth,
             "SSH Keys",
             active_page="ssh_keys",
-            keys=keys,
-            servers=servers,
+            keys=bundle["keys"],
+            servers=bundle["servers"],
         ),
     )
 

@@ -148,3 +148,70 @@ class ApprovalService:
             DeployApproval.status == ApprovalStatus.pending,
         )
         return self.db.scalar(stmt)
+
+    def get_list_bundle(self, history_limit: int = 100) -> dict:
+        from app.models.app_upgrade import AppUpgrade
+        from app.models.catalog import AppCatalogItem, AppRelease
+        from app.services.instance_service import InstanceService
+
+        pending = self.get_pending()
+        history = list(
+            self.db.scalars(
+                select(DeployApproval).order_by(DeployApproval.created_at.desc()).limit(history_limit)
+            ).all()
+        )
+        instances = InstanceService(self.db).list_all()
+        inst_map = {i.instance_id: i for i in instances}
+
+        upgrade_map: dict[UUID, dict] = {}
+        upgrade_ids = {a.upgrade_id for a in pending + history if a.upgrade_id}
+        if upgrade_ids:
+            upgrades = list(self.db.scalars(select(AppUpgrade).where(AppUpgrade.upgrade_id.in_(upgrade_ids))).all())
+            catalog_ids = {u.catalog_item_id for u in upgrades}
+            items = list(
+                self.db.scalars(select(AppCatalogItem).where(AppCatalogItem.catalog_id.in_(catalog_ids))).all()
+            )
+            item_map = {i.catalog_id: i for i in items}
+            release_ids = {i.release_id for i in items}
+            releases = list(self.db.scalars(select(AppRelease).where(AppRelease.release_id.in_(release_ids))).all())
+            release_map = {r.release_id: r for r in releases}
+
+            for up in upgrades:
+                item = item_map.get(up.catalog_item_id)
+                release = release_map.get(item.release_id) if item else None
+                upgrade_map[up.upgrade_id] = {
+                    "catalog_label": item.label if item else None,
+                    "release_version": release.version if release else None,
+                    "release_name": release.name if release else None,
+                }
+
+        return {
+            "pending": pending,
+            "history": history,
+            "inst_map": inst_map,
+            "upgrade_map": upgrade_map,
+        }
+
+    def resolve_upgrade_schedule(self, approval: DeployApproval) -> tuple[str | None, datetime | None]:
+        if approval.deployment_type != "upgrade" or not approval.upgrade_id:
+            return None, None
+        from app.models.app_upgrade import AppUpgrade
+
+        upgrade = self.db.get(AppUpgrade, approval.upgrade_id)
+        if not upgrade:
+            return None, None
+        return str(upgrade.upgrade_id), upgrade.scheduled_for
+
+    @staticmethod
+    def serialize_approval(approval: DeployApproval) -> dict:
+        return {
+            "approval_id": str(approval.approval_id),
+            "instance_id": str(approval.instance_id),
+            "upgrade_id": str(approval.upgrade_id) if approval.upgrade_id else None,
+            "requested_by_name": approval.requested_by_name,
+            "deployment_type": approval.deployment_type,
+            "git_ref": approval.git_ref,
+            "reason": approval.reason,
+            "status": approval.status.value,
+            "created_at": approval.created_at.isoformat() if approval.created_at else None,
+        }

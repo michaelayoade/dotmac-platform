@@ -230,6 +230,25 @@ class ModuleService:
             )
         return result
 
+    @staticmethod
+    def serialize_module(module: Module) -> dict:
+        return {
+            "module_id": str(module.module_id),
+            "name": module.name,
+            "slug": module.slug,
+            "description": module.description,
+            "schemas": module.schemas,
+            "dependencies": module.dependencies,
+            "is_core": module.is_core,
+        }
+
+    def serialize_instance_module(self, entry: dict) -> dict:
+        module = entry["module"]
+        return {
+            "module": self.serialize_module(module),
+            "enabled": entry["enabled"],
+        }
+
     def get_enabled_schemas(self, instance_id: UUID) -> list[str]:
         """Get the list of database schemas that should be created for an instance."""
         schemas: list[str] = []

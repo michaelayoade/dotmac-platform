@@ -56,6 +56,21 @@ class UpgradeService:
         )
         return list(self.db.scalars(stmt).all())
 
+    @staticmethod
+    def serialize_upgrade(upgrade: AppUpgrade) -> dict:
+        return {
+            "upgrade_id": str(upgrade.upgrade_id),
+            "catalog_item_id": str(upgrade.catalog_item_id),
+            "status": upgrade.status.value,
+            "scheduled_for": upgrade.scheduled_for.isoformat() if upgrade.scheduled_for else None,
+            "started_at": upgrade.started_at.isoformat() if upgrade.started_at else None,
+            "completed_at": upgrade.completed_at.isoformat() if upgrade.completed_at else None,
+            "cancelled_by": upgrade.cancelled_by,
+            "cancelled_by_name": upgrade.cancelled_by_name,
+            "error_message": upgrade.error_message,
+            "created_at": upgrade.created_at.isoformat() if upgrade.created_at else None,
+        }
+
     def run_upgrade(self, upgrade_id: UUID) -> dict:
         upgrade = self.db.get(AppUpgrade, upgrade_id)
         if not upgrade:

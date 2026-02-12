@@ -32,8 +32,10 @@ def dashboard(
 ) -> Response:
     from datetime import datetime
 
+    from app.services.common import coerce_uuid
     from app.services.health_service import HealthService
     from app.services.instance_service import InstanceService
+    from app.services.onboarding_service import OnboardingService
     from app.services.server_service import ServerService
 
     health_svc = HealthService(db)
@@ -43,6 +45,16 @@ def dashboard(
     stats = health_svc.get_dashboard_stats()
     instances = instance_svc.list_all()
     servers = server_svc.list_all()
+
+    # Onboarding
+    show_onboarding = False
+    onboarding_checklist = None
+    person_id = coerce_uuid(auth.person_id)
+    if person_id:
+        onboarding_svc = OnboardingService(db)
+        show_onboarding = onboarding_svc.should_show_onboarding(person_id)
+        if show_onboarding:
+            onboarding_checklist = onboarding_svc.get_checklist(person_id)
 
     # Batch-fetch latest health checks to avoid N+1
     instance_ids = [inst.instance_id for inst in instances]
@@ -76,11 +88,13 @@ def dashboard(
         ctx(
             request,
             auth,
-            "Dashboard",
+            "Fleet Overview",
             active_page="dashboard",
             stats=stats,
             instances=instance_data,
             servers=servers,
+            show_onboarding=show_onboarding,
+            onboarding_checklist=onboarding_checklist,
         ),
     )
     response.headers["ETag"] = etag

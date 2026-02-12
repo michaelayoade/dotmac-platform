@@ -113,3 +113,33 @@ class NotificationService:
         result = self.db.execute(stmt)
         self.db.flush()
         return result.rowcount  # type: ignore[return-value]
+
+    def get_api_payload(self, person_id: UUID, limit: int, offset: int) -> dict:
+        notifications = self.get_recent(person_id, limit=limit, offset=offset)
+        unread_count = self.get_unread_count(person_id)
+        return {
+            "unread_count": unread_count,
+            "notifications": [
+                {
+                    "notification_id": str(n.notification_id),
+                    "category": n.category.value,
+                    "severity": n.severity.value,
+                    "title": n.title,
+                    "message": n.message,
+                    "link": n.link,
+                    "is_read": n.is_read,
+                    "created_at": n.created_at.isoformat() if n.created_at else None,
+                }
+                for n in notifications
+            ],
+        }
+
+    def get_badge_html(self, person_id: UUID) -> str:
+        count = self.get_unread_count(person_id)
+        if count == 0:
+            return ""
+        display = "99+" if count > 99 else str(count)
+        return (
+            f'<span class="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center '
+            f'rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{display}</span>'
+        )
