@@ -2,6 +2,10 @@
 RBAC — Web routes for roles and permissions management.
 """
 
+from __future__ import annotations
+
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates

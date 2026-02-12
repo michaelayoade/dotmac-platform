@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role
@@ -51,10 +51,11 @@ def get_otel_config(
 def delete_otel_config(
     instance_id: UUID,
     db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     svc = OtelExportService(db)
     svc.delete_config(instance_id)
     db.commit()
+    return Response(status_code=204)
 
 
 @router.post("/test", dependencies=[Depends(require_role("admin"))])
