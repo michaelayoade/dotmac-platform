@@ -11,14 +11,16 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "a1b2c3d4e5f7"
-down_revision = "f9a1b2c3d4e5"
+down_revision = "b9c0d1e2f3a4"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
     with op.batch_alter_table("people") as batch_op:
-        batch_op.add_column(sa.Column("onboarding_completed", sa.Boolean(), nullable=True, server_default=sa.text("0")))
+        batch_op.add_column(
+            sa.Column("onboarding_completed", sa.Boolean(), nullable=True, server_default=sa.text("false"))
+        )
 
 
 def downgrade() -> None:
