@@ -25,18 +25,7 @@ def onboarding_page(
 ) -> Response:
     svc = OnboardingService(db)
     person_id = coerce_uuid(auth.person_id)
-    if not person_id:
-        return templates.TemplateResponse(
-            "onboarding.html",
-            ctx(
-                request,
-                auth,
-                "Getting Started",
-                active_page="onboarding",
-                checklist={"steps": [], "completed_count": 0, "total_count": 0, "percent": 0},
-            ),
-        )
-    checklist = svc.get_checklist(person_id)
+    checklist = svc.get_checklist_safe(person_id)
     return templates.TemplateResponse(
         "onboarding.html",
         ctx(request, auth, "Getting Started", active_page="onboarding", checklist=checklist),

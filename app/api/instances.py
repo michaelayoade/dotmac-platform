@@ -26,28 +26,17 @@ def create_instance(
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
-    from app.services.catalog_service import CatalogService
-    from app.services.git_repo_service import GitRepoService
     from app.services.instance_service import InstanceService
 
     svc = InstanceService(db)
     try:
-        catalog_item = CatalogService(db).get_catalog_item(payload.catalog_item_id)
-        if not catalog_item or not catalog_item.is_active:
-            raise ValueError("Selected catalog item is invalid")
-        release = catalog_item.release
-        if not release or not release.is_active:
-            raise ValueError("Catalog release is invalid")
-        repo = GitRepoService(db).get_by_id(release.git_repo_id)
-        if not repo or not repo.is_active:
-            raise ValueError("Catalog release repo is invalid")
-
-        instance = svc.create(
+        instance = svc.create_with_catalog(
             server_id=payload.server_id,
             org_code=payload.org_code,
             org_name=payload.org_name,
-            sector_type=payload.sector_type.value,
-            framework=payload.framework.value,
+            catalog_item_id=payload.catalog_item_id,
+            sector_type=payload.sector_type.value if payload.sector_type else None,
+            framework=payload.framework.value if payload.framework else None,
             currency=payload.currency,
             admin_email=payload.admin_email,
             admin_username=payload.admin_username,
@@ -55,8 +44,6 @@ def create_instance(
             app_port=payload.app_port,
             db_port=payload.db_port,
             redis_port=payload.redis_port,
-            git_repo_id=release.git_repo_id,
-            catalog_item_id=payload.catalog_item_id,
         )
         db.commit()
         return InstanceCreateResponse(
@@ -75,6 +62,26 @@ def create_instance(
     except Exception:
         db.rollback()
         raise
+
+
+# ──────────────────────────── Auto-Deploy ─────────────────────────
+
+
+@router.post("/{instance_id}/auto-deploy")
+def toggle_auto_deploy(
+    instance_id: UUID,
+    enabled: bool = True,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.instance_service import InstanceService
+
+    try:
+        instance = InstanceService(db).set_auto_deploy(instance_id, enabled)
+        db.commit()
+        return {"instance_id": str(instance_id), "auto_deploy": instance.auto_deploy}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # ──────────────────────────── Modules ────────────────────────────
@@ -201,18 +208,14 @@ def assign_plan(
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
-    from app.models.instance import Instance
-    from app.services.plan_service import PlanService
+    from app.services.instance_service import InstanceService
 
-    instance = db.get(Instance, instance_id)
-    if not instance:
-        raise HTTPException(status_code=404, detail="Instance not found")
-    plan = PlanService(db).get_by_id(plan_id)
-    if not plan:
-        raise HTTPException(status_code=404, detail="Plan not found")
-    instance.plan_id = plan_id
-    db.commit()
-    return {"instance_id": str(instance_id), "plan_id": str(plan_id)}
+    try:
+        InstanceService(db).assign_plan(instance_id, plan_id)
+        db.commit()
+        return {"instance_id": str(instance_id), "plan_id": str(plan_id)}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # ──────────────────────────── Secret Rotation ────────────────────
@@ -568,19 +571,14 @@ def create_batch_deploy(
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
-    from app.models.deployment_batch import BatchStrategy
     from app.services.batch_deploy_service import BatchDeployService
     from app.tasks.deploy import run_batch_deploy
 
-    if not instance_ids or len(instance_ids) > 100:
-        raise HTTPException(status_code=400, detail="instance_ids must contain 1–100 entries")
-    try:
-        BatchStrategy(strategy)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid strategy: {strategy!r}")
-
     svc = BatchDeployService(db)
-    batch = svc.create_batch(instance_ids, strategy=strategy)
+    try:
+        batch = svc.create_batch_validated(instance_ids, strategy=strategy)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     db.commit()
     run_batch_deploy.delay(str(batch.batch_id))
     return {
@@ -999,20 +997,12 @@ def approve_deploy(
 
     svc = ApprovalService(db)
     try:
-        approval = svc.approve(
+        approval = svc.approve_and_dispatch(
             approval_id,
             approved_by=str(auth.get("person_id", "")) if isinstance(auth, dict) else "unknown",
         )
-        upgrade_id, upgrade_eta = svc.resolve_upgrade_schedule(approval)
-
         db.commit()
-        if upgrade_id:
-            from app.tasks.upgrade import run_upgrade
-
-            if upgrade_eta:
-                run_upgrade.apply_async(args=[upgrade_id], eta=upgrade_eta)
-            else:
-                run_upgrade.delay(upgrade_id)
+        svc.dispatch_upgrade()
         return {"approval_id": str(approval.approval_id), "status": approval.status.value}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1115,59 +1105,19 @@ def create_upgrade(
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
-    from datetime import UTC as _UTC
-    from datetime import datetime
-
     from app.services.upgrade_service import UpgradeService
-    from app.tasks.upgrade import run_upgrade
 
+    svc = UpgradeService(db)
     try:
-        scheduled_dt = None
-        if scheduled_for:
-            scheduled_dt = datetime.fromisoformat(scheduled_for)
-            if scheduled_dt.tzinfo is None:
-                scheduled_dt = scheduled_dt.replace(tzinfo=_UTC)
-
-        upgrade = UpgradeService(db).create_upgrade(
+        result = svc.create_and_dispatch(
             instance_id,
             catalog_item_id,
-            scheduled_for=scheduled_dt,
-            requested_by=auth.get("person_id"),
+            scheduled_for=scheduled_for,
+            requested_by=str(auth.get("person_id", "")) if isinstance(auth, dict) else None,
         )
-        from app.services.approval_service import ApprovalService
-        from app.services.catalog_service import CatalogService
-
-        approval_svc = ApprovalService(db)
-        catalog_item = CatalogService(db).get_catalog_item(catalog_item_id)
-        release = catalog_item.release if catalog_item else None
-        if approval_svc.requires_approval(instance_id):
-            reason = None
-            if catalog_item:
-                reason = f"Upgrade to {catalog_item.label}"
-                if release and release.version:
-                    reason = f"{reason} ({release.version})"
-            approval = approval_svc.request_approval(
-                instance_id,
-                requested_by=str(auth.get("person_id", "")),
-                deployment_type="upgrade",
-                git_ref=release.git_ref if release else None,
-                reason=reason,
-                upgrade_id=upgrade.upgrade_id,
-            )
-            db.commit()
-            return {
-                "upgrade_id": str(upgrade.upgrade_id),
-                "status": upgrade.status.value,
-                "approval_required": True,
-                "approval_id": str(approval.approval_id),
-            }
-
         db.commit()
-        if scheduled_dt:
-            run_upgrade.apply_async(args=[str(upgrade.upgrade_id)], eta=scheduled_dt)
-        else:
-            run_upgrade.delay(str(upgrade.upgrade_id))
-        return {"upgrade_id": str(upgrade.upgrade_id), "status": upgrade.status.value, "approval_required": False}
+        svc.dispatch_pending()
+        return result
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -1184,14 +1134,13 @@ def cancel_upgrade(
     from app.services.upgrade_service import UpgradeService
 
     try:
-        upgrade = UpgradeService(db).cancel_upgrade(
+        upgrade = UpgradeService(db).cancel_for_instance(
+            instance_id,
             upgrade_id,
             reason=reason,
             cancelled_by=str(auth.get("person_id", "")),
             cancelled_by_name=str(auth.get("user_name", "")) if isinstance(auth, dict) else None,
         )
-        if upgrade.instance_id != instance_id:
-            raise HTTPException(status_code=400, detail="Upgrade does not match instance")
         db.commit()
         return {"upgrade_id": str(upgrade.upgrade_id), "status": upgrade.status.value}
     except ValueError as e:

@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -45,9 +45,11 @@ class Instance(Base):
     org_code: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
     org_name: Mapped[str] = mapped_column(String(200), nullable=False)
     org_uuid: Mapped[str | None] = mapped_column(String(36))
-    sector_type: Mapped[SectorType] = mapped_column(Enum(SectorType), default=SectorType.PRIVATE)
-    framework: Mapped[AccountingFramework] = mapped_column(Enum(AccountingFramework), default=AccountingFramework.IFRS)
-    currency: Mapped[str] = mapped_column(String(3), default="NGN")
+    sector_type: Mapped[SectorType | None] = mapped_column(Enum(SectorType), nullable=True, default=None)
+    framework: Mapped[AccountingFramework | None] = mapped_column(
+        Enum(AccountingFramework), nullable=True, default=None
+    )
+    currency: Mapped[str | None] = mapped_column(String(3), nullable=True, default=None)
     app_port: Mapped[int] = mapped_column(Integer, nullable=False)
     db_port: Mapped[int] = mapped_column(Integer, nullable=False)
     redis_port: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -78,6 +80,7 @@ class Instance(Base):
         nullable=True,
         index=True,
     )
+    auto_deploy: Mapped[bool] = mapped_column(Boolean, default=False)
     # Lifecycle
     trial_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -5,11 +5,9 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_instance_access, require_role, require_user_auth
-from app.models.instance import Instance
 
 router = APIRouter(prefix="/dr/plans", tags=["disaster-recovery"])
 
@@ -47,22 +45,13 @@ def list_dr_plans(
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
-    from app.models.dr_plan import DisasterRecoveryPlan
     from app.services.dr_service import DisasterRecoveryService
 
-    svc = DisasterRecoveryService(db)
     org_id = auth.get("org_id")
     if not org_id:
         raise HTTPException(status_code=401, detail="Organization context required")
-    stmt = (
-        select(DisasterRecoveryPlan)
-        .join(Instance, Instance.instance_id == DisasterRecoveryPlan.instance_id)
-        .where(Instance.org_id == UUID(org_id))
-        .order_by(DisasterRecoveryPlan.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
-    plans = list(db.scalars(stmt).all())
+    svc = DisasterRecoveryService(db)
+    plans = svc.list_for_org(UUID(org_id), limit=limit, offset=offset)
     return [svc.serialize_plan(p) for p in plans]
 
 

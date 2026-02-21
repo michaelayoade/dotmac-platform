@@ -1,0 +1,123 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-2xl font-display text-surface-800 dark:text-surface-100">Notification Preferences</h1>
+        <p class="text-[13px] text-surface-400 dark:text-surface-500">Configure external channels for notification dispatch (Slack, Telegram, email).</p>
+    </div>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-800 dark:text-white">Channels</h2>
+        <div class="mt-4 space-y-3">
+            {% for item in channels %}
+            {% set ch = item.channel %}
+            <div class="rounded-lg border border-surface-200/80 bg-surface-50 px-4 py-3 text-[12px] dark:border-surface-800/50 dark:bg-surface-800/40">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            {% if ch.channel_type.value == "slack" %}
+                            <span class="inline-block rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">Slack</span>
+                            {% elif ch.channel_type.value == "telegram" %}
+                            <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">Telegram</span>
+                            {% elif ch.channel_type.value == "email" %}
+                            <span class="inline-block rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">Email</span>
+                            {% endif %}
+                            <p class="font-medium text-surface-800 dark:text-surface-100">{{ ch.label }}</p>
+                            {% if item.is_global %}
+                            <span class="inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Global</span>
+                            {% endif %}
+                            {% if not ch.is_active %}
+                            <span class="inline-block rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/40 dark:text-red-300">Inactive</span>
+                            {% endif %}
+                        </div>
+                        <p class="mt-1 text-surface-400 dark:text-surface-500">{{ item.config_masked }}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <form method="POST" action="/notification-preferences/{{ ch.channel_id }}/test">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <button type="submit" class="text-[11px] text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200">Test</button>
+                        </form>
+                        <form method="POST" action="/notification-preferences/{{ ch.channel_id }}/toggle">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <button type="submit" class="text-[11px] text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200">
+                                {{ "Enable" if not ch.is_active else "Disable" }}
+                            </button>
+                        </form>
+                        <form method="POST" action="/notification-preferences/{{ ch.channel_id }}/delete">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <button type="submit" class="text-[11px] text-red-600 hover:text-red-700 dark:text-red-400">Remove</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <p class="text-[12px] text-surface-400 dark:text-surface-500">No channels configured yet. Add one to start receiving notifications externally.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-800 dark:text-white">Add Channel</h2>
+        <form method="POST" action="/notification-preferences" class="mt-4 space-y-3 text-[12px]">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <div>
+                <label for="channel_type" class="block text-[11px] font-medium text-surface-600 dark:text-surface-400">Type</label>
+                <select name="channel_type" id="channel_type"
+                    class="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-surface-200"
+                    onchange="showConfigFields(this.value)">
+                    <option value="">Select channel type...</option>
+                    {% for ct in channel_types %}
+                    <option value="{{ ct }}">{{ ct | capitalize }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="label" class="block text-[11px] font-medium text-surface-600 dark:text-surface-400">Label</label>
+                <input type="text" name="label" id="label" maxlength="120" placeholder="e.g. My Slack Channel"
+                    class="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-surface-200" />
+            </div>
+
+            <div id="config-email" style="display:none">
+                <label class="block text-[11px] font-medium text-surface-600 dark:text-surface-400">Email Address</label>
+                <input type="email" name="config_email" placeholder="alerts@example.com"
+                    class="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-surface-200" />
+            </div>
+            <div id="config-slack" style="display:none">
+                <label class="block text-[11px] font-medium text-surface-600 dark:text-surface-400">Slack Webhook URL</label>
+                <input type="url" name="config_webhook_url" placeholder="https://hooks.slack.com/services/..."
+                    class="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-surface-200" />
+            </div>
+            <div id="config-telegram" style="display:none">
+                <label class="block text-[11px] font-medium text-surface-600 dark:text-surface-400">Bot Token</label>
+                <input type="text" name="config_bot_token" placeholder="123456:ABC-..."
+                    class="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-surface-200" />
+                <label class="mt-2 block text-[11px] font-medium text-surface-600 dark:text-surface-400">Chat ID</label>
+                <input type="text" name="config_chat_id" placeholder="-100123456789"
+                    class="mt-1 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-surface-200" />
+            </div>
+
+            <div class="flex items-center gap-2">
+                <input type="checkbox" name="is_global" id="is_global" value="true"
+                    class="rounded border-surface-300 dark:border-surface-600" />
+                <label for="is_global" class="text-[11px] text-surface-600 dark:text-surface-400">Global channel (admin only — applies to all users)</label>
+            </div>
+
+            <button type="submit"
+                class="rounded-lg bg-surface-800 px-4 py-2 text-[12px] font-medium text-white hover:bg-surface-700 dark:bg-surface-200 dark:text-surface-900 dark:hover:bg-surface-300">
+                Add Channel
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+function showConfigFields(type) {
+    document.getElementById('config-email').style.display = type === 'email' ? 'block' : 'none';
+    document.getElementById('config-slack').style.display = type === 'slack' ? 'block' : 'none';
+    document.getElementById('config-telegram').style.display = type === 'telegram' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

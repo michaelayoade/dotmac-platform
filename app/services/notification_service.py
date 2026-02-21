@@ -41,6 +41,7 @@ class NotificationService:
         )
         self.db.add(n)
         self.db.flush()
+        _queue_channel_dispatch(n)
         return n
 
     def create_for_admins(
@@ -62,6 +63,7 @@ class NotificationService:
         )
         self.db.add(n)
         self.db.flush()
+        _queue_channel_dispatch(n)
         return n
 
     def get_unread_count(self, person_id: UUID) -> int:
@@ -143,3 +145,13 @@ class NotificationService:
             f'<span class="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center '
             f'rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{display}</span>'
         )
+
+
+def _queue_channel_dispatch(notification: Notification) -> None:
+    """Best-effort: queue external channel dispatch for a notification."""
+    try:
+        from app.tasks.notifications import dispatch_notification
+
+        dispatch_notification.delay(str(notification.notification_id))
+    except Exception:
+        logger.debug("Failed to queue notification dispatch", exc_info=True)

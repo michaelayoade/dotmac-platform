@@ -31,6 +31,7 @@ class GitRepoService:
         credential: str | None = None,
         default_branch: str = "main",
         is_platform_default: bool = False,
+        registry_url: str | None = None,
     ) -> GitRepository:
         if not label.strip():
             raise ValueError("Label is required")
@@ -44,6 +45,7 @@ class GitRepoService:
             auth_type=auth_type,
             default_branch=(default_branch or "main").strip(),
             is_platform_default=is_platform_default,
+            registry_url=registry_url.strip() if registry_url else None,
             is_active=True,
         )
         if auth_type == GitAuthType.ssh_key and credential:
@@ -126,6 +128,7 @@ class GitRepoService:
         credential: str | None,
         default_branch: str,
         is_platform_default: bool,
+        registry_url: str | None = None,
     ) -> GitRepository:
         auth_enum = GitAuthType(auth_type)
         return self.create_repo(
@@ -135,6 +138,7 @@ class GitRepoService:
             credential=credential,
             default_branch=default_branch,
             is_platform_default=is_platform_default,
+            registry_url=registry_url,
         )
 
     def get_by_id(self, repo_id: UUID) -> GitRepository | None:
@@ -210,7 +214,7 @@ class GitRepoService:
             repo.is_platform_default = False
 
     @staticmethod
-    def serialize_repo(repo: GitRepository) -> dict:
+    def serialize_repo(repo: GitRepository) -> dict[str, object]:
         return {
             "repo_id": str(repo.repo_id),
             "label": repo.label,
@@ -218,10 +222,59 @@ class GitRepoService:
             "auth_type": repo.auth_type.value,
             "default_branch": repo.default_branch,
             "is_platform_default": repo.is_platform_default,
+            "registry_url": repo.registry_url,
             "is_active": repo.is_active,
             "created_at": repo.created_at.isoformat() if repo.created_at else None,
             "updated_at": repo.updated_at.isoformat() if repo.updated_at else None,
         }
+
+    @staticmethod
+    def resolve_image_ref(
+        repo: GitRepository,
+        git_ref: str | None = None,
+        instance: Instance | None = None,
+    ) -> str:
+        """Resolve a full container image reference for a prebuilt image.
+
+        Tag priority: git_ref > instance.git_tag > instance.git_branch
+        > repo.default_branch > "latest".
+        """
+        if not repo.registry_url:
+            raise ValueError("Repository does not have a registry URL configured")
+        tag = git_ref
+        if not tag and instance:
+            tag = instance.git_tag or instance.git_branch
+        if not tag:
+            tag = repo.default_branch or "latest"
+        base = repo.registry_url.rstrip("/")
+        return f"{base}:{tag}"
+
+    def set_webhook_secret(self, repo_id: UUID, secret: str) -> None:
+        """Encrypt and store a webhook secret for a repo."""
+        repo = self.get_by_id(repo_id)
+        if not repo:
+            raise ValueError("Repo not found")
+        repo.webhook_secret_encrypted = encrypt_value(secret)
+        self.db.flush()
+
+    def get_webhook_secret(self, repo_id: UUID) -> str | None:
+        """Decrypt and return the webhook secret for a repo."""
+        repo = self.get_by_id(repo_id)
+        if not repo or not repo.webhook_secret_encrypted:
+            return None
+        return decrypt_value(repo.webhook_secret_encrypted)
+
+    def generate_webhook_secret(self, repo_id: UUID) -> str:
+        """Generate a random webhook secret, store it, and return the plaintext."""
+        import secrets as _secrets
+
+        repo = self.get_by_id(repo_id)
+        if not repo:
+            raise ValueError("Repo not found")
+        plaintext = _secrets.token_hex(32)
+        repo.webhook_secret_encrypted = encrypt_value(plaintext)
+        self.db.flush()
+        return plaintext
 
     @staticmethod
     def parse_auth_type(value: str) -> GitAuthType:

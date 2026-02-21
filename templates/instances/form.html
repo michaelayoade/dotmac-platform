@@ -83,31 +83,64 @@
                 </div>
             </div>
 
-            <div class="grid gap-5 sm:grid-cols-3">
-                <div>
-                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Sector Type</label>
-                    <select name="sector_type" data-testid="instance-sector"
-                            class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
-                        <option value="PRIVATE" selected>Private Sector</option>
-                        <option value="PUBLIC">Public Sector</option>
-                        <option value="NGO">NGO / Non-Profit</option>
-                    </select>
+            <details class="group rounded-lg border border-surface-200/80 dark:border-surface-800/50" x-data="{ open: false }">
+                <summary class="cursor-pointer px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500 select-none list-none flex items-center gap-2" @click.prevent="open = !open">
+                    <svg class="h-3.5 w-3.5 transition-transform" :class="open && 'rotate-90'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+                    ERP Configuration (optional)
+                </summary>
+                <div class="px-4 pb-4 pt-1 grid gap-5 sm:grid-cols-3" x-show="open" x-cloak>
+                    <div>
+                        <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Sector Type</label>
+                        <select name="sector_type" data-testid="instance-sector"
+                                class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
+                            <option value="" selected>Not applicable</option>
+                            <option value="PRIVATE">Private Sector</option>
+                            <option value="PUBLIC">Public Sector</option>
+                            <option value="NGO">NGO / Non-Profit</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Framework</label>
+                        <select name="framework" data-testid="instance-framework"
+                                class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
+                            <option value="" selected>Not applicable</option>
+                            <option value="IFRS">IFRS</option>
+                            <option value="IPSAS">IPSAS</option>
+                            <option value="BOTH">Both</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Currency</label>
+                        <input type="text" name="currency" value="" maxlength="3" data-testid="instance-currency"
+                               class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] font-mono uppercase dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Framework</label>
-                    <select name="framework" data-testid="instance-framework"
-                            class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
-                        <option value="IFRS" selected>IFRS</option>
-                        <option value="IPSAS">IPSAS</option>
-                        <option value="BOTH">Both</option>
-                    </select>
+            </details>
+
+            <details class="group rounded-lg border border-surface-200/80 dark:border-surface-800/50" x-data="{ open: false }">
+                <summary class="cursor-pointer px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500 select-none list-none flex items-center gap-2" @click.prevent="open = !open">
+                    <svg class="h-3.5 w-3.5 transition-transform" :class="open && 'rotate-90'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+                    Custom Ports (optional)
+                </summary>
+                <div class="px-4 pb-4 pt-1 grid gap-5 sm:grid-cols-3" x-show="open" x-cloak>
+                    <div>
+                        <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">App Port</label>
+                        <input type="number" name="app_port" placeholder="Auto" min="1" max="65535" data-testid="instance-app-port"
+                               class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] font-mono dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">DB Port</label>
+                        <input type="number" name="db_port" placeholder="Auto" min="1" max="65535" data-testid="instance-db-port"
+                               class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] font-mono dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Redis Port</label>
+                        <input type="number" name="redis_port" placeholder="Auto" min="1" max="65535" data-testid="instance-redis-port"
+                               class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] font-mono dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+                    </div>
+                    <p class="sm:col-span-3 text-[11px] text-surface-400 dark:text-surface-500">Leave empty to auto-allocate ports from the server's pool.</p>
                 </div>
-                <div>
-                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Currency</label>
-                    <input type="text" name="currency" value="NGN" maxlength="3" data-testid="instance-currency"
-                           class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] font-mono uppercase dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
-                </div>
-            </div>
+            </details>
 
             <div class="grid gap-5 sm:grid-cols-2">
                 <div>

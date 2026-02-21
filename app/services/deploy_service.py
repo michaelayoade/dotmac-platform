@@ -13,6 +13,7 @@ import shlex
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from cryptography.fernet import InvalidToken
@@ -26,6 +27,9 @@ from app.models.server import Server
 from app.services.auth_flow import _decrypt_secret as _decrypt_auth_secret
 from app.services.auth_flow import _encrypt_secret as _encrypt_auth_secret
 from app.services.ssh_service import SSHService, get_ssh_for_server
+
+if TYPE_CHECKING:
+    from app.models.git_repository import GitRepository
 
 logger = logging.getLogger(__name__)
 
@@ -221,6 +225,7 @@ class DeployService:
         log = self.db.scalar(stmt)
         if not log or not log.deploy_secret:
             return None
+        return _decrypt_deploy_secret(self.db, log.deploy_secret)
 
     def get_deploy_log_bundle(self, instance_id: UUID, deployment_id: str | None = None) -> dict:
         from app.services.instance_service import InstanceService
@@ -242,7 +247,6 @@ class DeployService:
             "logs": logs,
             "is_running": is_running,
         }
-        return _decrypt_deploy_secret(self.db, log.deploy_secret)
 
     def clear_deploy_secret(self, instance_id: UUID, deployment_id: str) -> None:
         """Clear deploy secrets after a successful deployment."""
@@ -411,7 +415,7 @@ class DeployService:
                 logger.warning("Pre-deploy backup failed for %s — continuing", instance.org_code)
 
             # Step 1: Generate instance files
-            results["generate"] = self._step_generate(instance, deployment_id, admin_password)
+            results["generate"] = self._step_generate(instance, deployment_id, admin_password, git_ref=git_ref)
             if not results["generate"]:
                 raise DeployError("generate", "File generation failed")
 
@@ -477,7 +481,7 @@ class DeployService:
             # Record deployed git ref
             if git_ref:
                 instance.deployed_git_ref = git_ref
-            elif getattr(instance, "catalog_item_id", None):
+            elif instance.catalog_item_id is not None:
                 try:
                     from app.services.catalog_service import CatalogService
 
@@ -548,6 +552,31 @@ class DeployService:
         """Lightweight reconfigure: regenerate .env, transfer, restart, verify."""
         instance_id = instance.instance_id
 
+        # Detect mode switch (source ↔ prebuilt image) — reconfigure can't handle this
+        try:
+            from app.services.git_repo_service import GitRepoService
+
+            repo = GitRepoService(self.db).get_repo_for_instance(instance.instance_id)
+            wants_prebuilt = bool(repo and repo.uses_prebuilt_image)
+            if instance.deploy_path:
+                env_check = ssh.exec_command(
+                    f"grep -q DOTMAC_IMAGE {shlex.quote(instance.deploy_path)}/.env && echo yes || echo no",
+                    timeout=10,
+                )
+                has_prebuilt = "yes" in env_check.stdout
+                if wants_prebuilt != has_prebuilt:
+                    mode_from = "source-build" if has_prebuilt else "prebuilt-image"
+                    mode_to = "prebuilt-image" if wants_prebuilt else "source-build"
+                    raise DeployError(
+                        "generate",
+                        f"Deploy mode changed from {mode_from} to {mode_to}. "
+                        f"Use a full deploy (not reconfigure) to apply this change.",
+                    )
+        except DeployError:
+            raise
+        except Exception:
+            logger.debug("Mode-switch detection skipped", exc_info=True)
+
         results["generate"] = self._step_generate(instance, deployment_id, admin_password)
         if not results["generate"]:
             raise DeployError("generate", "File generation failed")
@@ -577,7 +606,9 @@ class DeployService:
         step = "backup"
         self._update_step(instance.instance_id, deployment_id, step, DeployStepStatus.running)
         try:
-            if instance.status == InstanceStatus.provisioned:
+            # Instance status is set to "deploying" before the pipeline starts, so we can't
+            # rely on status to detect first deploy. Use deployed_git_ref as a durable marker.
+            if not instance.deployed_git_ref:
                 self._update_step(
                     instance.instance_id,
                     deployment_id,
@@ -602,12 +633,24 @@ class DeployService:
                 )
                 return True
 
+            error = backup.error_message or "unknown error"
+            err_lower = error.lower()
+            if "no such container" in err_lower and "_db" in err_lower:
+                self._update_step(
+                    instance.instance_id,
+                    deployment_id,
+                    step,
+                    DeployStepStatus.skipped,
+                    "No existing database container found — skipping backup",
+                )
+                return True
+
             self._update_step(
                 instance.instance_id,
                 deployment_id,
                 step,
                 DeployStepStatus.failed,
-                f"Backup failed: {backup.error_message or 'unknown error'}",
+                f"Backup failed: {error}",
             )
             return False
         except Exception as e:
@@ -636,14 +679,20 @@ class DeployService:
         )
         return False
 
-    def _step_generate(self, instance: Instance, deployment_id: str, admin_password: str | None) -> bool:
+    def _step_generate(
+        self,
+        instance: Instance,
+        deployment_id: str,
+        admin_password: str | None,
+        git_ref: str | None = None,
+    ) -> bool:
         step = "generate"
         self._update_step(instance.instance_id, deployment_id, step, DeployStepStatus.running)
         try:
             from app.services.instance_service import InstanceService
 
             svc = InstanceService(self.db)
-            result = svc.provision_files(instance, admin_password or "")
+            result = svc.provision_files(instance, admin_password or "", git_ref=git_ref)
             self._update_step(
                 instance.instance_id,
                 deployment_id,
@@ -700,12 +749,17 @@ class DeployService:
         from app.services.git_repo_service import GitRepoService, format_env_prefix
         from app.services.platform_settings import PlatformSettingsService
 
+        # If the repo uses a pre-built image, pull instead of clone/build
+        repo_service = GitRepoService(self.db)
+        repo = repo_service.get_repo_for_instance(instance.instance_id)
+        if repo and repo.uses_prebuilt_image:
+            return self._step_pull_image(instance, deployment_id, ssh, repo, git_ref)
+
         ps = PlatformSettingsService(self.db)
         src_path = ps.get("dotmac_source_path")
-        repo_service = GitRepoService(self.db)
         repo = None
         release = None
-        if getattr(instance, "catalog_item_id", None):
+        if instance.catalog_item_id is not None:
             catalog_item = CatalogService(self.db).get_catalog_item(instance.catalog_item_id)
             if not catalog_item or not catalog_item.is_active:
                 self._update_step(
@@ -776,6 +830,45 @@ class DeployService:
         # Check if source already exists
         result = ssh.exec_command(f"test -d {q_src}/.git && echo 'exists'")
         if "exists" in result.stdout:
+            # If the expected repo URL doesn't match the existing origin URL, re-clone.
+            # Otherwise the deploy can silently keep using the wrong repository.
+            if git_repo_url:
+                origin = ssh.exec_command(f"git -C {q_src} remote get-url origin", timeout=15)
+                origin_url = (origin.stdout or "").strip()
+                if origin.ok and origin_url and origin_url != git_repo_url:
+                    backup_path = f"{src_path}.bak.{deployment_id[:8]}"
+                    self._update_step(
+                        instance.instance_id,
+                        deployment_id,
+                        step,
+                        DeployStepStatus.running,
+                        f"Source repo changed (origin: {_redact_git_url(origin_url)}). Re-cloning to {src_path}...",
+                    )
+                    ssh.exec_command(f"mv {q_src} {shlex.quote(backup_path)}", timeout=60)
+                    clone_result = ssh.exec_command(
+                        f"{env_prefix}git clone --branch {q_branch} {shlex.quote(git_repo_url)} {q_src}",
+                        timeout=300,
+                    )
+                    if clone_result.ok:
+                        self._update_step(
+                            instance.instance_id,
+                            deployment_id,
+                            step,
+                            DeployStepStatus.success,
+                            f"Cloned to {src_path} (branch: {git_branch})",
+                            clone_result.stdout[-2000:] if clone_result.stdout else None,
+                        )
+                        return True
+                    self._update_step(
+                        instance.instance_id,
+                        deployment_id,
+                        step,
+                        DeployStepStatus.failed,
+                        "Git clone failed after repo change",
+                        clone_result.stderr[-2000:] if clone_result.stderr else None,
+                    )
+                    return False
+
             # Pull latest changes
             self._update_step(
                 instance.instance_id, deployment_id, step, DeployStepStatus.running, f"Updating source at {src_path}..."
@@ -856,13 +949,139 @@ class DeployService:
         )
         return False
 
+    def _step_pull_image(
+        self,
+        instance: Instance,
+        deployment_id: str,
+        ssh: SSHService,
+        repo: GitRepository,
+        git_ref: str | None = None,
+    ) -> bool:
+        """Pull a pre-built image from a container registry instead of cloning source."""
+        from app.models.git_repository import GitAuthType
+        from app.services.git_repo_service import GitRepoService
+        from app.services.settings_crypto import decrypt_value
+
+        step = "ensure_source"
+        try:
+            image_ref = GitRepoService.resolve_image_ref(repo, git_ref=git_ref, instance=instance)
+        except ValueError as exc:
+            self._update_step(
+                instance.instance_id,
+                deployment_id,
+                step,
+                DeployStepStatus.failed,
+                str(exc),
+            )
+            return False
+
+        self._update_step(
+            instance.instance_id,
+            deployment_id,
+            step,
+            DeployStepStatus.running,
+            f"Pulling pre-built image: {image_ref}...",
+        )
+
+        # Authenticate with the container registry if a token is available
+        if repo.auth_type == GitAuthType.token and repo.token_encrypted:
+            token = decrypt_value(repo.token_encrypted)
+            if token:
+                # Extract registry host from image ref (e.g. ghcr.io from ghcr.io/org/repo:tag)
+                registry_host = image_ref.split("/")[0]
+                login_cmd = (
+                    f"echo {shlex.quote(token)} | "
+                    f"docker login {shlex.quote(registry_host)} -u __token__ --password-stdin"
+                )
+                login_result = ssh.exec_command(login_cmd, timeout=30)
+                if not login_result.ok:
+                    self._update_step(
+                        instance.instance_id,
+                        deployment_id,
+                        step,
+                        DeployStepStatus.failed,
+                        "Docker registry login failed",
+                        login_result.stderr[-2000:] if login_result.stderr else None,
+                    )
+                    return False
+
+        # Pull the image
+        pull_result = ssh.exec_command(
+            f"docker pull {shlex.quote(image_ref)}",
+            timeout=300,
+        )
+        if pull_result.ok:
+            self._update_step(
+                instance.instance_id,
+                deployment_id,
+                step,
+                DeployStepStatus.success,
+                f"Pulled image: {image_ref}",
+                pull_result.stdout[-2000:] if pull_result.stdout else None,
+            )
+            return True
+
+        self._update_step(
+            instance.instance_id,
+            deployment_id,
+            step,
+            DeployStepStatus.failed,
+            f"Failed to pull image: {image_ref}",
+            pull_result.stderr[-2000:] if pull_result.stderr else None,
+        )
+        return False
+
     def _step_build(self, instance: Instance, deployment_id: str, ssh: SSHService) -> bool:
         step = "build"
+
+        # Skip build when using a pre-built container image
+        from app.services.git_repo_service import GitRepoService
+
+        repo = GitRepoService(self.db).get_repo_for_instance(instance.instance_id)
+        if repo and repo.uses_prebuilt_image:
+            self._update_step(
+                instance.instance_id,
+                deployment_id,
+                step,
+                DeployStepStatus.skipped,
+                "Skipped — using pre-built image from registry",
+            )
+            return True
+
         self._update_step(
             instance.instance_id, deployment_id, step, DeployStepStatus.running, "Building Docker images..."
         )
+        # Preflight: fail with a clearer error if the build context doesn't contain a Dockerfile.
+        # This commonly happens when the configured git repo is a frontend-only repo.
+        preflight_script = """\
+set -euo pipefail
+if [ ! -f .env ]; then echo '.env not found' >&2; exit 2; fi
+if [ ! -f docker-compose.yml ]; then echo 'docker-compose.yml not found' >&2; exit 2; fi
+ctx="$(sed -n 's/^APP_BUILD_CONTEXT=//p' .env | head -n1 | tr -d '\r')"
+if [ -z "$ctx" ]; then
+  ctx="$(sed -n 's/^[[:space:]]*context:[[:space:]]*\\${APP_BUILD_CONTEXT:-\\(.*\\)}[[:space:]]*$/\\1/p' docker-compose.yml | head -n1 | tr -d '\r')"
+fi
+if [ -z "$ctx" ]; then echo 'APP_BUILD_CONTEXT is not set and no compose fallback was found' >&2; exit 2; fi
+if [ ! -f "$ctx/Dockerfile" ]; then echo "Missing Dockerfile: $ctx/Dockerfile" >&2; exit 2; fi
+"""
+        pre = ssh.exec_command(
+            f"bash -lc {shlex.quote(preflight_script)}",
+            timeout=30,
+            cwd=instance.deploy_path,
+        )
+        if not pre.ok:
+            self._update_step(
+                instance.instance_id,
+                deployment_id,
+                step,
+                DeployStepStatus.failed,
+                "Build preflight failed",
+                (pre.stdout + "\n" + pre.stderr)[-2000:],
+            )
+            return False
         result = ssh.exec_command(
-            "docker compose build",
+            # Avoid Compose Bake mode (requires buildx) unless the server has it installed.
+            "COMPOSE_BAKE=false docker compose build",
             timeout=600,
             cwd=instance.deploy_path,
         )
@@ -1248,6 +1467,24 @@ class DeployService:
         except Exception:
             logger.exception("Failed to roll back containers for %s", instance.org_code)
 
+        # Clean up pulled images for prebuilt repos to avoid disk bloat
+        try:
+            from app.services.git_repo_service import GitRepoService
+
+            repo = GitRepoService(self.db).get_repo_for_instance(instance.instance_id)
+            if repo and repo.uses_prebuilt_image:
+                image_ref = GitRepoService.resolve_image_ref(repo, instance=instance)
+                rmi_result = ssh.exec_command(
+                    f"docker rmi {shlex.quote(image_ref)}",
+                    timeout=30,
+                )
+                if rmi_result.ok:
+                    logger.info("Removed pulled image %s during rollback for %s", image_ref, instance.org_code)
+                else:
+                    logger.debug("Could not remove image %s: %s", image_ref, rmi_result.stderr[:200])
+        except Exception:
+            logger.debug("Image cleanup skipped during rollback for %s", instance.org_code, exc_info=True)
+
     def _dispatch_webhook(self, event: str, instance: Instance, deployment_id: str, **extra) -> None:
         """Best-effort webhook dispatch for deploy events."""
         try:
@@ -1291,6 +1528,30 @@ class DeployService:
             )
         except Exception:
             logger.debug("Failed to create deploy notification", exc_info=True)
+
+        # Best-effort GitHub commit status update
+        try:
+            if event in ("deploy_success", "deploy_failed") and instance.git_repo_id:
+                from app.models.git_repository import GitAuthType, GitRepository
+
+                repo = self.db.get(GitRepository, instance.git_repo_id) if instance.git_repo_id else None
+                if repo and repo.auth_type == GitAuthType.token and repo.token_encrypted:
+                    deployed_ref = instance.deployed_git_ref or instance.git_branch
+                    if deployed_ref and len(deployed_ref) >= 7:
+                        from app.tasks.github_webhooks import update_github_commit_status
+
+                        state = "success" if event == "deploy_success" else "failure"
+                        description = f"Deploy {event.split('_')[1]} for {instance.org_code}"
+                        target_url = f"/instances/{instance.instance_id}"
+                        update_github_commit_status.delay(
+                            str(repo.repo_id),
+                            deployed_ref,
+                            state,
+                            description,
+                            target_url,
+                        )
+        except Exception:
+            logger.debug("Failed to queue commit status update", exc_info=True)
 
     def check_maintenance_window(self, instance_id: UUID) -> bool:
         """Check if deployment is allowed based on maintenance windows."""

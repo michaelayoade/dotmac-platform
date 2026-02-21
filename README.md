@@ -349,6 +349,36 @@ docker compose pull app
 docker compose up -d app
 ```
 
+## Managed Server Prerequisites (For Deployments)
+
+The platform can register servers over SSH, but **deploying instances to a server requires OS-level dependencies on that server**.
+
+Minimum requirements on each managed server:
+- Docker Engine + `docker compose` plugin available to the SSH user
+- `git` available (for cloning repos)
+- Writable deploy paths: `/opt/dotmac/instances` and `/opt/dotmac/keys` for the SSH user
+- Caddy installed and running (if you want HTTPS + domains via the platform): `/etc/caddy/sites-enabled/` and a `Caddyfile` that imports it
+- If any step needs elevated privileges (installing packages, reloading Caddy), the SSH user must have **non-interactive sudo** (no password prompt), or you must use an SSH user with the required privileges (e.g. `root`)
+
+### Bootstrap Script
+
+This repo includes a helper that can check and (optionally) install these prerequisites over SSH for all servers in the platform DB:
+
+```bash
+# Dry run (checks only)
+docker compose exec -T app python scripts/bootstrap_servers.py --all
+
+# Apply changes (requires passwordless sudo on the target servers)
+docker compose exec -T app python scripts/bootstrap_servers.py --all --execute
+```
+
+Note: Installing Docker and changing group membership typically requires the SSH user to log out/in before `docker ps` works.
+
+On Ubuntu/Debian, the compose package name varies by repository:
+- Common: `docker-compose-v2` (provides `docker compose`)
+- Fallback: `docker-compose` (legacy `docker-compose` binary)
+- `docker-compose-plugin` is typically provided by Docker's upstream apt repo, not Ubuntu's default repo.
+
 ### Version History
 
 | Version | Date | Highlights |

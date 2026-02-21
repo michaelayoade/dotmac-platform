@@ -190,6 +190,12 @@ class InstanceService:
                 return item.health_checked_at or datetime.min.replace(tzinfo=UTC)
             if sort_key == "port":
                 return inst.app_port or 0
+            if sort_key == "framework":
+                return inst.framework.value if inst.framework else ""
+            if sort_key == "sector":
+                return inst.sector_type.value if inst.sector_type else ""
+            if sort_key == "catalog":
+                return item.catalog_label or ""
             return inst.org_code
 
         reverse = sort_dir == "desc"
@@ -294,6 +300,60 @@ class InstanceService:
             raise ValueError("Selected git repository is invalid")
         instance.git_repo_id = repo.repo_id
 
+    def set_auto_deploy(self, instance_id: UUID, enabled: bool) -> Instance:
+        instance = self.get_or_404(instance_id)
+        instance.auto_deploy = enabled
+        self.db.flush()
+        return instance
+
+    def assign_plan(self, instance_id: UUID, plan_id: UUID | None) -> Instance:
+        instance = self.get_or_404(instance_id)
+        if plan_id is not None:
+            from app.services.plan_service import PlanService
+
+            plan = PlanService(self.db).get_by_id(plan_id)
+            if not plan:
+                raise ValueError("Plan not found")
+        instance.plan_id = plan_id
+        self.db.flush()
+        return instance
+
+    def create_with_catalog(
+        self,
+        *,
+        server_id: UUID,
+        org_code: str,
+        org_name: str,
+        catalog_item_id: UUID,
+        sector_type: str | None = None,
+        framework: str | None = None,
+        currency: str | None = None,
+        admin_email: str | None = None,
+        admin_username: str | None = None,
+        domain: str | None = None,
+        app_port: int | None = None,
+        db_port: int | None = None,
+        redis_port: int | None = None,
+    ) -> Instance:
+        """Validate catalog item and create an instance in one step."""
+        git_repo_id = self.resolve_catalog_repo(catalog_item_id)
+        return self.create(
+            server_id=server_id,
+            org_code=org_code,
+            org_name=org_name,
+            sector_type=sector_type,
+            framework=framework,
+            currency=currency,
+            admin_email=admin_email,
+            admin_username=admin_username,
+            domain=domain,
+            app_port=app_port,
+            db_port=db_port,
+            redis_port=redis_port,
+            git_repo_id=git_repo_id,
+            catalog_item_id=catalog_item_id,
+        )
+
     def set_git_refs(
         self,
         instance_id: UUID,
@@ -341,9 +401,9 @@ class InstanceService:
         server_id: UUID,
         org_code: str,
         org_name: str,
-        sector_type: str = "PRIVATE",
-        framework: str = "IFRS",
-        currency: str = "NGN",
+        sector_type: str | None = None,
+        framework: str | None = None,
+        currency: str | None = None,
         admin_email: str | None = None,
         admin_username: str | None = None,
         domain: str | None = None,
@@ -397,9 +457,9 @@ class InstanceService:
             org_code=org_code,
             org_name=org_name,
             org_uuid=org_uuid,
-            sector_type=SectorType(sector_type),
-            framework=AccountingFramework(framework),
-            currency=currency,
+            sector_type=SectorType(sector_type) if sector_type else None,
+            framework=AccountingFramework(framework) if framework else None,
+            currency=currency or None,
             app_port=app_port,
             db_port=db_port,
             redis_port=redis_port,
@@ -530,6 +590,7 @@ class InstanceService:
         instance: Instance,
         admin_password: str,
         existing_env: dict[str, str] | None = None,
+        image_ref: str | None = None,
     ) -> str:
         """Generate .env file content for an instance.
 
@@ -540,11 +601,15 @@ class InstanceService:
                           When provided, critical secrets (TOTP_ENCRYPTION_KEY,
                           POSTGRES_PASSWORD, REDIS_PASSWORD, JWT_SECRET) and
                           any custom variables not in the template are preserved.
+            image_ref: Pre-built container image reference (e.g.
+                       ``ghcr.io/org/repo:tag``).  When provided, the
+                       ``DOTMAC_IMAGE`` variable is emitted so that
+                       ``docker-compose.yml`` can reference it.
         """
         from app.services.platform_settings import PlatformSettingsService
 
         ps = PlatformSettingsService(self.db)
-        source_path = ps.get("dotmac_source_path")
+        source_path = ps.get("dotmac_source_path") or "/opt/dotmac/src"
 
         existing = existing_env or {}
 
@@ -615,17 +680,17 @@ class InstanceService:
             BRAND_TAGLINE=
             BRAND_LOGO_URL=
             APP_URL={instance.app_url or ""}
-            DEFAULT_FUNCTIONAL_CURRENCY_CODE={instance.currency}
-            DEFAULT_PRESENTATION_CURRENCY_CODE={instance.currency}
+            DEFAULT_FUNCTIONAL_CURRENCY_CODE={instance.currency or ""}
+            DEFAULT_PRESENTATION_CURRENCY_CODE={instance.currency or ""}
 
             GUNICORN_WORKERS=2
             GUNICORN_LOG_LEVEL=info
 
             BOOTSTRAP_ORG_CODE={instance.org_code}
             BOOTSTRAP_ORG_NAME={instance.org_name}
-            BOOTSTRAP_SECTOR_TYPE={instance.sector_type.value}
-            BOOTSTRAP_FRAMEWORK={instance.framework.value}
-            BOOTSTRAP_CURRENCY={instance.currency}
+            BOOTSTRAP_SECTOR_TYPE={instance.sector_type.value if instance.sector_type else ""}
+            BOOTSTRAP_FRAMEWORK={instance.framework.value if instance.framework else ""}
+            BOOTSTRAP_CURRENCY={instance.currency or ""}
             BOOTSTRAP_ADMIN_EMAIL={instance.admin_email or ""}
             BOOTSTRAP_ADMIN_USERNAME={instance.admin_username or "admin"}
             BOOTSTRAP_ADMIN_PASSWORD={admin_password}
@@ -640,6 +705,10 @@ class InstanceService:
             SPLYNX_API_KEY={existing.get("SPLYNX_API_KEY", "")}
             SPLYNX_API_SECRET={existing.get("SPLYNX_API_SECRET", "")}
         """)
+
+        # --- Inject pre-built image ref ---
+        if image_ref:
+            env_content += f"\n# Pre-built container image\nDOTMAC_IMAGE={image_ref}\n"
 
         # --- Inject feature flags ---
         try:
@@ -684,9 +753,31 @@ class InstanceService:
 
         return env_content
 
-    def generate_docker_compose(self, instance: Instance) -> str:
-        """Generate docker-compose.yml for an instance."""
+    def generate_docker_compose(self, instance: Instance, image_ref: str | None = None) -> str:
+        """Generate docker-compose.yml for an instance.
+
+        When *image_ref* is provided the app, worker and beat services use
+        ``image: ${{DOTMAC_IMAGE}}`` instead of a build context so that the
+        pre-built image from a container registry is used directly.
+        """
         slug = instance.org_code.lower()
+        from app.services.platform_settings import PlatformSettingsService
+
+        ps = PlatformSettingsService(self.db)
+        source_path = ps.get("dotmac_source_path") or "/opt/dotmac/src"
+
+        # Build the image/build directive for app services.  When a pre-built
+        # image is available we reference ${DOTMAC_IMAGE} (set in .env);
+        # otherwise we use the standard build context.
+        if image_ref:
+            _svc_src = "image: ${DOTMAC_IMAGE}"
+        else:
+            _svc_src = (
+                f"build:\n"
+                f"                  context: ${{APP_BUILD_CONTEXT:-{source_path}}}\n"
+                f"                  dockerfile: Dockerfile"
+            )
+
         return textwrap.dedent(f"""\
             # DotMac ERP Instance: {instance.org_code}
             # Generated by DotMac Platform
@@ -711,7 +802,7 @@ class InstanceService:
                   retries: 3
 
               app:
-                build: ${{APP_BUILD_CONTEXT:-./../..}}
+                {_svc_src}
                 container_name: dotmac_{slug}_app
                 restart: unless-stopped
                 ports:
@@ -745,7 +836,7 @@ class InstanceService:
                 command: ["gunicorn", "-c", "gunicorn.conf.py", "app.main:app"]
 
               worker:
-                build: ${{APP_BUILD_CONTEXT:-./../..}}
+                {_svc_src}
                 container_name: dotmac_{slug}_worker
                 restart: unless-stopped
                 env_file:
@@ -763,7 +854,7 @@ class InstanceService:
                 command: ["celery", "-A", "app.celery_app", "worker", "-l", "info"]
 
               beat:
-                build: ${{APP_BUILD_CONTEXT:-./../..}}
+                {_svc_src}
                 container_name: dotmac_{slug}_beat
                 restart: unless-stopped
                 env_file:
@@ -812,8 +903,14 @@ class InstanceService:
               dotmac_logs:
         """)
 
-    def generate_setup_script(self, instance: Instance) -> str:
+    def generate_setup_script(self, instance: Instance, image_ref: str | None = None) -> str:
         """Generate setup.sh for an instance."""
+        if image_ref:
+            app_up_cmd = "docker compose up -d app worker beat"
+            app_step_label = "Pulling and starting app containers..."
+        else:
+            app_up_cmd = "docker compose up -d --build app worker beat"
+            app_step_label = "Building and starting app containers..."
         return textwrap.dedent(f"""\
             #!/usr/bin/env bash
             set -euo pipefail
@@ -830,8 +927,8 @@ class InstanceService:
             echo "  Waiting for database to be healthy..."
             sleep 5
 
-            echo "[2/4] Building and starting app containers..."
-            docker compose up -d --build app worker beat
+            echo "[2/4] {app_step_label}"
+            {app_up_cmd}
 
             echo "[3/4] Running database migrations..."
             docker compose exec -T app alembic upgrade head
@@ -892,38 +989,42 @@ class InstanceService:
 
                 db = SessionLocal()
                 try:
-                    # --- 1. Create Organization ---
-                    org = db.query(Organization).filter(
-                        Organization.organization_code == org_code
-                    ).first()
+                    # --- 1. Create Organization (only for ERP instances) ---
+                    org = None
+                    if sector_type and framework and currency:
+                        org = db.query(Organization).filter(
+                            Organization.organization_code == org_code
+                        ).first()
 
-                    if not org:
-                        from uuid import UUID
-                        is_public = sector_type in ("PUBLIC", "NGO")
+                        if not org:
+                            from uuid import UUID
+                            is_public = sector_type in ("PUBLIC", "NGO")
 
-                        org = Organization(
-                            organization_id=UUID(org_id),
-                            organization_code=org_code,
-                            legal_name=org_name,
-                            sector_type=SectorType(sector_type),
-                            accounting_framework=AccountingFramework(framework),
-                            fund_accounting_enabled=is_public,
-                            commitment_control_enabled=(sector_type == "PUBLIC"),
-                            functional_currency_code=currency,
-                            presentation_currency_code=currency,
-                            fiscal_year_end_month=12,
-                            fiscal_year_end_day=31,
-                            is_active=True,
-                        )
-                        db.add(org)
-                        db.flush()
-                        print(f"  Created organization: {org_name} ({org_code})")
-                        print(f"    ID:        {org_id}")
-                        print(f"    Sector:    {sector_type}")
-                        print(f"    Framework: {framework}")
-                        print(f"    Currency:  {currency}")
+                            org = Organization(
+                                organization_id=UUID(org_id),
+                                organization_code=org_code,
+                                legal_name=org_name,
+                                sector_type=SectorType(sector_type),
+                                accounting_framework=AccountingFramework(framework),
+                                fund_accounting_enabled=is_public,
+                                commitment_control_enabled=(sector_type == "PUBLIC"),
+                                functional_currency_code=currency,
+                                presentation_currency_code=currency,
+                                fiscal_year_end_month=12,
+                                fiscal_year_end_day=31,
+                                is_active=True,
+                            )
+                            db.add(org)
+                            db.flush()
+                            print(f"  Created organization: {org_name} ({org_code})")
+                            print(f"    ID:        {org_id}")
+                            print(f"    Sector:    {sector_type}")
+                            print(f"    Framework: {framework}")
+                            print(f"    Currency:  {currency}")
+                        else:
+                            print(f"  Organization exists: {org_code}")
                     else:
-                        print(f"  Organization exists: {org_code}")
+                        print(f"  Skipping organization creation (non-ERP instance)")
 
                     # --- 2. Seed RBAC (permissions + roles) ---
                     print("  Setting up RBAC...")
@@ -1028,11 +1129,18 @@ class InstanceService:
                 main()
         ''')
 
-    def provision_files(self, instance: Instance, admin_password: str) -> dict:
+    def provision_files(self, instance: Instance, admin_password: str, git_ref: str | None = None) -> dict:
         """Generate all instance files and write them to the deploy path.
 
         Reads the existing .env (if any) so that critical secrets and custom
         variables are preserved across redeploys.
+
+        Args:
+            instance: The instance to provision.
+            admin_password: Admin password to embed in .env.
+            git_ref: Deployment-specific git ref override.  Passed through to
+                     ``resolve_image_ref`` so that the ``DOTMAC_IMAGE`` value
+                     in ``.env`` matches the tag that will actually be pulled.
         """
         server = self.db.get(Server, instance.server_id)
         if not server:
@@ -1042,6 +1150,18 @@ class InstanceService:
         deploy_path = instance.deploy_path
         if not deploy_path:
             raise ValueError("Deploy path not configured")
+
+        # Resolve pre-built image ref if the repo has a registry URL
+        image_ref: str | None = None
+        try:
+            from app.services.git_repo_service import GitRepoService
+
+            repo = GitRepoService(self.db).get_repo_for_instance(instance.instance_id)
+            if repo and repo.uses_prebuilt_image:
+                image_ref = GitRepoService.resolve_image_ref(repo, git_ref=git_ref, instance=instance)
+                logger.info("Using pre-built image for %s: %s", instance.org_code, image_ref)
+        except Exception:
+            logger.debug("Could not resolve pre-built image ref for %s", instance.org_code, exc_info=True)
 
         # Create deploy directory
         ssh.sftp_mkdir_p(deploy_path)
@@ -1059,13 +1179,13 @@ class InstanceService:
             )
 
         # Generate and write files
-        env_content = self.generate_env(instance, admin_password, existing_env)
+        env_content = self.generate_env(instance, admin_password, existing_env, image_ref=image_ref)
         ssh.sftp_put_string(env_content, env_path)
 
-        compose_content = self.generate_docker_compose(instance)
+        compose_content = self.generate_docker_compose(instance, image_ref=image_ref)
         ssh.sftp_put_string(compose_content, os.path.join(deploy_path, "docker-compose.yml"))
 
-        setup_content = self.generate_setup_script(instance)
+        setup_content = self.generate_setup_script(instance, image_ref=image_ref)
         ssh.sftp_put_string(setup_content, os.path.join(deploy_path, "setup.sh"), mode=0o755)
 
         bootstrap_content = self.generate_bootstrap_db_script()

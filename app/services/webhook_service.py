@@ -52,6 +52,9 @@ class WebhookService:
     def __init__(self, db: Session):
         self.db = db
 
+    def get_endpoint(self, endpoint_id: UUID) -> WebhookEndpoint | None:
+        return self.db.get(WebhookEndpoint, endpoint_id)
+
     def list_endpoints(self, instance_id: UUID | None = None) -> list[WebhookEndpoint]:
         stmt = select(WebhookEndpoint).where(WebhookEndpoint.is_active.is_(True))
         if instance_id:

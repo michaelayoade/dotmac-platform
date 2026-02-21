@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 class PlanViolation:
     kind: str
     message: str
-    current: float | int | None = None
-    limit: float | int | None = None
+    current: float | int | str | None = None
+    limit: float | int | list[str] | None = None
     percent: float | None = None
 
 

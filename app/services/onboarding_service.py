@@ -83,6 +83,12 @@ class OnboardingService:
             "percent": percent,
         }
 
+    def get_checklist_safe(self, person_id: UUID | None) -> dict:
+        """Return onboarding checklist, or an empty default if person_id is invalid."""
+        if person_id:
+            return self.get_checklist(person_id)
+        return {"steps": [], "completed_count": 0, "total_count": 0, "percent": 0}
+
     def should_show_onboarding(self, person_id: UUID) -> bool:
         """Return True if onboarding hasn't been dismissed by this person."""
         person = self.db.get(Person, person_id)

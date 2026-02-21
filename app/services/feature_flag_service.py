@@ -139,13 +139,12 @@ class FeatureFlagService:
             self.db.delete(flag)
             self.db.flush()
 
-
-def get_env_vars(self, instance_id: UUID) -> dict[str, str]:
-    """Get all flags as env vars for .env generation."""
-    env = {}
-    for entry in self.list_for_instance(instance_id):
-        env[entry["key"]] = entry["value"]
-    return env
+    def get_env_vars(self, instance_id: UUID) -> dict[str, str]:
+        """Get all flags as env vars for .env generation."""
+        env: dict[str, str] = {}
+        for entry in self.list_for_instance(instance_id):
+            env[entry["key"]] = entry["value"]
+        return env
 
 
 def _is_truthy(value: str | None) -> bool:

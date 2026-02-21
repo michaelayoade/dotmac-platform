@@ -22,6 +22,7 @@ dr_test_status_enum = ENUM("pending", "running", "passed", "failed", name="drtes
 
 def upgrade() -> None:
     bind = op.get_bind()
+    inspector = sa.inspect(bind)
     if bind.dialect.name == "postgresql":
         bind.execute(
             sa.text(
@@ -30,25 +31,29 @@ def upgrade() -> None:
             )
         )
 
-    op.create_table(
-        "disaster_recovery_plans",
-        sa.Column("dr_plan_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("instance_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("backup_schedule_cron", sa.String(length=120), nullable=False),
-        sa.Column("retention_days", sa.Integer(), nullable=False),
-        sa.Column("target_server_id", UUID(as_uuid=True), nullable=True),
-        sa.Column("last_backup_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("last_tested_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("last_test_status", dr_test_status_enum, nullable=True),
-        sa.Column("last_test_message", sa.Text(), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["instance_id"], ["instances.instance_id"]),
-        sa.ForeignKeyConstraint(["target_server_id"], ["servers.server_id"]),
-        sa.PrimaryKeyConstraint("dr_plan_id"),
-    )
-    op.create_index("ix_disaster_recovery_plans_instance_id", "disaster_recovery_plans", ["instance_id"])
+    if "disaster_recovery_plans" not in inspector.get_table_names():
+        op.create_table(
+            "disaster_recovery_plans",
+            sa.Column("dr_plan_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("instance_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("backup_schedule_cron", sa.String(length=120), nullable=False),
+            sa.Column("retention_days", sa.Integer(), nullable=False),
+            sa.Column("target_server_id", UUID(as_uuid=True), nullable=True),
+            sa.Column("last_backup_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("last_tested_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("last_test_status", dr_test_status_enum, nullable=True),
+            sa.Column("last_test_message", sa.Text(), nullable=True),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.ForeignKeyConstraint(["instance_id"], ["instances.instance_id"]),
+            sa.ForeignKeyConstraint(["target_server_id"], ["servers.server_id"]),
+            sa.PrimaryKeyConstraint("dr_plan_id"),
+        )
+
+    dr_indexes = {idx["name"] for idx in inspector.get_indexes("disaster_recovery_plans")}
+    if "ix_disaster_recovery_plans_instance_id" not in dr_indexes:
+        op.create_index("ix_disaster_recovery_plans_instance_id", "disaster_recovery_plans", ["instance_id"])
 
 
 def downgrade() -> None:

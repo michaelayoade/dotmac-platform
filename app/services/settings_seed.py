@@ -225,6 +225,16 @@ def seed_scheduled_tasks(db: Session) -> None:
             "task_name": "app.tasks.cleanup.cleanup_old_health_checks",
             "interval_seconds": 3600,
         },
+        {
+            "name": "Run scheduled backups",
+            "task_name": "app.tasks.dr.run_scheduled_backups",
+            "interval_seconds": 60,
+        },
+        {
+            "name": "Prune expired backups",
+            "task_name": "app.tasks.dr.prune_expired_backups",
+            "interval_seconds": 86400,
+        },
     ]
 
     for item in defaults:

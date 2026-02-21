@@ -24,6 +24,7 @@ services:
     volumes:
       - /root/.ssh:/root/.ssh:ro
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./.secrets/mimi_ed25519:/home/appuser/.ssh/mimi_ed25519:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 30s
@@ -52,6 +53,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/dotmac:/opt/dotmac/src:ro
       - /opt/dotmac/instances:/opt/dotmac/instances
+      - ./.secrets/mimi_ed25519:/home/appuser/.ssh/mimi_ed25519:ro
     command: ["celery", "-A", "app.celery_app", "worker", "-l", "info"]
     healthcheck:
       test: ["CMD", "celery", "-A", "app.celery_app", "inspect", "ping", "--timeout", "5"]

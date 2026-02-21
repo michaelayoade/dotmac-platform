@@ -15,8 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 class ApprovalService:
+    _pending_upgrade: tuple[str, datetime | None] | None
+
     def __init__(self, db: Session):
         self.db = db
+        self._pending_upgrade = None
 
     def request_approval(
         self,
@@ -191,6 +194,39 @@ class ApprovalService:
             "inst_map": inst_map,
             "upgrade_map": upgrade_map,
         }
+
+    def approve_and_dispatch(
+        self,
+        approval_id: UUID,
+        approved_by: str,
+        approved_by_name: str | None = None,
+    ) -> DeployApproval:
+        """Approve a deployment and dispatch the upgrade task if applicable.
+
+        Caller must call db.commit() first, then call dispatch_upgrade() on
+        the returned object (or use the helper after commit).
+        """
+        approval = self.approve(approval_id, approved_by, approved_by_name)
+        upgrade_id, upgrade_eta = self.resolve_upgrade_schedule(approval)
+        # Stash for post-commit dispatch
+        self._pending_upgrade = (upgrade_id, upgrade_eta) if upgrade_id else None
+        return approval
+
+    def dispatch_upgrade(self) -> None:
+        """Dispatch the upgrade task queued by approve_and_dispatch.
+
+        Must be called AFTER db.commit().
+        """
+        if not self._pending_upgrade:
+            return
+        upgrade_id, upgrade_eta = self._pending_upgrade
+        from app.tasks.upgrade import run_upgrade
+
+        if upgrade_eta:
+            run_upgrade.apply_async(args=[upgrade_id], eta=upgrade_eta)
+        else:
+            run_upgrade.delay(upgrade_id)
+        self._pending_upgrade = None
 
     def resolve_upgrade_schedule(self, approval: DeployApproval) -> tuple[str | None, datetime | None]:
         if approval.deployment_type != "upgrade" or not approval.upgrade_id:

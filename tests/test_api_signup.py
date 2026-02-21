@@ -42,7 +42,7 @@ def _seed_server(db_session):
 
 
 def test_signup_start_creates_pending_request(monkeypatch, client, db_session):
-    _seed_server(db_session)
+    server = _seed_server(db_session)
     catalog_item = _seed_catalog(db_session)
 
     def _fake_send(*_args, **_kwargs):
@@ -53,8 +53,9 @@ def test_signup_start_creates_pending_request(monkeypatch, client, db_session):
     payload = {
         "org_name": "Acme Inc",
         "catalog_item_id": str(catalog_item.catalog_id),
-        "admin_email": "owner@acme.test",
+        "admin_email": "owner@example.com",
         "admin_password": "Secret123!",
+        "server_id": str(server.server_id),
     }
 
     resp = client.post("/auth/signup", json=payload)
@@ -75,7 +76,7 @@ def test_signup_verify_marks_verified(client, db_session):
 
     token = "test-token-123456"
     signup = SignupRequest(
-        email="owner@acme.test",
+        email="owner@example.com",
         org_name="Acme Inc",
         org_code="ACME_INC",
         catalog_item_id=catalog_item.catalog_id,
@@ -106,7 +107,7 @@ def test_signup_confirm_billing_marks_confirmed(client, db_session, admin_header
     catalog_item = _seed_catalog(db_session)
 
     signup = SignupRequest(
-        email="owner@acme.test",
+        email="owner@example.com",
         org_name="Acme Inc",
         org_code="ACME_INC",
         catalog_item_id=catalog_item.catalog_id,
@@ -140,7 +141,7 @@ def test_signup_resend_updates_token(monkeypatch, client, db_session):
     from app.services.signup_service import _token_hash
 
     signup = SignupRequest(
-        email="owner@acme.test",
+        email="owner@example.com",
         org_name="Acme Inc",
         org_code="ACME_INC",
         catalog_item_id=catalog_item.catalog_id,
@@ -165,11 +166,11 @@ def test_signup_resend_updates_token(monkeypatch, client, db_session):
 
 
 def test_signup_provision_requires_billing(client, db_session, admin_headers):
-    _seed_server(db_session)
+    server = _seed_server(db_session)
     catalog_item = _seed_catalog(db_session)
 
     signup = SignupRequest(
-        email="owner@acme.test",
+        email="owner@example.com",
         org_name="Acme Inc",
         org_code="ACME_INC",
         catalog_item_id=catalog_item.catalog_id,
@@ -178,13 +179,15 @@ def test_signup_provision_requires_billing(client, db_session, admin_headers):
         status=SignupStatus.verified,
         email_verified_at=datetime.now(UTC),
         expires_at=datetime.now(UTC) + timedelta(hours=12),
+        server_id=server.server_id,
     )
     db_session.add(signup)
     db_session.commit()
 
     resp = client.post(f"/auth/signup/{signup.signup_id}/provision", headers=admin_headers)
     assert resp.status_code == 400
-    assert resp.json()["detail"]["code"] == "SIGNUP_PROVISION_FAILED"
+    body = resp.json()
+    assert body.get("detail", body)["code"] == "SIGNUP_PROVISION_FAILED"
 
 
 def test_signup_provision_creates_instance_and_deployment(client, db_session, admin_headers):
@@ -192,7 +195,7 @@ def test_signup_provision_creates_instance_and_deployment(client, db_session, ad
     catalog_item = _seed_catalog(db_session)
 
     signup = SignupRequest(
-        email="owner@acme.test",
+        email="owner@example.com",
         org_name="Acme Inc",
         org_code="ACME_INC",
         catalog_item_id=catalog_item.catalog_id,
@@ -202,6 +205,7 @@ def test_signup_provision_creates_instance_and_deployment(client, db_session, ad
         email_verified_at=datetime.now(UTC),
         billing_confirmed_at=datetime.now(UTC),
         expires_at=datetime.now(UTC) + timedelta(hours=12),
+        server_id=server.server_id,
     )
     db_session.add(signup)
     db_session.commit()

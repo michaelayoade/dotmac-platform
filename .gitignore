@@ -77,3 +77,11 @@ static/css/tailwind.out.css
 
 # Docker
 .docker/
+
+# Secrets
+.secrets/
+
+# Test artifacts
+pytest_results*.txt
+playwright-*.png
+file:dotmac_test*

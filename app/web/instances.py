@@ -138,13 +138,16 @@ def instance_create(
     server_id: str = Form(...),
     org_code: str = Form(...),
     org_name: str = Form(...),
-    sector_type: str = Form("PRIVATE"),
-    framework: str = Form("IFRS"),
-    currency: str = Form("NGN"),
+    sector_type: str = Form(""),
+    framework: str = Form(""),
+    currency: str = Form(""),
     admin_email: str = Form(""),
     admin_username: str = Form("admin"),
     domain: str = Form(""),
     catalog_item_id: str = Form(""),
+    app_port: str = Form(""),
+    db_port: str = Form(""),
+    redis_port: str = Form(""),
     csrf_token: str = Form(""),
 ):
     require_admin(auth)
@@ -163,12 +166,15 @@ def instance_create(
             server_id=UUID(server_id),
             org_code=org_code,
             org_name=org_name,
-            sector_type=sector_type,
-            framework=framework,
-            currency=currency,
+            sector_type=sector_type or None,
+            framework=framework or None,
+            currency=currency or None,
             admin_email=admin_email or None,
             admin_username=admin_username or "admin",
             domain=domain or None,
+            app_port=int(app_port) if app_port else None,
+            db_port=int(db_port) if db_port else None,
+            redis_port=int(redis_port) if redis_port else None,
             git_repo_id=git_repo_id,
             catalog_item_id=catalog_id,
         )
@@ -336,55 +342,21 @@ def instance_create_upgrade(
 ):
     require_admin(auth)
     validate_csrf_token(request, csrf_token)
-    from datetime import UTC as _UTC
-    from datetime import datetime
-
     from app.services.upgrade_service import UpgradeService
-    from app.tasks.upgrade import run_upgrade
 
     try:
         if not catalog_item_id:
             raise ValueError("Catalog item is required")
-        scheduled_dt = None
-        if scheduled_for:
-            scheduled_dt = datetime.fromisoformat(scheduled_for)
-            if scheduled_dt.tzinfo is None:
-                scheduled_dt = scheduled_dt.replace(tzinfo=_UTC)
-
-        upgrade = UpgradeService(db).create_upgrade(
+        svc = UpgradeService(db)
+        svc.create_and_dispatch(
             instance_id,
             UUID(catalog_item_id),
-            scheduled_for=scheduled_dt,
-            requested_by=auth.person_id,
+            scheduled_for=scheduled_for,
+            requested_by=auth.person_id or "unknown",
+            requested_by_name=auth.user_name,
         )
-        from app.services.approval_service import ApprovalService
-        from app.services.catalog_service import CatalogService
-
-        approval_svc = ApprovalService(db)
-        catalog_item = CatalogService(db).get_catalog_item(UUID(catalog_item_id))
-        release = catalog_item.release if catalog_item else None
-        if approval_svc.requires_approval(instance_id):
-            reason = None
-            if catalog_item:
-                reason = f"Upgrade to {catalog_item.label}"
-                if release and release.version:
-                    reason = f"{reason} ({release.version})"
-            approval_svc.request_approval(
-                instance_id,
-                requested_by=auth.person_id or "unknown",
-                requested_by_name=auth.user_name,
-                deployment_type="upgrade",
-                git_ref=release.git_ref if release else None,
-                reason=reason,
-                upgrade_id=upgrade.upgrade_id,
-            )
-            db.commit()
-        else:
-            db.commit()
-            if scheduled_dt:
-                run_upgrade.apply_async(args=[str(upgrade.upgrade_id)], eta=scheduled_dt)
-            else:
-                run_upgrade.delay(str(upgrade.upgrade_id))
+        db.commit()
+        svc.dispatch_pending()
     except Exception:
         db.rollback()
     return RedirectResponse(f"/instances/{instance_id}?tab=upgrades", status_code=302)
@@ -405,14 +377,13 @@ def instance_cancel_upgrade(
     from app.services.upgrade_service import UpgradeService
 
     try:
-        upgrade = UpgradeService(db).cancel_upgrade(
+        UpgradeService(db).cancel_for_instance(
+            instance_id,
             upgrade_id,
             reason=reason or None,
             cancelled_by=auth.person_id,
             cancelled_by_name=auth.user_name,
         )
-        if upgrade.instance_id != instance_id:
-            raise ValueError("Upgrade does not match instance")
         db.commit()
     except Exception:
         db.rollback()
@@ -682,9 +653,7 @@ def assign_plan(
 
     from app.services.instance_service import InstanceService
 
-    svc = InstanceService(db)
-    instance = svc.get_or_404(instance_id)
-    instance.plan_id = UUID(plan_id) if plan_id else None
+    InstanceService(db).assign_plan(instance_id, UUID(plan_id) if plan_id else None)
     db.commit()
     return RedirectResponse(f"/instances/{instance_id}#plan", status_code=302)
 

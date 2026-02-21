@@ -247,12 +247,22 @@ _include_api_router(instances_api_router, dependencies=[Depends(require_instance
 from app.api.notifications import router as notifications_api_router
 
 _include_api_router(notifications_api_router, dependencies=[Depends(require_user_auth)])
-_include_api_router(observability_api_router, dependencies=[Depends(require_user_auth)])
-_include_api_router(ssh_keys_api_router, dependencies=[Depends(require_user_auth)])
+app.include_router(observability_api_router, prefix="/api/v1", dependencies=[Depends(require_user_auth)])
+# ssh-keys web UI also uses "/ssh-keys"; keep API namespaced to avoid route shadowing.
+app.include_router(ssh_keys_api_router, prefix="/api/v1", dependencies=[Depends(require_user_auth)])
 # git-repos API only at /api/v1 — root /git-repos is the web UI
 app.include_router(git_repos_api_router, prefix="/api/v1", dependencies=[Depends(require_user_auth)])
 _include_api_router(dr_api_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(catalog_api_router, dependencies=[Depends(require_user_auth)])
+
+from app.api.github_webhooks import router as github_webhooks_router  # noqa: E402
+
+# GitHub webhooks are unauthenticated — validation via HMAC signature
+app.include_router(github_webhooks_router, prefix="/api/v1")
+
+from app.api.notification_channels import router as notification_channels_router  # noqa: E402
+
+_include_api_router(notification_channels_router, dependencies=[Depends(require_user_auth)])
 
 from app.api.otel import router as otel_api_router  # noqa: E402
 
@@ -286,6 +296,10 @@ app.include_router(ssh_keys_web_router)
 app.include_router(git_repos_web_router)
 app.include_router(dr_web_router)
 app.include_router(catalog_web_router)
+
+from app.web.notification_channels_web import router as notification_channels_web_router  # noqa: E402
+
+app.include_router(notification_channels_web_router)
 
 from app.web.otel_web import router as otel_web_router  # noqa: E402
 

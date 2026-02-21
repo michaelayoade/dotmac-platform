@@ -96,7 +96,7 @@ def people_create(
         status=status,
         is_active=is_active,
         gender="unknown",
-        org_id=auth.org_id,
+        org_id=UUID(auth.org_id) if auth.org_id else None,
     )
     people_service.create(db, payload)
     return RedirectResponse("/people", status_code=302)

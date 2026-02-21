@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import enum
 import uuid
 from datetime import UTC, datetime
@@ -39,4 +41,6 @@ class DeploymentBatch(Base):
     failed_count: Mapped[int] = mapped_column(Integer, default=0)
     created_by: Mapped[str | None] = mapped_column(String(120))
     notes: Mapped[str | None] = mapped_column(Text)
+    git_ref: Mapped[str | None] = mapped_column(String(200))
+    deployment_type: Mapped[str] = mapped_column(String(20), default="upgrade")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

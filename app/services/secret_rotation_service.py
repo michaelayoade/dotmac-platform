@@ -107,11 +107,11 @@ class SecretRotationService:
 
             elif secret_name == "REDIS_PASSWORD":
                 new_password = secrets.token_urlsafe(16)
-                old_password = env.get("REDIS_PASSWORD")
+                old_redis_password: str | None = env.get("REDIS_PASSWORD")
                 rotated_redis = False
                 env_written = False
                 try:
-                    self._rotate_redis_password(instance, ssh, old_password, new_password)
+                    self._rotate_redis_password(instance, ssh, old_redis_password, new_password)
                     rotated_redis = True
                     updates.update(
                         {
@@ -128,7 +128,7 @@ class SecretRotationService:
                 except Exception:
                     if rotated_redis:
                         try:
-                            rollback_password = old_password or ""
+                            rollback_password = old_redis_password or ""
                             self._rotate_redis_password(instance, ssh, new_password, rollback_password)
                         except Exception:
                             logger.warning("Failed to roll back Redis password for %s", instance.org_code)
@@ -195,14 +195,14 @@ class SecretRotationService:
             except Exception as e:
                 logger.warning("Secret rotation failed for %s: %s", secret_name, e)
                 # log already updated to failed in rotate_secret
-                log = self.db.scalar(
+                failed_log = self.db.scalar(
                     select(SecretRotationLog)
                     .where(SecretRotationLog.instance_id == instance_id)
                     .where(SecretRotationLog.secret_name == secret_name)
                     .order_by(SecretRotationLog.created_at.desc())
                 )
-                if log:
-                    logs.append(log)
+                if failed_log:
+                    logs.append(failed_log)
         return logs
 
     def get_rotation_history(
@@ -248,7 +248,7 @@ class SecretRotationService:
         return server
 
     def _env_path(self, instance: Instance) -> str:
-        return f"{instance.deploy_path.rstrip('/')}/.env"
+        return f"{(instance.deploy_path or '').rstrip('/')}/.env"
 
     def _recreate_services(self, instance: Instance, ssh, services: list[str]) -> None:
         services_str = " ".join(services)

@@ -19,6 +19,14 @@ from app.services.auth_flow import decode_access_token
 from app.services.common import coerce_uuid
 
 
+def _as_utc(dt):
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
+
+
 def get_db():
     db = SessionLocal()
     try:
@@ -91,7 +99,8 @@ def require_web_auth(
         session = db.get(AuthSession, coerce_uuid(session_id))
         if not session or session.status != SessionStatus.active:
             raise HTTPException(status_code=302, headers={"Location": "/login"})
-        if session.expires_at and session.expires_at <= now:
+        expires_at = _as_utc(session.expires_at)
+        if expires_at and expires_at <= now:
             raise HTTPException(status_code=302, headers={"Location": "/login"})
 
         person = db.get(Person, coerce_uuid(person_id))
@@ -139,6 +148,11 @@ def optional_web_auth(
         # Validate session is still active (matches require_web_auth behaviour)
         session = db.get(AuthSession, coerce_uuid(session_id))
         if not session or session.status != SessionStatus.active:
+            return WebAuthContext()
+        from datetime import datetime
+
+        expires_at = _as_utc(session.expires_at)
+        if expires_at and expires_at <= datetime.now(UTC):
             return WebAuthContext()
 
         person = db.get(Person, coerce_uuid(person_id))

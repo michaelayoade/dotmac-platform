@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+from typing import cast
 from urllib.request import Request, urlopen
 
 ASSETS = {
@@ -22,7 +23,7 @@ FONTS_CSS_URL = (
 def download(url: str) -> bytes:
     req = Request(url, headers={"User-Agent": "dotmac-platform-fetch/1.0"})
     with urlopen(req, timeout=30) as resp:
-        return resp.read()
+        return cast(bytes, resp.read())
 
 
 def write_file(path: str, content: bytes) -> None:

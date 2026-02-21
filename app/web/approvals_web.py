@@ -61,16 +61,9 @@ def approvals_approve(
         if not auth.person_id:
             raise HTTPException(status_code=401, detail="Unauthorized")
         svc = ApprovalService(db)
-        approval = svc.approve(approval_id, auth.person_id, auth.user_name)
-        upgrade_id, upgrade_eta = svc.resolve_upgrade_schedule(approval)
+        svc.approve_and_dispatch(approval_id, auth.person_id, auth.user_name)
         db.commit()
-        if upgrade_id:
-            from app.tasks.upgrade import run_upgrade
-
-            if upgrade_eta:
-                run_upgrade.apply_async(args=[upgrade_id], eta=upgrade_eta)
-            else:
-                run_upgrade.delay(upgrade_id)
+        svc.dispatch_upgrade()
     except Exception as e:
         db.rollback()
         logger.exception("Failed to approve %s: %s", approval_id, e)

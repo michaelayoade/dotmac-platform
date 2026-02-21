@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -8,13 +9,15 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
+import builtins
+
 from app.models.scheduler import ScheduledTask, ScheduleType
 from app.schemas.scheduler import ScheduledTaskCreate, ScheduledTaskUpdate
 from app.services.common import apply_ordering, apply_pagination, coerce_uuid
 from app.services.response import ListResponseMixin
 
 
-def _validate_schedule_type(value):
+def _validate_schedule_type(value: str | ScheduleType | None) -> ScheduleType | None:
     if value is None:
         return None
     if isinstance(value, ScheduleType):
@@ -44,14 +47,14 @@ class ScheduledTasks(ListResponseMixin):
         return task
 
     @staticmethod
-    def list(
+    def list(  # noqa: A003
         db: Session,
         enabled: bool | None,
         order_by: str,
         order_dir: str,
         limit: int,
         offset: int,
-    ):
+    ) -> builtins.list[ScheduledTask]:
         stmt = select(ScheduledTask)
         if enabled is not None:
             stmt = stmt.where(ScheduledTask.enabled == enabled)
@@ -90,7 +93,7 @@ class ScheduledTasks(ListResponseMixin):
         db.flush()
 
     @staticmethod
-    def parse_args_kwargs(args_json: str, kwargs_json: str) -> tuple[list | None, dict | None]:
+    def parse_args_kwargs(args_json: str, kwargs_json: str) -> tuple[builtins.list[Any] | None, dict[str, Any] | None]:
         import json
 
         try:

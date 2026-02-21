@@ -76,6 +76,8 @@ def run_batch_deploy(batch_id: str) -> dict:
 
         strategy = batch.strategy.value
         instance_ids = list(batch.instance_ids or [])
+        batch_git_ref = batch.git_ref
+        batch_deploy_type = batch.deployment_type or "upgrade"
 
     if not instance_ids:
         return {"success": False, "error": "No instances in batch"}
@@ -91,11 +93,21 @@ def run_batch_deploy(batch_id: str) -> dict:
             deploy_svc = DeployService(inner_db)
             try:
                 iid = UUID(inst_id_str)
-                deployment_id = deploy_svc.create_deployment(iid)
+                deployment_id = deploy_svc.create_deployment(
+                    iid,
+                    deployment_type=batch_deploy_type,
+                    git_ref=batch_git_ref,
+                )
                 inner_db.commit()
 
                 admin_password = deploy_svc.get_deploy_secret(iid, deployment_id)
-                result = deploy_svc.run_deployment(iid, deployment_id, admin_password or "")
+                result = deploy_svc.run_deployment(
+                    iid,
+                    deployment_id,
+                    admin_password or "",
+                    deployment_type=batch_deploy_type,
+                    git_ref=batch_git_ref,
+                )
                 batch_svc_inner.update_progress(UUID(batch_id), inst_id_str, result.get("success", False))
                 inner_db.commit()
                 return inst_id_str, bool(result.get("success", False))

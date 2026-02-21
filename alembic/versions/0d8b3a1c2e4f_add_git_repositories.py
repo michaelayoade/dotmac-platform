@@ -21,6 +21,7 @@ git_auth_type_enum = ENUM("none", "ssh_key", "token", name="gitauthtype", create
 
 def upgrade() -> None:
     bind = op.get_bind()
+    inspector = sa.inspect(bind)
     if bind.dialect.name == "postgresql":
         bind.execute(
             sa.text(
@@ -29,32 +30,42 @@ def upgrade() -> None:
             )
         )
 
-    op.create_table(
-        "git_repositories",
-        sa.Column("repo_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("label", sa.String(length=120), nullable=False),
-        sa.Column("url", sa.String(length=512), nullable=False),
-        sa.Column("auth_type", git_auth_type_enum, nullable=True),
-        sa.Column("ssh_key_encrypted", sa.Text(), nullable=True),
-        sa.Column("token_encrypted", sa.Text(), nullable=True),
-        sa.Column("default_branch", sa.String(length=120), nullable=True),
-        sa.Column("is_platform_default", sa.Boolean(), nullable=False, server_default="false"),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.PrimaryKeyConstraint("repo_id"),
-        sa.UniqueConstraint("label", name="uq_git_repositories_label"),
-    )
+    if "git_repositories" not in inspector.get_table_names():
+        op.create_table(
+            "git_repositories",
+            sa.Column("repo_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("label", sa.String(length=120), nullable=False),
+            sa.Column("url", sa.String(length=512), nullable=False),
+            sa.Column("auth_type", git_auth_type_enum, nullable=True),
+            sa.Column("ssh_key_encrypted", sa.Text(), nullable=True),
+            sa.Column("token_encrypted", sa.Text(), nullable=True),
+            sa.Column("default_branch", sa.String(length=120), nullable=True),
+            sa.Column("is_platform_default", sa.Boolean(), nullable=False, server_default="false"),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.PrimaryKeyConstraint("repo_id"),
+            sa.UniqueConstraint("label", name="uq_git_repositories_label"),
+        )
 
-    op.add_column("instances", sa.Column("git_repo_id", UUID(as_uuid=True), nullable=True))
-    op.create_index("ix_instances_git_repo_id", "instances", ["git_repo_id"])
-    op.create_foreign_key(
-        "fk_instances_git_repo_id",
-        "instances",
-        "git_repositories",
-        ["git_repo_id"],
-        ["repo_id"],
-    )
+    instance_cols = {c["name"] for c in inspector.get_columns("instances")}
+    if "git_repo_id" not in instance_cols:
+        op.add_column("instances", sa.Column("git_repo_id", UUID(as_uuid=True), nullable=True))
+        inspector = sa.inspect(bind)
+
+    instance_indexes = {idx["name"] for idx in inspector.get_indexes("instances")}
+    if "ix_instances_git_repo_id" not in instance_indexes:
+        op.create_index("ix_instances_git_repo_id", "instances", ["git_repo_id"])
+
+    instance_fks = {fk["name"] for fk in inspector.get_foreign_keys("instances")}
+    if "fk_instances_git_repo_id" not in instance_fks:
+        op.create_foreign_key(
+            "fk_instances_git_repo_id",
+            "instances",
+            "git_repositories",
+            ["git_repo_id"],
+            ["repo_id"],
+        )
 
 
 def downgrade() -> None:

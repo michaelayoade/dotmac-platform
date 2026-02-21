@@ -155,18 +155,24 @@
                 <dt class="text-[13px] text-surface-400 dark:text-surface-500">Org Code</dt>
                 <dd class="text-[13px] font-medium text-surface-900 dark:text-white font-mono">{{ instance.org_code }}</dd>
             </div>
+            {% if instance.framework %}
             <div class="flex justify-between items-center">
                 <dt class="text-[13px] text-surface-400 dark:text-surface-500">Framework</dt>
                 <dd><span class="rounded-md bg-surface-100 px-2 py-0.5 text-[11px] font-medium text-surface-600 dark:bg-surface-800 dark:text-surface-400">{{ instance.framework.value }}</span></dd>
             </div>
+            {% endif %}
+            {% if instance.sector_type %}
             <div class="flex justify-between items-center">
                 <dt class="text-[13px] text-surface-400 dark:text-surface-500">Sector</dt>
                 <dd><span class="rounded-md bg-surface-100 px-2 py-0.5 text-[11px] font-medium text-surface-600 dark:bg-surface-800 dark:text-surface-400">{{ instance.sector_type.value }}</span></dd>
             </div>
+            {% endif %}
+            {% if instance.currency %}
             <div class="flex justify-between items-baseline">
                 <dt class="text-[13px] text-surface-400 dark:text-surface-500">Currency</dt>
                 <dd class="text-[13px] text-surface-900 dark:text-white">{{ instance.currency }}</dd>
             </div>
+            {% endif %}
             <div class="flex justify-between items-center">
                 <dt class="text-[13px] text-surface-400 dark:text-surface-500">Plan</dt>
                 <dd>

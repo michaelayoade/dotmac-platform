@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 from app.metrics import (
@@ -59,7 +60,7 @@ def _get_sample_value(metric, labels: dict) -> float | None:
     target_names = {metric._name, f"{metric._name}_total"}  # type: ignore[attr-defined]
     for sample in metric.collect()[0].samples:
         if sample.name in target_names and sample.labels == labels:
-            return sample.value
+            return cast(float, sample.value)
     return None
 
 

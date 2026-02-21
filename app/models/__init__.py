@@ -37,6 +37,7 @@ from app.models.dr_plan import DisasterRecoveryPlan, DRTestStatus  # noqa: F401
 from app.models.drift_report import DriftReport  # noqa: F401
 from app.models.feature_flag import InstanceFlag  # noqa: F401
 from app.models.git_repository import GitAuthType, GitRepository  # noqa: F401
+from app.models.github_webhook_log import GitHubWebhookLog  # noqa: F401
 from app.models.health_check import HealthCheck, HealthStatus  # noqa: F401
 from app.models.instance import (  # noqa: F401
     AccountingFramework,
@@ -53,6 +54,7 @@ from app.models.notification import (  # noqa: F401
     NotificationCategory,
     NotificationSeverity,
 )
+from app.models.notification_channel import ChannelType, NotificationChannel  # noqa: F401
 from app.models.organization import Organization  # noqa: F401
 from app.models.organization_member import OrganizationMember  # noqa: F401
 from app.models.otel_config import OtelExportConfig  # noqa: F401

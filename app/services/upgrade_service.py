@@ -17,8 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class UpgradeService:
+    _pending_dispatch: tuple[AppUpgrade, datetime | None] | None
+
     def __init__(self, db: Session):
         self.db = db
+        self._pending_dispatch = None
 
     def create_upgrade(
         self,
@@ -132,6 +135,104 @@ class UpgradeService:
             upgrade.completed_at = datetime.now(UTC)
             self.db.commit()
             return {"success": False, "error": str(e)}
+
+    def create_and_dispatch(
+        self,
+        instance_id: UUID,
+        catalog_item_id: UUID,
+        *,
+        scheduled_for: str | None = None,
+        requested_by: str | None = None,
+        requested_by_name: str | None = None,
+    ) -> dict:
+        """Create an upgrade, handle approval if needed, and dispatch the task.
+
+        Returns a dict with upgrade_id, status, and approval info.
+        """
+        from app.services.approval_service import ApprovalService
+        from app.services.catalog_service import CatalogService
+
+        scheduled_dt: datetime | None = None
+        if scheduled_for:
+            scheduled_dt = datetime.fromisoformat(scheduled_for)
+            if scheduled_dt.tzinfo is None:
+                scheduled_dt = scheduled_dt.replace(tzinfo=UTC)
+
+        upgrade = self.create_upgrade(
+            instance_id,
+            catalog_item_id,
+            scheduled_for=scheduled_dt,
+            requested_by=requested_by,
+        )
+
+        approval_svc = ApprovalService(self.db)
+        if approval_svc.requires_approval(instance_id):
+            catalog_item = CatalogService(self.db).get_catalog_item(catalog_item_id)
+            release = catalog_item.release if catalog_item else None
+            reason: str | None = None
+            if catalog_item:
+                reason = f"Upgrade to {catalog_item.label}"
+                if release and release.version:
+                    reason = f"{reason} ({release.version})"
+            approval = approval_svc.request_approval(
+                instance_id,
+                requested_by=requested_by or "unknown",
+                requested_by_name=requested_by_name,
+                deployment_type="upgrade",
+                git_ref=release.git_ref if release else None,
+                reason=reason,
+                upgrade_id=upgrade.upgrade_id,
+            )
+            return {
+                "upgrade_id": str(upgrade.upgrade_id),
+                "status": upgrade.status.value,
+                "approval_required": True,
+                "approval_id": str(approval.approval_id),
+            }
+
+        # No approval needed — dispatch task after caller commits
+        self._pending_dispatch = (upgrade, scheduled_dt)
+        return {
+            "upgrade_id": str(upgrade.upgrade_id),
+            "status": upgrade.status.value,
+            "approval_required": False,
+        }
+
+    def dispatch_pending(self) -> None:
+        """Dispatch the upgrade task queued by create_and_dispatch.
+
+        Must be called AFTER db.commit() so the task can read the upgrade row.
+        """
+        from app.tasks.upgrade import run_upgrade
+
+        if not self._pending_dispatch:
+            return
+        upgrade, scheduled_dt = self._pending_dispatch
+        if scheduled_dt:
+            run_upgrade.apply_async(args=[str(upgrade.upgrade_id)], eta=scheduled_dt)
+        else:
+            run_upgrade.delay(str(upgrade.upgrade_id))
+        self._pending_dispatch = None
+
+    def cancel_for_instance(
+        self,
+        instance_id: UUID,
+        upgrade_id: UUID,
+        *,
+        reason: str | None = None,
+        cancelled_by: str | None = None,
+        cancelled_by_name: str | None = None,
+    ) -> AppUpgrade:
+        """Cancel an upgrade, verifying it belongs to the given instance."""
+        upgrade = self.cancel_upgrade(
+            upgrade_id,
+            reason=reason,
+            cancelled_by=cancelled_by,
+            cancelled_by_name=cancelled_by_name,
+        )
+        if upgrade.instance_id != instance_id:
+            raise ValueError("Upgrade does not match instance")
+        return upgrade
 
     def cancel_upgrade(
         self,

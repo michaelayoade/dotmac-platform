@@ -6,6 +6,7 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
     volumes:
       - ./app:/app/app
+      - ./scripts:/app/scripts
       - ./templates:/app/templates
       - ./static:/app/static
 

@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime
+from typing import cast
 
 from app.models.feature_flag import InstanceFlag
 from app.models.instance import Instance, InstanceStatus
@@ -70,7 +71,7 @@ def _make_module(db_session, slug: str, *, is_core: bool = False) -> Module:
     # Re-use existing module if already seeded (shared in-memory DB)
     existing = db_session.scalar(select(Module).where(Module.slug == slug))
     if existing:
-        return existing
+        return cast(Module, existing)
     mod = Module(
         name=slug.title(),
         slug=slug,

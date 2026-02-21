@@ -64,6 +64,18 @@ class DisasterRecoveryService:
         self.db.delete(plan)
         self.db.flush()
 
+    def list_for_org(self, org_id: UUID, limit: int = 200, offset: int = 0) -> list[DisasterRecoveryPlan]:
+        """List DR plans for instances belonging to a specific organization."""
+        stmt = (
+            select(DisasterRecoveryPlan)
+            .join(Instance, Instance.instance_id == DisasterRecoveryPlan.instance_id)
+            .where(Instance.org_id == org_id)
+            .order_by(DisasterRecoveryPlan.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(self.db.scalars(stmt).all())
+
     def list_plans(self, limit: int = 200, offset: int = 0) -> list[DisasterRecoveryPlan]:
         stmt = select(DisasterRecoveryPlan).order_by(DisasterRecoveryPlan.created_at.desc()).limit(limit).offset(offset)
         return list(self.db.scalars(stmt).all())
@@ -145,8 +157,8 @@ class DisasterRecoveryService:
             server_id=target_server_id,
             org_code=new_org_code,
             org_name=new_org_name or f"Restore of {source_instance.org_name}",
-            sector_type=source_instance.sector_type.value,
-            framework=source_instance.framework.value,
+            sector_type=source_instance.sector_type.value if source_instance.sector_type else None,
+            framework=source_instance.framework.value if source_instance.framework else None,
             currency=source_instance.currency,
             admin_email=source_instance.admin_email,
             admin_username=source_instance.admin_username,

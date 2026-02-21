@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import enum
 import uuid
 from datetime import UTC, datetime
@@ -26,6 +28,8 @@ class GitRepository(Base):
     token_encrypted: Mapped[str | None] = mapped_column(Text)
     default_branch: Mapped[str] = mapped_column(String(120), default="main")
     is_platform_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    webhook_secret_encrypted: Mapped[str | None] = mapped_column(Text)
+    registry_url: Mapped[str | None] = mapped_column(String(512))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
@@ -33,3 +37,7 @@ class GitRepository(Base):
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
     )
+
+    @property
+    def uses_prebuilt_image(self) -> bool:
+        return bool(self.registry_url)

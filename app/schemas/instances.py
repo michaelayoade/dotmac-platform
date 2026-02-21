@@ -11,9 +11,9 @@ class InstanceCreateRequest(BaseModel):
     server_id: UUID
     org_code: str = Field(min_length=1, max_length=40)
     org_name: str = Field(min_length=1, max_length=200)
-    sector_type: SectorType = SectorType.PRIVATE
-    framework: AccountingFramework = AccountingFramework.IFRS
-    currency: str = Field(default="NGN", min_length=3, max_length=3)
+    sector_type: SectorType | None = None
+    framework: AccountingFramework | None = None
+    currency: str | None = Field(default=None, max_length=3)
     admin_email: EmailStr | None = None
     admin_username: str = Field(default="admin", min_length=1, max_length=80)
     domain: str | None = Field(default=None, max_length=255)

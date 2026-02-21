@@ -1,15 +1,10 @@
-from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_role
 from app.db import SessionLocal
-from app.models.auth import Session as AuthSession
-from app.models.auth import SessionStatus, UserCredential
-from app.models.person import Person
 from app.rate_limit import (
     login_limiter,
     mfa_verify_limiter,
@@ -58,16 +53,9 @@ from app.schemas.signup import (
     SignupVerifyResponse,
 )
 from app.services import auth_flow as auth_flow_service
-from app.services import avatar as avatar_service
+from app.services import auth_session_service, person_profile_service
 from app.services.auth_dependencies import require_user_auth
-from app.services.auth_flow import (
-    hash_password,
-    request_password_reset,
-    reset_password,
-    revoke_sessions_for_person,
-    verify_password,
-)
-from app.services.common import coerce_uuid
+from app.services.auth_flow import request_password_reset, reset_password
 from app.services.email import send_password_reset_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -212,6 +200,10 @@ def signup_confirm_billing(
     try:
         signup = svc.confirm_billing(signup_id=signup_id, billing_reference=payload.billing_reference)
         db.commit()
+        if signup.billing_confirmed_at is None:
+            raise HTTPException(
+                status_code=500, detail={"code": "SIGNUP_BILLING_FAILED", "message": "Missing timestamp"}
+            )
         return SignupBillingConfirmResponse(
             signup_id=signup.signup_id,
             status=signup.status.value,
@@ -321,22 +313,8 @@ def logout(payload: LogoutRequest, request: Request, db: Session = Depends(get_d
     return auth_flow_service.auth_flow.logout_response(db, payload.refresh_token, request)
 
 
-@router.get(
-    "/me",
-    response_model=MeResponse,
-    status_code=status.HTTP_200_OK,
-    responses={
-        401: {"model": ErrorResponse},
-    },
-)
-def get_me(
-    auth: dict = Depends(require_user_auth),
-    db: Session = Depends(get_db),
-):
-    person = db.get(Person, coerce_uuid(auth["person_id"]))
-    if not person:
-        raise HTTPException(status_code=404, detail="User not found")
-
+def _build_me_response(person: person_profile_service.Person, auth: dict) -> MeResponse:
+    """Build MeResponse from a Person model and auth context."""
     return MeResponse(
         id=person.id,
         first_name=person.first_name,
@@ -354,6 +332,25 @@ def get_me(
         roles=auth.get("roles", []),
         scopes=auth.get("scopes", []),
     )
+
+
+@router.get(
+    "/me",
+    response_model=MeResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        401: {"model": ErrorResponse},
+    },
+)
+def get_me(
+    auth: dict = Depends(require_user_auth),
+    db: Session = Depends(get_db),
+):
+    try:
+        person = person_profile_service.get_profile(db, auth["person_id"])
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return _build_me_response(person, auth)
 
 
 @router.patch(
@@ -369,46 +366,12 @@ def update_me(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    person = db.get(Person, coerce_uuid(auth["person_id"]))
-    if not person:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    _ME_UPDATABLE_FIELDS = {
-        "first_name",
-        "last_name",
-        "display_name",
-        "phone",
-        "date_of_birth",
-        "gender",
-        "preferred_contact_method",
-        "locale",
-        "timezone",
-    }
-    update_data = payload.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        if field in _ME_UPDATABLE_FIELDS:
-            setattr(person, field, value)
-
+    try:
+        person = person_profile_service.update_profile(db, auth["person_id"], payload.model_dump(exclude_unset=True))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     db.commit()
-    db.refresh(person)
-
-    return MeResponse(
-        id=person.id,
-        first_name=person.first_name,
-        last_name=person.last_name,
-        display_name=person.display_name,
-        avatar_url=person.avatar_url,
-        email=person.email,
-        email_verified=person.email_verified,
-        phone=person.phone,
-        date_of_birth=person.date_of_birth,
-        gender=person.gender.value if person.gender else "unknown",
-        preferred_contact_method=person.preferred_contact_method.value if person.preferred_contact_method else None,
-        locale=person.locale,
-        timezone=person.timezone,
-        roles=auth.get("roles", []),
-        scopes=auth.get("scopes", []),
-    )
+    return _build_me_response(person, auth)
 
 
 @router.post(
@@ -425,20 +388,11 @@ async def upload_avatar(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    person = db.get(Person, coerce_uuid(auth["person_id"]))
-    if not person:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # Delete old avatar if exists
-    avatar_service.delete_avatar(person.avatar_url)
-
-    # Save new avatar
-    avatar_url = await avatar_service.save_avatar(file, str(person.id))
-
-    # Update person record
-    person.avatar_url = avatar_url
+    try:
+        avatar_url = await person_profile_service.upload_avatar(db, auth["person_id"], file)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     db.commit()
-
     return AvatarUploadResponse(avatar_url=avatar_url)
 
 
@@ -453,12 +407,10 @@ def delete_avatar(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    person = db.get(Person, coerce_uuid(auth["person_id"]))
-    if not person:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    avatar_service.delete_avatar(person.avatar_url)
-    person.avatar_url = None
+    try:
+        person_profile_service.delete_avatar(db, auth["person_id"])
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     db.commit()
 
 
@@ -474,18 +426,8 @@ def list_sessions(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    person_id = coerce_uuid(auth["person_id"])
-    stmt = (
-        select(AuthSession)
-        .where(AuthSession.person_id == person_id)
-        .where(AuthSession.status == SessionStatus.active)
-        .where(AuthSession.revoked_at.is_(None))
-        .order_by(AuthSession.created_at.desc())
-    )
-    sessions = list(db.scalars(stmt).all())
-
+    sessions = auth_session_service.list_for_person(db, auth["person_id"])
     current_session_id = auth.get("session_id")
-
     return SessionListResponse(
         sessions=[
             SessionInfoResponse(
@@ -518,25 +460,14 @@ def revoke_session(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    stmt = (
-        select(AuthSession)
-        .where(AuthSession.id == coerce_uuid(session_id))
-        .where(AuthSession.person_id == coerce_uuid(auth["person_id"]))
-    )
-    session = db.scalar(stmt)
-
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    if session.status == SessionStatus.revoked:
-        raise HTTPException(status_code=400, detail="Session already revoked")
-
-    now = datetime.now(UTC)
-    session.status = SessionStatus.revoked
-    session.revoked_at = now
+    try:
+        revoked_at = auth_session_service.revoke_session(db, auth["person_id"], session_id)
+    except ValueError as e:
+        detail = str(e)
+        code = 400 if "already revoked" in detail else 404
+        raise HTTPException(status_code=code, detail=detail)
     db.commit()
-
-    return SessionRevokeResponse(revoked_at=now)
+    return SessionRevokeResponse(revoked_at=revoked_at)
 
 
 @router.delete(
@@ -551,27 +482,9 @@ def revoke_all_other_sessions(
     auth: dict = Depends(require_user_auth),
     db: Session = Depends(get_db),
 ):
-    current_session_id = auth.get("session_id")
-    if current_session_id:
-        current_session_id = coerce_uuid(current_session_id)
-
-    stmt = (
-        select(AuthSession)
-        .where(AuthSession.person_id == coerce_uuid(auth["person_id"]))
-        .where(AuthSession.status == SessionStatus.active)
-        .where(AuthSession.revoked_at.is_(None))
-        .where(AuthSession.id != current_session_id)
-    )
-    sessions = list(db.scalars(stmt).all())
-
-    now = datetime.now(UTC)
-    for session in sessions:
-        session.status = SessionStatus.revoked
-        session.revoked_at = now
-
+    revoked_at, count = auth_session_service.revoke_all_others(db, auth["person_id"], auth.get("session_id"))
     db.commit()
-
-    return SessionRevokeResponse(revoked_at=now, revoked_count=len(sessions))
+    return SessionRevokeResponse(revoked_at=revoked_at, revoked_count=count)
 
 
 @router.post(
@@ -591,30 +504,19 @@ def change_password(
     db: Session = Depends(get_db),
 ):
     password_change_limiter.check(request)
-    stmt = (
-        select(UserCredential)
-        .where(UserCredential.person_id == coerce_uuid(auth["person_id"]))
-        .where(UserCredential.is_active.is_(True))
-    )
-    credential = db.scalar(stmt)
-
-    if not credential:
-        raise HTTPException(status_code=404, detail="No credentials found")
-
-    if not verify_password(payload.current_password, credential.password_hash):
-        raise HTTPException(status_code=401, detail="Current password is incorrect")
-
-    if payload.current_password == payload.new_password:
-        raise HTTPException(status_code=400, detail="New password must be different")
-
-    now = datetime.now(UTC)
-    credential.password_hash = hash_password(payload.new_password)
-    credential.password_updated_at = now
-    credential.must_change_password = False
-    revoke_sessions_for_person(db, auth["person_id"])
+    try:
+        changed_at = person_profile_service.change_password(
+            db, auth["person_id"], payload.current_password, payload.new_password
+        )
+    except ValueError as e:
+        detail = str(e)
+        if "incorrect" in detail:
+            raise HTTPException(status_code=401, detail=detail)
+        if "No credentials" in detail:
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
     db.commit()
-
-    return PasswordChangeResponse(changed_at=now)
+    return PasswordChangeResponse(changed_at=changed_at)
 
 
 @router.post(

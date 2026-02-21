@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import logging
 
 from fastapi import HTTPException, Request, Response
@@ -61,7 +62,7 @@ class AuditEvents(ListResponseMixin):
         order_dir: str,
         limit: int,
         offset: int,
-    ):
+    ) -> builtins.list[AuditEvent]:
         stmt = select(AuditEvent)
         if actor_id:
             stmt = stmt.where(AuditEvent.actor_id == actor_id)
@@ -109,7 +110,7 @@ class AuditEvents(ListResponseMixin):
         order_dir: str,
         page: int,
         page_size: int,
-    ) -> tuple[list[AuditEvent], bool | None, AuditActorType | None]:
+    ) -> tuple[builtins.list[AuditEvent], bool | None, AuditActorType | None]:
         resolved_actor_type = AuditEvents.parse_actor_type(actor_type)
         is_success_val = None
         if is_success in {"true", "false"}:

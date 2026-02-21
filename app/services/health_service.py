@@ -22,6 +22,7 @@ from app.config import settings as platform_settings
 from app.models.health_check import HealthCheck, HealthStatus
 from app.models.instance import Instance, InstanceStatus
 from app.models.server import Server
+from app.services.ssh_service import get_ssh_for_server
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +113,6 @@ class HealthService:
             return check
 
         try:
-            from app.services.ssh_service import get_ssh_for_server
-
             ssh = get_ssh_for_server(server)
             port = int(instance.app_port)
             result = ssh.exec_command(
@@ -421,6 +420,36 @@ class HealthService:
         if check.status == HealthStatus.healthy:
             return "healthy"
         return "unhealthy"
+
+    def get_dashboard_instances(self, instances: list[Instance]) -> tuple[list[dict], str]:
+        """Build enriched instance data for the dashboard, plus an ETag string.
+
+        Returns (instance_data, etag) where instance_data is a list of dicts
+        with 'instance', 'health', and 'health_state' keys, and etag is a
+        content hash for HTMX caching.
+        """
+        import hashlib
+
+        instance_ids = [inst.instance_id for inst in instances]
+        health_map = self.get_latest_checks_batch(instance_ids)
+        now = datetime.now(UTC)
+        instance_data: list[dict] = []
+        etag_parts: list[str] = []
+        for inst in instances:
+            check = health_map.get(inst.instance_id)
+            health_state = self.classify_health(check, now)
+            instance_data.append(
+                {
+                    "instance": inst,
+                    "health": check,
+                    "health_state": health_state,
+                }
+            )
+            etag_parts.append(
+                f"{inst.instance_id}:{inst.status.value}:{health_state}:{check.response_ms if check else ''}"
+            )
+        etag = '"' + hashlib.md5("|".join(etag_parts).encode()).hexdigest()[:16] + '"'  # noqa: S324
+        return instance_data, etag
 
     def get_badge_state(self, instance_id: UUID) -> dict:
         """Return health badge data + ETag payload."""

@@ -166,7 +166,7 @@ class ServerService:
             {
                 "server": s,
                 "instance_count": counts.get(s.server_id, 0),
-                "ssh_key_label": key_labels.get(s.ssh_key_id),
+                "ssh_key_label": key_labels.get(s.ssh_key_id) if s.ssh_key_id else None,
             }
             for s in servers
         ]

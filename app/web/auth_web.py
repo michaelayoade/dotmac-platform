@@ -4,7 +4,7 @@ Auth Web Routes — Login/logout pages for the platform.
 
 import logging
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -235,26 +235,20 @@ def logout(
     db: Session = Depends(get_db),
     csrf_token: str = Form(""),
 ):
-    validate_csrf_token(request, csrf_token)
+    try:
+        validate_csrf_token(request, csrf_token)
+    except HTTPException as exc:
+        # Allow stale pages to log out successfully when only token age exceeded.
+        if exc.status_code != 403 or exc.detail != "CSRF token expired":
+            raise
 
     # Best-effort session revocation
-    try:
-        from app.models.auth import Session as AuthSession
-        from app.models.auth import SessionStatus
-        from app.services.auth_flow import decode_access_token
-        from app.services.common import coerce_uuid
+    from app.services import auth_session_service
 
-        access_token = request.cookies.get("access_token")
-        if access_token:
-            payload = decode_access_token(db, access_token)
-            session_id = payload.get("session_id")
-            if session_id:
-                session = db.get(AuthSession, coerce_uuid(session_id))
-                if session and session.status == SessionStatus.active:
-                    session.status = SessionStatus.revoked
-                    db.commit()
-    except Exception as e:
-        logger.warning("Failed to revoke session on logout: %s", e)
+    access_token = request.cookies.get("access_token")
+    if access_token:
+        auth_session_service.revoke_by_access_token(db, access_token)
+        db.commit()
 
     response = RedirectResponse("/login", status_code=302)
     response.delete_cookie("access_token", path="/")

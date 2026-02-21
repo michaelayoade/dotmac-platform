@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.models.webhook import WebhookEndpoint, WebhookEvent
+from app.models.webhook import WebhookEvent
 from app.web.deps import WebAuthContext, get_db, require_web_auth
 from app.web.helpers import ctx, require_admin, validate_csrf_token
 
@@ -105,11 +105,11 @@ def webhooks_deliveries(
     require_admin(auth)
     from app.services.webhook_service import WebhookService
 
-    endpoint = db.get(WebhookEndpoint, endpoint_id)
+    svc = WebhookService(db)
+    endpoint = svc.get_endpoint(endpoint_id)
     if not endpoint:
         return RedirectResponse("/webhooks", status_code=302)
 
-    svc = WebhookService(db)
     deliveries = svc.get_deliveries(endpoint_id)
 
     return templates.TemplateResponse(

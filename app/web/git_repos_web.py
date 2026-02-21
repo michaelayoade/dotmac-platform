@@ -52,6 +52,7 @@ def git_repos_create(
     credential: str | None = Form(None),
     default_branch: str = Form("main"),
     is_platform_default: bool = Form(False),
+    registry_url: str | None = Form(None),
     csrf_token: str = Form(""),
 ):
     require_admin(auth)
@@ -66,6 +67,7 @@ def git_repos_create(
             credential=credential,
             default_branch=default_branch,
             is_platform_default=is_platform_default,
+            registry_url=registry_url or None,
         )
         db.commit()
     except Exception as e:

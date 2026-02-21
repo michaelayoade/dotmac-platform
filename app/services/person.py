@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
+import builtins
+
 from app.models.person import Person, PersonStatus
 from app.models.rbac import PersonRole, Role
 from app.schemas.person import PersonCreate, PersonUpdate
@@ -102,7 +104,7 @@ class People(ListResponseMixin):
         page: int,
         page_size: int,
         org_id: str | None = None,
-    ) -> tuple[list[Person], int, dict]:
+    ) -> tuple[builtins.list[Person], int, dict[uuid.UUID, builtins.list[str]]]:
         q = (q or "").strip()
         q_like = f"%{q}%" if q else None
         stmt = sa_select(Person)

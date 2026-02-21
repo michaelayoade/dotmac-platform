@@ -7,6 +7,7 @@ import logging
 import re
 import secrets
 from datetime import UTC, datetime, timedelta
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import and_, select
@@ -30,6 +31,14 @@ logger = logging.getLogger(__name__)
 
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 class SignupService:
@@ -56,7 +65,8 @@ class SignupService:
     def _expire_if_needed(self, signup: SignupRequest) -> None:
         if signup.status in {SignupStatus.provisioned, SignupStatus.canceled, SignupStatus.expired}:
             return
-        if signup.expires_at and signup.expires_at <= datetime.now(UTC):
+        expires_at = _as_utc(signup.expires_at)
+        if expires_at and expires_at <= datetime.now(UTC):
             signup.status = SignupStatus.expired
             self.db.flush()
 
@@ -72,7 +82,7 @@ class SignupService:
         repo = GitRepoService(self.db).get_by_id(release.git_repo_id)
         if not repo or not repo.is_active:
             raise ValueError("Catalog release repo is invalid")
-        return release.git_repo_id
+        return cast(UUID, release.git_repo_id)
 
     def _generate_org_code(self, org_name: str) -> str:
         import re

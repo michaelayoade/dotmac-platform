@@ -28,24 +28,27 @@ def upgrade() -> None:
         op.execute("ALTER TYPE settingdomain ADD VALUE IF NOT EXISTS 'platform'")
 
     # Create enum types if they don't exist
-    existing_enums = [e["name"] for e in inspector.get_enums()]
+    existing_enums: set[str] = set()
+    if is_postgres:
+        rows = bind.execute(sa.text("SELECT typname FROM pg_type WHERE typtype = 'e'"))
+        existing_enums = {row[0] for row in rows}
 
-    if is_postgres and "serverstatus" not in existing_enums:
+    if "serverstatus" not in existing_enums:
         sa.Enum("connected", "unreachable", "unknown", name="serverstatus").create(bind)
 
-    if is_postgres and "sectortype" not in existing_enums:
+    if "sectortype" not in existing_enums:
         sa.Enum("PRIVATE", "PUBLIC", "NGO", name="sectortype").create(bind)
 
-    if is_postgres and "accountingframework" not in existing_enums:
+    if "accountingframework" not in existing_enums:
         sa.Enum("IFRS", "IPSAS", "BOTH", name="accountingframework").create(bind)
 
-    if is_postgres and "instancestatus" not in existing_enums:
+    if "instancestatus" not in existing_enums:
         sa.Enum("provisioned", "deploying", "running", "stopped", "error", name="instancestatus").create(bind)
 
-    if is_postgres and "healthstatus" not in existing_enums:
+    if "healthstatus" not in existing_enums:
         sa.Enum("healthy", "unhealthy", "unreachable", name="healthstatus").create(bind)
 
-    if is_postgres and "deploystepstatus" not in existing_enums:
+    if "deploystepstatus" not in existing_enums:
         sa.Enum("pending", "running", "success", "failed", "skipped", name="deploystepstatus").create(bind)
 
     # Create servers table

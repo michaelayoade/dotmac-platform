@@ -7,7 +7,7 @@ Create Date: 2026-02-09 12:00:00.000000
 """
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ENUM, UUID
 
 from alembic import op
 
@@ -18,18 +18,37 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    # Ensure enum types exist before creating table.
+    notificationcategory = ENUM("alert", "deploy", "backup", "system", name="notificationcategory")
+    notificationcategory.create(bind, checkfirst=True)
+    notificationseverity = ENUM("info", "warning", "critical", name="notificationseverity")
+    notificationseverity.create(bind, checkfirst=True)
+
+    if "notifications" in inspector.get_table_names():
+        existing_indexes = {idx["name"] for idx in inspector.get_indexes("notifications")}
+        if "ix_notifications_person_id" not in existing_indexes:
+            op.create_index("ix_notifications_person_id", "notifications", ["person_id"])
+        if "ix_notifications_created_at" not in existing_indexes:
+            op.create_index("ix_notifications_created_at", "notifications", ["created_at"])
+        if "ix_notifications_is_read" not in existing_indexes:
+            op.create_index("ix_notifications_is_read", "notifications", ["is_read"])
+        return
+
     op.create_table(
         "notifications",
         sa.Column("notification_id", UUID(as_uuid=True), primary_key=True),
         sa.Column("person_id", UUID(as_uuid=True), sa.ForeignKey("people.id"), nullable=True),
         sa.Column(
             "category",
-            sa.Enum("alert", "deploy", "backup", "system", name="notificationcategory", create_type=False),
+            ENUM("alert", "deploy", "backup", "system", name="notificationcategory", create_type=False),
             nullable=False,
         ),
         sa.Column(
             "severity",
-            sa.Enum("info", "warning", "critical", name="notificationseverity", create_type=False),
+            ENUM("info", "warning", "critical", name="notificationseverity", create_type=False),
             nullable=False,
             server_default="info",
         ),
@@ -39,11 +58,6 @@ def upgrade() -> None:
         sa.Column("is_read", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    # Create enums first (PostgreSQL)
-    notificationcategory = sa.Enum("alert", "deploy", "backup", "system", name="notificationcategory")
-    notificationcategory.create(op.get_bind(), checkfirst=True)
-    notificationseverity = sa.Enum("info", "warning", "critical", name="notificationseverity")
-    notificationseverity.create(op.get_bind(), checkfirst=True)
 
     op.create_index("ix_notifications_person_id", "notifications", ["person_id"])
     op.create_index("ix_notifications_created_at", "notifications", ["created_at"])

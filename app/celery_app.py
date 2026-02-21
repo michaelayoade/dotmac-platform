@@ -15,5 +15,8 @@ celery_app.autodiscover_tasks(
         "app.tasks.monitoring",
         "app.tasks.lifecycle",
         "app.tasks.webhooks",
+        "app.tasks.dr",
+        "app.tasks.github_webhooks",
+        "app.tasks.notifications",
     ]
 )

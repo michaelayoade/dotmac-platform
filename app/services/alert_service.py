@@ -201,12 +201,12 @@ class AlertService:
         if to_resolve:
             now = datetime.now(UTC)
             for rule_id, instance_id in to_resolve:
-                stmt = select(AlertEvent).where(
+                resolve_stmt = select(AlertEvent).where(
                     AlertEvent.rule_id == rule_id,
                     AlertEvent.instance_id == instance_id,
                     AlertEvent.resolved_at.is_(None),
                 )
-                events = list(self.db.scalars(stmt).all())
+                events = list(self.db.scalars(resolve_stmt).all())
                 for event in events:
                     event.resolved_at = now
                     resolved_count += 1

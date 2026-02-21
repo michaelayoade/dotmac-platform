@@ -1,21 +1,110 @@
+import asyncio
+import inspect
 import os
 import sys
 import uuid
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from http.cookies import SimpleCookie
 from types import ModuleType
 
+import fastapi.dependencies.utils as fastapi_deps_utils
+import fastapi.routing as fastapi_routing
+import httpx
 import pytest
-from fastapi.testclient import TestClient
+import starlette.concurrency as starlette_concurrency
+import starlette.routing as starlette_routing
+from fastapi.routing import APIRoute
 from jose import jwt
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
-from sqlalchemy.pool import StaticPool
+from starlette.routing import request_response
+
+
+async def _patched_run_in_threadpool(func, *args, **kwargs):
+    """Run inline in tests to avoid cross-thread sqlite/session deadlocks."""
+    return func(*args, **kwargs)
+
+
+starlette_concurrency.run_in_threadpool = _patched_run_in_threadpool
+starlette_routing.run_in_threadpool = _patched_run_in_threadpool
+fastapi_routing.run_in_threadpool = _patched_run_in_threadpool
+fastapi_deps_utils.run_in_threadpool = _patched_run_in_threadpool
+
+
+def _syncify_fastapi_routes(app) -> None:
+    if getattr(app.state, "_sync_routes_patched", False):
+        return
+    for route in app.routes:
+        if isinstance(route, APIRoute) and not inspect.iscoroutinefunction(route.endpoint):
+            original = route.endpoint
+
+            async def _wrapped(*args, __orig=original, **kwargs):
+                return __orig(*args, **kwargs)
+
+            route.endpoint = _wrapped
+            route.dependant.call = _wrapped
+            route.app = request_response(route.get_route_handler())
+    app.state._sync_routes_patched = True
+
+
+class SyncASGIClient:
+    def __init__(self, app):
+        self._app = app
+        self._cookies = httpx.Cookies()
+
+    async def _request(self, method: str, url: str, **kwargs):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=self._app, raise_app_exceptions=False),
+            base_url="http://testserver",
+            follow_redirects=True,
+            cookies=self._cookies,
+        ) as client:
+            response = await client.request(method, url, **kwargs)
+            # Persist the client cookie jar, not only response cookies, so
+            # HttpOnly/redirect-set cookies survive across requests.
+            self._cookies.update(client.cookies)
+            for raw_cookie in response.headers.get_list("set-cookie"):
+                parsed = SimpleCookie()
+                parsed.load(raw_cookie)
+                for key, morsel in parsed.items():
+                    if morsel.value == "" or morsel["max-age"] == "0":
+                        stale = [(c.domain, c.path, c.name) for c in self._cookies.jar if c.name == key]
+                        for domain, path, name in stale:
+                            self._cookies.jar.clear(domain, path, name)
+        self._cookies.update(response.cookies)
+        return response
+
+    def request(self, method: str, url: str, **kwargs):
+        return asyncio.run(self._request(method, url, **kwargs))
+
+    def get(self, url: str, **kwargs):
+        return self.request("GET", url, **kwargs)
+
+    def post(self, url: str, **kwargs):
+        return self.request("POST", url, **kwargs)
+
+    def put(self, url: str, **kwargs):
+        return self.request("PUT", url, **kwargs)
+
+    def patch(self, url: str, **kwargs):
+        return self.request("PATCH", url, **kwargs)
+
+    def delete(self, url: str, **kwargs):
+        return self.request("DELETE", url, **kwargs)
+
+    def close(self) -> None:
+        return None
+
+    @property
+    def cookies(self):
+        return self._cookies
+
 
 # Create a test engine BEFORE any app imports
 _test_engine = create_engine(
-    "sqlite+pysqlite:///:memory:",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
+    "sqlite+pysqlite:///file:dotmac_test?mode=memory&cache=shared",
+    connect_args={"check_same_thread": False, "uri": True},
 )
 
 
@@ -67,6 +156,9 @@ os.environ["JWT_SECRET"] = "test-secret"
 os.environ["JWT_ALGORITHM"] = "HS256"
 os.environ["TOTP_ENCRYPTION_KEY"] = "QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g="
 os.environ["TOTP_ISSUER"] = "StarterTemplate"
+os.environ["REFRESH_COOKIE_NAME"] = "refresh_token"
+os.environ["REFRESH_COOKIE_SECURE"] = "false"
+os.environ["REFRESH_COOKIE_PATH"] = "/"
 
 # Now import the models - they'll use our mocked db module
 from app.models.audit import AuditActorType, AuditEvent
@@ -81,9 +173,11 @@ from app.models.catalog import AppBundle, AppCatalogItem, AppRelease  # noqa: F4
 from app.models.deployment_log import DeploymentLog  # noqa: F401
 from app.models.domain_settings import DomainSetting, SettingDomain
 from app.models.git_repository import GitRepository  # noqa: F401
+from app.models.github_webhook_log import GitHubWebhookLog  # noqa: F401
 from app.models.health_check import HealthCheck, HealthStatus  # noqa: F401
 from app.models.instance import Instance  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
+from app.models.notification_channel import NotificationChannel  # noqa: F401
 from app.models.organization import Organization  # noqa: F401
 from app.models.organization_member import OrganizationMember  # noqa: F401
 from app.models.otel_config import OtelExportConfig  # noqa: F401
@@ -114,9 +208,16 @@ def db_session(engine):
     """
     Session = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     session = Session()
+    for table in reversed(TestBase.metadata.sorted_tables):
+        session.execute(table.delete())
+    session.commit()
     try:
         yield session
     finally:
+        session.rollback()
+        for table in reversed(TestBase.metadata.sorted_tables):
+            session.execute(table.delete())
+        session.commit()
         session.close()
 
 
@@ -158,6 +259,7 @@ def auth_env():
 def _reset_rate_limiters():
     """Reset in-memory rate limiter state between tests."""
     from app.rate_limit import (
+        github_webhook_limiter,
         login_limiter,
         mfa_verify_limiter,
         password_change_limiter,
@@ -176,6 +278,7 @@ def _reset_rate_limiters():
     signup_limiter._requests.clear()
     signup_resend_limiter._requests.clear()
     signup_verify_limiter._requests.clear()
+    github_webhook_limiter._requests.clear()
 
 
 # ============ FastAPI Test Client Fixtures ============
@@ -185,6 +288,7 @@ def _reset_rate_limiters():
 def client(db_session):
     """Create a test client with database dependency override."""
     from app.api.audit import get_db as audit_get_db
+    from app.api.auth import get_db as auth_api_get_db
     from app.api.auth_flow import get_db as auth_flow_get_db
     from app.api.persons import get_db as persons_get_db
     from app.api.rbac import get_db as rbac_get_db
@@ -192,32 +296,56 @@ def client(db_session):
     from app.api.settings import get_db as settings_get_db
     from app.main import app
     from app.services.auth_dependencies import _get_db as auth_deps_get_db
-
-    Session = sessionmaker(bind=db_session.bind, autoflush=False, autocommit=False)
+    from app.services.module_service import ModuleService
+    from app.services.plan_service import PlanService
+    from app.services.settings_seed import (
+        seed_audit_settings,
+        seed_auth_settings,
+        seed_scheduled_tasks,
+        seed_scheduler_settings,
+    )
+    from app.web.deps import get_db as web_get_db
 
     def override_get_db():
-        session = Session()
-        try:
-            yield session
-        finally:
-            session.close()
+        return db_session
 
     # Override all get_db dependencies
     from app.api.deps import get_db as deps_get_db
 
     app.dependency_overrides[persons_get_db] = override_get_db
+    app.dependency_overrides[auth_api_get_db] = override_get_db
     app.dependency_overrides[auth_flow_get_db] = override_get_db
     app.dependency_overrides[rbac_get_db] = override_get_db
     app.dependency_overrides[audit_get_db] = override_get_db
     app.dependency_overrides[settings_get_db] = override_get_db
     app.dependency_overrides[scheduler_get_db] = override_get_db
     app.dependency_overrides[auth_deps_get_db] = override_get_db
+    app.dependency_overrides[web_get_db] = override_get_db
     app.dependency_overrides[deps_get_db] = override_get_db
 
-    with TestClient(app, raise_server_exceptions=False) as test_client:
-        yield test_client
+    # Seed defaults up front in the shared test session to avoid lifespan startup
+    # using a separate session/portal and hanging on sqlite in-memory access.
+    seed_auth_settings(db_session)
+    seed_audit_settings(db_session)
+    seed_scheduler_settings(db_session)
+    seed_scheduled_tasks(db_session)
+    ModuleService(db_session).seed_modules()
+    PlanService(db_session).seed_plans()
+    db_session.commit()
 
-    app.dependency_overrides.clear()
+    @asynccontextmanager
+    async def _test_lifespan(_app):
+        yield
+
+    original_lifespan = app.router.lifespan_context
+    app.router.lifespan_context = _test_lifespan
+    test_client = SyncASGIClient(app)
+    try:
+        yield test_client
+    finally:
+        test_client.close()
+        app.router.lifespan_context = original_lifespan
+        app.dependency_overrides.clear()
 
 
 def _create_access_token(

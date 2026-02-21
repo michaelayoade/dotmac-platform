@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import random
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -76,30 +77,31 @@ class ServerSelectionService:
         return selected
 
     def _select_least_instances(self, servers: list[Server]) -> Server:
-        counts = dict(
-            self.db.execute(
-                select(Instance.server_id, func.count(Instance.instance_id))
-                .where(Instance.server_id.in_([s.server_id for s in servers]))
-                .group_by(Instance.server_id)
-            ).all()
-        )
+        rows = self.db.execute(
+            select(Instance.server_id, func.count(Instance.instance_id))
+            .where(Instance.server_id.in_([s.server_id for s in servers]))
+            .group_by(Instance.server_id)
+        ).all()
+        counts: dict[UUID, int] = {row[0]: row[1] for row in rows}
 
         def _count(server: Server) -> int:
-            return int(counts.get(server.server_id, 0))
+            return counts.get(server.server_id, 0)
 
         servers_sorted = sorted(servers, key=lambda s: (_count(s), s.created_at))
         return servers_sorted[0]
 
     def _select_weighted(self, servers: list[Server]) -> Server:
         ps = PlatformSettingsService(self.db)
-        weights = ps.get_json(_WEIGHTS_KEY) or {}
+        weights = cast(dict[str, object], ps.get_json(_WEIGHTS_KEY) or {})
         weighted: list[tuple[Server, int]] = []
         for server in servers:
             weight = weights.get(str(server.server_id))
-            try:
-                weight_int = int(weight)
-            except (TypeError, ValueError):
-                weight_int = 0
+            weight_int = 0
+            if isinstance(weight, (int, str)):
+                try:
+                    weight_int = int(weight)
+                except ValueError:
+                    weight_int = 0
             if weight_int > 0:
                 weighted.append((server, weight_int))
 

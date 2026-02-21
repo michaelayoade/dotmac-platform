@@ -29,6 +29,8 @@ class BatchDeployService:
         scheduled_at: datetime | None = None,
         created_by: str | None = None,
         notes: str | None = None,
+        git_ref: str | None = None,
+        deployment_type: str = "upgrade",
     ) -> DeploymentBatch:
         """Create a new deployment batch."""
         batch = DeploymentBatch(
@@ -39,6 +41,8 @@ class BatchDeployService:
             total_instances=len(instance_ids),
             created_by=created_by,
             notes=notes,
+            git_ref=git_ref,
+            deployment_type=deployment_type,
         )
         self.db.add(batch)
         self.db.flush()
@@ -49,6 +53,27 @@ class BatchDeployService:
             strategy,
         )
         return batch
+
+    def create_batch_validated(
+        self,
+        instance_ids: list[str],
+        strategy: str = "rolling",
+        git_ref: str | None = None,
+        deployment_type: str = "upgrade",
+    ) -> DeploymentBatch:
+        """Validate inputs and create a batch deploy.
+
+        Raises ValueError for invalid instance_ids or strategy.
+        """
+        if not instance_ids or len(instance_ids) > 100:
+            raise ValueError("instance_ids must contain 1\u2013100 entries")
+        try:
+            BatchStrategy(strategy)
+        except ValueError:
+            raise ValueError(f"Invalid strategy: {strategy!r}")
+        if deployment_type not in ("full", "upgrade", "reconfigure"):
+            raise ValueError(f"Invalid deployment_type: {deployment_type!r}")
+        return self.create_batch(instance_ids, strategy=strategy, git_ref=git_ref, deployment_type=deployment_type)
 
     def list_batches(self, limit: int = 20, offset: int = 0) -> list[DeploymentBatch]:
         stmt = select(DeploymentBatch).order_by(DeploymentBatch.created_at.desc()).limit(limit).offset(offset)
@@ -63,6 +88,8 @@ class BatchDeployService:
             "total_instances": batch.total_instances,
             "completed_count": batch.completed_count,
             "failed_count": batch.failed_count,
+            "git_ref": batch.git_ref,
+            "deployment_type": batch.deployment_type,
             "created_at": batch.created_at.isoformat() if batch.created_at else None,
             "started_at": batch.started_at.isoformat() if batch.started_at else None,
             "completed_at": batch.completed_at.isoformat() if batch.completed_at else None,

@@ -33,6 +33,7 @@ def create_repo(
     credential: str | None = Body(None),
     default_branch: str = Body("main"),
     is_platform_default: bool = Body(False),
+    registry_url: str | None = Body(None),
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
@@ -51,6 +52,7 @@ def create_repo(
             credential=credential,
             default_branch=default_branch,
             is_platform_default=is_platform_default,
+            registry_url=registry_url,
         )
         db.commit()
         return GitRepoService.serialize_repo(repo)
@@ -69,18 +71,20 @@ def update_repo(
     default_branch: str | None = Body(None),
     is_platform_default: bool | None = Body(None),
     is_active: bool | None = Body(None),
+    registry_url: str | None = Body(None),
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
     from app.services.git_repo_service import GitRepoService
 
-    kwargs: dict = {
+    kwargs: dict[str, object] = {
         "label": label,
         "url": url,
         "credential": credential,
         "default_branch": default_branch,
         "is_platform_default": is_platform_default,
         "is_active": is_active,
+        "registry_url": registry_url,
     }
     if auth_type is not None:
         try:

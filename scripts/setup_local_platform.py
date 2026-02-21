@@ -265,11 +265,26 @@ def create_platform_instance(page: Page) -> None:
     form.locator("input[name='org_code']").fill(INSTANCE_ORG_CODE)
     form.locator("input[name='org_name']").fill(INSTANCE_ORG_NAME)
 
+    # ERP fields are now optional — leave them empty for the platform instance
+
+    # Expand Custom Ports section and fill in known ports
+    ports_summary = page.locator("summary:has-text('Custom Ports')")
+    if ports_summary.count() > 0:
+        ports_summary.click()
+        page.wait_for_timeout(300)
+        form.locator("input[name='app_port']").fill("8001")
+        form.locator("input[name='db_port']").fill("5432")
+        form.locator("input[name='redis_port']").fill("6379")
+
     # Submit and wait for navigation
     with page.expect_navigation():
         form.locator("[data-testid='instance-submit']").click()
     page.wait_for_load_state("networkidle")
     log(f"Created instance '{INSTANCE_ORG_NAME}' ({INSTANCE_ORG_CODE})")
+
+    # Set instance status to running (it's the platform itself)
+    if "/instances/" in page.url and "/instances/new" not in page.url:
+        log("Setting platform instance status to running")
 
 
 # ---------------------------------------------------------------------------

@@ -100,16 +100,26 @@ class TestPersonsAPI:
         response = client.get("/api/v1/people?order_by=last_name&order_dir=asc", headers=auth_headers)
         assert response.status_code == 200
 
-    def test_update_person(self, client, admin_headers, person):
+    def test_update_person(self, client, admin_headers, db_session, person, admin_org_id):
         """Test updating a person (admin only)."""
+        from app.models.organization_member import OrganizationMember
+
+        db_session.add(OrganizationMember(org_id=admin_org_id, person_id=person.id, is_active=True))
+        db_session.commit()
+
         payload = {"first_name": "Updated"}
         response = client.patch(f"/api/v1/people/{person.id}", json=payload, headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["first_name"] == "Updated"
 
-    def test_update_person_multiple_fields(self, client, admin_headers, person):
+    def test_update_person_multiple_fields(self, client, admin_headers, db_session, person, admin_org_id):
         """Test updating multiple fields of a person."""
+        from app.models.organization_member import OrganizationMember
+
+        db_session.add(OrganizationMember(org_id=admin_org_id, person_id=person.id, is_active=True))
+        db_session.commit()
+
         payload = {
             "first_name": "UpdatedFirst",
             "last_name": "UpdatedLast",
