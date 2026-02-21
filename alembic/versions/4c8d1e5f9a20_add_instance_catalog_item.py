@@ -18,15 +18,21 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("instances", sa.Column("catalog_item_id", UUID(as_uuid=True), nullable=True))
-    op.create_index("ix_instances_catalog_item_id", "instances", ["catalog_item_id"])
-    op.create_foreign_key(
-        "fk_instances_catalog_item_id",
-        "instances",
-        "app_catalog_items",
-        ["catalog_item_id"],
-        ["catalog_id"],
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    cols = {c["name"] for c in inspector.get_columns("instances")}
+    if "catalog_item_id" not in cols:
+        op.add_column("instances", sa.Column("catalog_item_id", UUID(as_uuid=True), nullable=True))
+        op.create_foreign_key(
+            "fk_instances_catalog_item_id",
+            "instances",
+            "app_catalog_items",
+            ["catalog_item_id"],
+            ["catalog_id"],
+        )
+    indexes = {idx["name"] for idx in inspector.get_indexes("instances")}
+    if "ix_instances_catalog_item_id" not in indexes:
+        op.create_index("ix_instances_catalog_item_id", "instances", ["catalog_item_id"])
 
 
 def downgrade() -> None:

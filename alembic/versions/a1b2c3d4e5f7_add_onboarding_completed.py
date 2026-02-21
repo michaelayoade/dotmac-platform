@@ -17,10 +17,14 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("people") as batch_op:
-        batch_op.add_column(
-            sa.Column("onboarding_completed", sa.Boolean(), nullable=True, server_default=sa.text("false"))
-        )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    cols = {c["name"] for c in inspector.get_columns("people")}
+    if "onboarding_completed" not in cols:
+        with op.batch_alter_table("people") as batch_op:
+            batch_op.add_column(
+                sa.Column("onboarding_completed", sa.Boolean(), nullable=True, server_default=sa.text("false"))
+            )
 
 
 def downgrade() -> None:

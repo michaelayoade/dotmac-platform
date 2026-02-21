@@ -17,8 +17,16 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("app_upgrades", sa.Column("cancelled_by", sa.String(length=120), nullable=True))
-    op.add_column("app_upgrades", sa.Column("cancelled_by_name", sa.String(length=200), nullable=True))
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    tables = set(inspector.get_table_names())
+    if "app_upgrades" not in tables:
+        return
+    cols = {c["name"] for c in inspector.get_columns("app_upgrades")}
+    if "cancelled_by" not in cols:
+        op.add_column("app_upgrades", sa.Column("cancelled_by", sa.String(length=120), nullable=True))
+    if "cancelled_by_name" not in cols:
+        op.add_column("app_upgrades", sa.Column("cancelled_by_name", sa.String(length=200), nullable=True))
 
 
 def downgrade() -> None:

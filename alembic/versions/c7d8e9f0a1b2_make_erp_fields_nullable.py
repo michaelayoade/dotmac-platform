@@ -22,7 +22,14 @@ depends_on = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    tables = set(inspector.get_table_names())
+    if "instances" not in tables:
+        return
+
     # Make columns nullable and drop server defaults
+    # alter_column is inherently idempotent (setting nullable=True when already nullable is a no-op)
     with op.batch_alter_table("instances") as batch_op:
         batch_op.alter_column("sector_type", existing_type=sa.String(length=7), nullable=True, server_default=None)
         batch_op.alter_column("framework", existing_type=sa.String(length=4), nullable=True, server_default=None)

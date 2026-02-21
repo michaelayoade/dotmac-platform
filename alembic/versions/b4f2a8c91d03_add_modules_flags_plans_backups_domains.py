@@ -38,6 +38,9 @@ domain_status_enum = sa.Enum(
 def upgrade() -> None:
     bind = op.get_bind()
     is_postgres = bind.dialect.name == "postgresql"
+    inspector = sa.inspect(bind)
+    tables = set(inspector.get_table_names())
+
     # ── 1. Extend the existing instancestatus enum with new values ──────
     if is_postgres:
         op.execute("ALTER TYPE instancestatus ADD VALUE IF NOT EXISTS 'trial'")
@@ -47,170 +50,211 @@ def upgrade() -> None:
     # ── 2. Create new tables (plans first, because instances will FK to it) ─
 
     # plans
-    op.create_table(
-        "plans",
-        sa.Column("plan_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("name", sa.String(length=80), nullable=False),
-        sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("max_users", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("max_storage_gb", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column(
-            "allowed_modules",
-            JSON(),
-            nullable=False,
-            server_default=sa.text("'[]'::json") if is_postgres else sa.text("'[]'"),
-        ),
-        sa.Column(
-            "allowed_flags",
-            JSON(),
-            nullable=False,
-            server_default=sa.text("'[]'::json") if is_postgres else sa.text("'[]'"),
-        ),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.PrimaryKeyConstraint("plan_id"),
-        sa.UniqueConstraint("name", name="uq_plans_name"),
-    )
+    if "plans" not in tables:
+        op.create_table(
+            "plans",
+            sa.Column("plan_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("name", sa.String(length=80), nullable=False),
+            sa.Column("description", sa.Text(), nullable=True),
+            sa.Column("max_users", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("max_storage_gb", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column(
+                "allowed_modules",
+                JSON(),
+                nullable=False,
+                server_default=sa.text("'[]'::json") if is_postgres else sa.text("'[]'"),
+            ),
+            sa.Column(
+                "allowed_flags",
+                JSON(),
+                nullable=False,
+                server_default=sa.text("'[]'::json") if is_postgres else sa.text("'[]'"),
+            ),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.PrimaryKeyConstraint("plan_id"),
+            sa.UniqueConstraint("name", name="uq_plans_name"),
+        )
 
     # modules
-    op.create_table(
-        "modules",
-        sa.Column("module_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("name", sa.String(length=120), nullable=False),
-        sa.Column("slug", sa.String(length=60), nullable=False),
-        sa.Column("description", sa.Text(), nullable=True),
-        sa.Column(
-            "schemas",
-            JSON(),
-            nullable=False,
-            server_default=sa.text("'[]'::json") if is_postgres else sa.text("'[]'"),
-        ),
-        sa.Column(
-            "dependencies",
-            JSON(),
-            nullable=False,
-            server_default=sa.text("'[]'::json") if is_postgres else sa.text("'[]'"),
-        ),
-        sa.Column("is_core", sa.Boolean(), nullable=False, server_default="false"),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.PrimaryKeyConstraint("module_id"),
-        sa.UniqueConstraint("slug", name="uq_modules_slug"),
-    )
+    if "modules" not in tables:
+        op.create_table(
+            "modules",
+            sa.Column("module_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("name", sa.String(length=120), nullable=False),
+            sa.Column("slug", sa.String(length=60), nullable=False),
+            sa.Column("description", sa.Text(), nullable=True),
+            sa.Column(
+                "schemas",
+                JSON(),
+                nullable=False,
+                server_default=sa.text("'[]'::json") if is_postgres else sa.text("'[]'"),
+            ),
+            sa.Column(
+                "dependencies",
+                JSON(),
+                nullable=False,
+                server_default=sa.text("'[]'::json") if is_postgres else sa.text("'[]'"),
+            ),
+            sa.Column("is_core", sa.Boolean(), nullable=False, server_default="false"),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.PrimaryKeyConstraint("module_id"),
+            sa.UniqueConstraint("slug", name="uq_modules_slug"),
+        )
 
     # instance_modules
-    op.create_table(
-        "instance_modules",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("instance_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("module_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("enabled", sa.Boolean(), nullable=False, server_default="true"),
-        sa.Column("enabled_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["instance_id"], ["instances.instance_id"]),
-        sa.ForeignKeyConstraint(["module_id"], ["modules.module_id"]),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("instance_id", "module_id", name="uq_instance_module"),
+    if "instance_modules" not in tables:
+        op.create_table(
+            "instance_modules",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("instance_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("module_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("enabled", sa.Boolean(), nullable=False, server_default="true"),
+            sa.Column("enabled_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(["instance_id"], ["instances.instance_id"]),
+            sa.ForeignKeyConstraint(["module_id"], ["modules.module_id"]),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("instance_id", "module_id", name="uq_instance_module"),
+        )
+    im_indexes = (
+        {idx["name"] for idx in inspector.get_indexes("instance_modules")} if "instance_modules" in tables else set()
     )
-    op.create_index("ix_instance_modules_instance_id", "instance_modules", ["instance_id"])
-    op.create_index("ix_instance_modules_module_id", "instance_modules", ["module_id"])
+    if "ix_instance_modules_instance_id" not in im_indexes:
+        op.create_index("ix_instance_modules_instance_id", "instance_modules", ["instance_id"])
+    if "ix_instance_modules_module_id" not in im_indexes:
+        op.create_index("ix_instance_modules_module_id", "instance_modules", ["module_id"])
 
     # instance_flags
-    op.create_table(
-        "instance_flags",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("instance_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("flag_key", sa.String(length=120), nullable=False),
-        sa.Column("flag_value", sa.String(length=255), nullable=False, server_default="true"),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["instance_id"], ["instances.instance_id"]),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("instance_id", "flag_key", name="uq_instance_flag"),
+    if "instance_flags" not in tables:
+        op.create_table(
+            "instance_flags",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("instance_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("flag_key", sa.String(length=120), nullable=False),
+            sa.Column("flag_value", sa.String(length=255), nullable=False, server_default="true"),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.ForeignKeyConstraint(["instance_id"], ["instances.instance_id"]),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("instance_id", "flag_key", name="uq_instance_flag"),
+        )
+    if_indexes = (
+        {idx["name"] for idx in inspector.get_indexes("instance_flags")} if "instance_flags" in tables else set()
     )
-    op.create_index("ix_instance_flags_instance_id", "instance_flags", ["instance_id"])
+    if "ix_instance_flags_instance_id" not in if_indexes:
+        op.create_index("ix_instance_flags_instance_id", "instance_flags", ["instance_id"])
 
     # backups
-    op.create_table(
-        "backups",
-        sa.Column("backup_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("instance_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("backup_type", backup_type_enum, nullable=True),
-        sa.Column("status", backup_status_enum, nullable=True),
-        sa.Column("file_path", sa.String(length=512), nullable=True),
-        sa.Column("size_bytes", sa.BigInteger(), nullable=True),
-        sa.Column("error_message", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["instance_id"], ["instances.instance_id"]),
-        sa.PrimaryKeyConstraint("backup_id"),
-    )
-    op.create_index("ix_backups_instance_id", "backups", ["instance_id"])
+    if "backups" not in tables:
+        op.create_table(
+            "backups",
+            sa.Column("backup_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("instance_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("backup_type", backup_type_enum, nullable=True),
+            sa.Column("status", backup_status_enum, nullable=True),
+            sa.Column("file_path", sa.String(length=512), nullable=True),
+            sa.Column("size_bytes", sa.BigInteger(), nullable=True),
+            sa.Column("error_message", sa.Text(), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(["instance_id"], ["instances.instance_id"]),
+            sa.PrimaryKeyConstraint("backup_id"),
+        )
+    bk_indexes = {idx["name"] for idx in inspector.get_indexes("backups")} if "backups" in tables else set()
+    if "ix_backups_instance_id" not in bk_indexes:
+        op.create_index("ix_backups_instance_id", "backups", ["instance_id"])
 
     # deployment_batches
-    op.create_table(
-        "deployment_batches",
-        sa.Column("batch_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("instance_ids", JSON(), nullable=False),
-        sa.Column("strategy", batch_strategy_enum, nullable=True),
-        sa.Column("status", batch_status_enum, nullable=True),
-        sa.Column("scheduled_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("results", JSON(), nullable=True),
-        sa.Column("total_instances", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("completed_count", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("failed_count", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("created_by", sa.String(length=120), nullable=True),
-        sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.PrimaryKeyConstraint("batch_id"),
-    )
+    if "deployment_batches" not in tables:
+        op.create_table(
+            "deployment_batches",
+            sa.Column("batch_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("instance_ids", JSON(), nullable=False),
+            sa.Column("strategy", batch_strategy_enum, nullable=True),
+            sa.Column("status", batch_status_enum, nullable=True),
+            sa.Column("scheduled_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("results", JSON(), nullable=True),
+            sa.Column("total_instances", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("completed_count", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("failed_count", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("created_by", sa.String(length=120), nullable=True),
+            sa.Column("notes", sa.Text(), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.PrimaryKeyConstraint("batch_id"),
+        )
 
     # instance_domains
-    op.create_table(
-        "instance_domains",
-        sa.Column("domain_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("instance_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("domain", sa.String(length=255), nullable=False),
-        sa.Column("is_primary", sa.Boolean(), nullable=False, server_default="false"),
-        sa.Column("status", domain_status_enum, nullable=True),
-        sa.Column("verification_token", sa.String(length=255), nullable=True),
-        sa.Column("verified_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("ssl_expires_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("ssl_provisioned_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("error_message", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["instance_id"], ["instances.instance_id"]),
-        sa.PrimaryKeyConstraint("domain_id"),
-        sa.UniqueConstraint("domain", name="uq_instance_domains_domain"),
+    if "instance_domains" not in tables:
+        op.create_table(
+            "instance_domains",
+            sa.Column("domain_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("instance_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("domain", sa.String(length=255), nullable=False),
+            sa.Column("is_primary", sa.Boolean(), nullable=False, server_default="false"),
+            sa.Column("status", domain_status_enum, nullable=True),
+            sa.Column("verification_token", sa.String(length=255), nullable=True),
+            sa.Column("verified_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("ssl_expires_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("ssl_provisioned_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("error_message", sa.Text(), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.ForeignKeyConstraint(["instance_id"], ["instances.instance_id"]),
+            sa.PrimaryKeyConstraint("domain_id"),
+            sa.UniqueConstraint("domain", name="uq_instance_domains_domain"),
+        )
+    id_indexes = (
+        {idx["name"] for idx in inspector.get_indexes("instance_domains")} if "instance_domains" in tables else set()
     )
-    op.create_index("ix_instance_domains_instance_id", "instance_domains", ["instance_id"])
+    if "ix_instance_domains_instance_id" not in id_indexes:
+        op.create_index("ix_instance_domains_instance_id", "instance_domains", ["instance_id"])
 
     # ── 3. Add new columns to existing tables ───────────────────────────
 
     # instances: plan association, version pinning, lifecycle
-    op.add_column("instances", sa.Column("plan_id", UUID(as_uuid=True), nullable=True))
-    op.add_column("instances", sa.Column("git_branch", sa.String(length=120), nullable=True))
-    op.add_column("instances", sa.Column("git_tag", sa.String(length=120), nullable=True))
-    op.add_column("instances", sa.Column("deployed_git_ref", sa.String(length=120), nullable=True))
-    op.add_column("instances", sa.Column("trial_expires_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("instances", sa.Column("suspended_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("instances", sa.Column("archived_at", sa.DateTime(timezone=True), nullable=True))
-    op.create_foreign_key("fk_instances_plan_id", "instances", "plans", ["plan_id"], ["plan_id"])
+    inst_cols = {c["name"] for c in inspector.get_columns("instances")} if "instances" in tables else set()
+    if "plan_id" not in inst_cols:
+        op.add_column("instances", sa.Column("plan_id", UUID(as_uuid=True), nullable=True))
+    if "git_branch" not in inst_cols:
+        op.add_column("instances", sa.Column("git_branch", sa.String(length=120), nullable=True))
+    if "git_tag" not in inst_cols:
+        op.add_column("instances", sa.Column("git_tag", sa.String(length=120), nullable=True))
+    if "deployed_git_ref" not in inst_cols:
+        op.add_column("instances", sa.Column("deployed_git_ref", sa.String(length=120), nullable=True))
+    if "trial_expires_at" not in inst_cols:
+        op.add_column("instances", sa.Column("trial_expires_at", sa.DateTime(timezone=True), nullable=True))
+    if "suspended_at" not in inst_cols:
+        op.add_column("instances", sa.Column("suspended_at", sa.DateTime(timezone=True), nullable=True))
+    if "archived_at" not in inst_cols:
+        op.add_column("instances", sa.Column("archived_at", sa.DateTime(timezone=True), nullable=True))
+    if "plan_id" not in inst_cols:
+        op.create_foreign_key("fk_instances_plan_id", "instances", "plans", ["plan_id"], ["plan_id"])
 
     # deployment_logs: deployment metadata
-    op.add_column("deployment_logs", sa.Column("deployment_type", sa.String(length=30), nullable=True))
-    op.add_column("deployment_logs", sa.Column("git_ref", sa.String(length=120), nullable=True))
+    dl_cols = {c["name"] for c in inspector.get_columns("deployment_logs")} if "deployment_logs" in tables else set()
+    if "deployment_type" not in dl_cols:
+        op.add_column("deployment_logs", sa.Column("deployment_type", sa.String(length=30), nullable=True))
+    if "git_ref" not in dl_cols:
+        op.add_column("deployment_logs", sa.Column("git_ref", sa.String(length=120), nullable=True))
 
     # health_checks: resource monitoring
-    op.add_column("health_checks", sa.Column("cpu_percent", sa.Float(), nullable=True))
-    op.add_column("health_checks", sa.Column("memory_mb", sa.Integer(), nullable=True))
-    op.add_column("health_checks", sa.Column("memory_limit_mb", sa.Integer(), nullable=True))
-    op.add_column("health_checks", sa.Column("disk_usage_mb", sa.BigInteger(), nullable=True))
-    op.add_column("health_checks", sa.Column("db_size_mb", sa.Integer(), nullable=True))
-    op.add_column("health_checks", sa.Column("active_connections", sa.Integer(), nullable=True))
+    hc_cols = {c["name"] for c in inspector.get_columns("health_checks")} if "health_checks" in tables else set()
+    if "cpu_percent" not in hc_cols:
+        op.add_column("health_checks", sa.Column("cpu_percent", sa.Float(), nullable=True))
+    if "memory_mb" not in hc_cols:
+        op.add_column("health_checks", sa.Column("memory_mb", sa.Integer(), nullable=True))
+    if "memory_limit_mb" not in hc_cols:
+        op.add_column("health_checks", sa.Column("memory_limit_mb", sa.Integer(), nullable=True))
+    if "disk_usage_mb" not in hc_cols:
+        op.add_column("health_checks", sa.Column("disk_usage_mb", sa.BigInteger(), nullable=True))
+    if "db_size_mb" not in hc_cols:
+        op.add_column("health_checks", sa.Column("db_size_mb", sa.Integer(), nullable=True))
+    if "active_connections" not in hc_cols:
+        op.add_column("health_checks", sa.Column("active_connections", sa.Integer(), nullable=True))
 
 
 def downgrade() -> None:

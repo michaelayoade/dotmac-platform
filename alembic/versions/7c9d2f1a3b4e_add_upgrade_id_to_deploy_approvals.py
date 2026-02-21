@@ -18,15 +18,24 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("deploy_approvals", sa.Column("upgrade_id", UUID(as_uuid=True), nullable=True))
-    op.create_index("ix_deploy_approvals_upgrade_id", "deploy_approvals", ["upgrade_id"])
-    op.create_foreign_key(
-        "fk_deploy_approvals_upgrade_id",
-        "deploy_approvals",
-        "app_upgrades",
-        ["upgrade_id"],
-        ["upgrade_id"],
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    tables = set(inspector.get_table_names())
+    if "deploy_approvals" not in tables:
+        return
+    cols = {c["name"] for c in inspector.get_columns("deploy_approvals")}
+    if "upgrade_id" not in cols:
+        op.add_column("deploy_approvals", sa.Column("upgrade_id", UUID(as_uuid=True), nullable=True))
+        op.create_foreign_key(
+            "fk_deploy_approvals_upgrade_id",
+            "deploy_approvals",
+            "app_upgrades",
+            ["upgrade_id"],
+            ["upgrade_id"],
+        )
+    indexes = {idx["name"] for idx in inspector.get_indexes("deploy_approvals")}
+    if "ix_deploy_approvals_upgrade_id" not in indexes:
+        op.create_index("ix_deploy_approvals_upgrade_id", "deploy_approvals", ["upgrade_id"])
 
 
 def downgrade() -> None:

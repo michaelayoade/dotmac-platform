@@ -29,6 +29,9 @@ upgrade_status_enum = ENUM(
 
 def upgrade() -> None:
     bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    tables = set(inspector.get_table_names())
+
     if bind.dialect.name == "postgresql":
         bind.execute(
             sa.text(
@@ -38,23 +41,26 @@ def upgrade() -> None:
             )
         )
 
-    op.create_table(
-        "app_upgrades",
-        sa.Column("upgrade_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("instance_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("catalog_item_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("status", upgrade_status_enum, nullable=True),
-        sa.Column("scheduled_for", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("requested_by", sa.String(length=120), nullable=True),
-        sa.Column("error_message", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["instance_id"], ["instances.instance_id"]),
-        sa.ForeignKeyConstraint(["catalog_item_id"], ["app_catalog_items.catalog_id"]),
-        sa.PrimaryKeyConstraint("upgrade_id"),
-    )
-    op.create_index("ix_app_upgrades_instance_id", "app_upgrades", ["instance_id"])
+    if "app_upgrades" not in tables:
+        op.create_table(
+            "app_upgrades",
+            sa.Column("upgrade_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("instance_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("catalog_item_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("status", upgrade_status_enum, nullable=True),
+            sa.Column("scheduled_for", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("requested_by", sa.String(length=120), nullable=True),
+            sa.Column("error_message", sa.Text(), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.ForeignKeyConstraint(["instance_id"], ["instances.instance_id"]),
+            sa.ForeignKeyConstraint(["catalog_item_id"], ["app_catalog_items.catalog_id"]),
+            sa.PrimaryKeyConstraint("upgrade_id"),
+        )
+    au_indexes = {idx["name"] for idx in inspector.get_indexes("app_upgrades")} if "app_upgrades" in tables else set()
+    if "ix_app_upgrades_instance_id" not in au_indexes:
+        op.create_index("ix_app_upgrades_instance_id", "app_upgrades", ["instance_id"])
 
 
 def downgrade() -> None:

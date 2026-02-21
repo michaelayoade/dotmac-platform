@@ -18,44 +18,56 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "app_releases",
-        sa.Column("release_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("name", sa.String(length=200), nullable=False),
-        sa.Column("version", sa.String(length=60), nullable=False),
-        sa.Column("git_ref", sa.String(length=120), nullable=False),
-        sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.PrimaryKeyConstraint("release_id"),
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    tables = set(inspector.get_table_names())
 
-    op.create_table(
-        "app_bundles",
-        sa.Column("bundle_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("name", sa.String(length=200), nullable=False),
-        sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("module_slugs", JSON(), nullable=True),
-        sa.Column("flag_keys", JSON(), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.PrimaryKeyConstraint("bundle_id"),
-    )
+    if "app_releases" not in tables:
+        op.create_table(
+            "app_releases",
+            sa.Column("release_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("name", sa.String(length=200), nullable=False),
+            sa.Column("version", sa.String(length=60), nullable=False),
+            sa.Column("git_ref", sa.String(length=120), nullable=False),
+            sa.Column("notes", sa.Text(), nullable=True),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.PrimaryKeyConstraint("release_id"),
+        )
 
-    op.create_table(
-        "app_catalog_items",
-        sa.Column("catalog_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("label", sa.String(length=200), nullable=False),
-        sa.Column("release_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("bundle_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["release_id"], ["app_releases.release_id"]),
-        sa.ForeignKeyConstraint(["bundle_id"], ["app_bundles.bundle_id"]),
-        sa.PrimaryKeyConstraint("catalog_id"),
+    if "app_bundles" not in tables:
+        op.create_table(
+            "app_bundles",
+            sa.Column("bundle_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("name", sa.String(length=200), nullable=False),
+            sa.Column("description", sa.Text(), nullable=True),
+            sa.Column("module_slugs", JSON(), nullable=True),
+            sa.Column("flag_keys", JSON(), nullable=True),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.PrimaryKeyConstraint("bundle_id"),
+        )
+
+    if "app_catalog_items" not in tables:
+        op.create_table(
+            "app_catalog_items",
+            sa.Column("catalog_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("label", sa.String(length=200), nullable=False),
+            sa.Column("release_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("bundle_id", UUID(as_uuid=True), nullable=False),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.ForeignKeyConstraint(["release_id"], ["app_releases.release_id"]),
+            sa.ForeignKeyConstraint(["bundle_id"], ["app_bundles.bundle_id"]),
+            sa.PrimaryKeyConstraint("catalog_id"),
+        )
+    indexes = (
+        {idx["name"] for idx in inspector.get_indexes("app_catalog_items")} if "app_catalog_items" in tables else set()
     )
-    op.create_index("ix_app_catalog_items_release_id", "app_catalog_items", ["release_id"])
-    op.create_index("ix_app_catalog_items_bundle_id", "app_catalog_items", ["bundle_id"])
+    if "ix_app_catalog_items_release_id" not in indexes:
+        op.create_index("ix_app_catalog_items_release_id", "app_catalog_items", ["release_id"])
+    if "ix_app_catalog_items_bundle_id" not in indexes:
+        op.create_index("ix_app_catalog_items_bundle_id", "app_catalog_items", ["bundle_id"])
 
 
 def downgrade() -> None:
