@@ -2,9 +2,24 @@ from __future__ import annotations
 
 import uuid
 
+import pytest
+
+from app.models.git_repository import GitRepository
+from app.models.health_check import HealthCheck
 from app.models.instance import Instance, InstanceStatus
 from app.models.server import Server, ServerStatus
 from app.services.onboarding_service import OnboardingService
+
+
+@pytest.fixture(autouse=True)
+def _clean_onboarding_tables(db_session):
+    """Clear tables that OnboardingService queries globally."""
+    db_session.query(HealthCheck).delete()
+    db_session.query(Instance).delete()
+    db_session.query(Server).delete()
+    db_session.query(GitRepository).delete()
+    db_session.commit()
+    yield
 
 
 class TestOnboardingService:

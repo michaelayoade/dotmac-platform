@@ -12,6 +12,15 @@ from tests.conftest import TestBase, _test_engine
 TestBase.metadata.create_all(_test_engine)
 
 
+@pytest.fixture(autouse=True)
+def _clean_tenant_tables(db_session):
+    db_session.query(Instance).delete()
+    db_session.query(Organization).delete()
+    db_session.query(Server).delete()
+    db_session.commit()
+    yield
+
+
 def _make_server(db_session):
     server = Server(
         name=f"server-{uuid.uuid4().hex[:6]}",
@@ -54,7 +63,8 @@ def _make_instance(db_session, server, org):
 
 def test_require_instance_access_allows_same_org(db_session):
     server = _make_server(db_session)
-    org = _make_org(db_session, "ORG_A")
+    suffix = uuid.uuid4().hex[:6]
+    org = _make_org(db_session, f"ORG_A_{suffix}")
     instance = _make_instance(db_session, server, org)
 
     auth = {"org_id": str(org.org_id)}
@@ -64,8 +74,9 @@ def test_require_instance_access_allows_same_org(db_session):
 
 def test_require_instance_access_forbids_other_org(db_session):
     server = _make_server(db_session)
-    org_a = _make_org(db_session, "ORG_A")
-    org_b = _make_org(db_session, "ORG_B")
+    suffix = uuid.uuid4().hex[:6]
+    org_a = _make_org(db_session, f"ORG_A_{suffix}")
+    org_b = _make_org(db_session, f"ORG_B_{suffix}")
     instance = _make_instance(db_session, server, org_a)
 
     auth = {"org_id": str(org_b.org_id)}

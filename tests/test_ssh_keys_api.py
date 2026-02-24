@@ -3,6 +3,8 @@
 import uuid
 from uuid import UUID
 
+import pytest
+
 from app.api.ssh_keys import (
     delete_key,
     generate_key,
@@ -11,10 +13,18 @@ from app.api.ssh_keys import (
     list_keys,
 )
 from app.models.server import Server
+from app.models.ssh_key import SSHKey
 from app.services.ssh_key_service import SSHKeyService
 from tests.conftest import TestBase, _test_engine
 
 TestBase.metadata.create_all(_test_engine)
+
+
+@pytest.fixture(autouse=True)
+def _clean_ssh_keys(db_session):
+    db_session.query(SSHKey).delete()
+    db_session.commit()
+    yield
 
 
 def _make_server(db_session):
