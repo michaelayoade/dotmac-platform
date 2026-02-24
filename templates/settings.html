@@ -12,33 +12,6 @@
 <form method="POST" action="/settings" class="max-w-2xl space-y-8" data-testid="settings-form"
       x-data="{ submitting: false }" @submit="submitting = true">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-    <!-- Deployment Source -->
-    <div class="rounded-xl border border-surface-200/80 bg-white p-7 dark:border-surface-800/50 dark:bg-surface-900/80">
-        <h2 class="text-xl font-display text-surface-900 dark:text-white">Deployment Source</h2>
-        <p class="mt-1 mb-6 text-[13px] text-surface-400 dark:text-surface-500">Configure the Git repository used to deploy ERP instances to servers.</p>
-
-        <div class="space-y-5">
-            <div>
-                <label for="dotmac_git_repo_url" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Git Repository URL</label>
-                <input type="text" id="dotmac_git_repo_url" name="dotmac_git_repo_url"
-                       value="{{ platform_settings.dotmac_git_repo_url }}"
-                       data-testid="settings-git-repo"
-                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] text-surface-900 placeholder-surface-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200/50 dark:border-surface-700 dark:bg-surface-800 dark:text-white dark:placeholder-surface-500 dark:focus:ring-primary-500/20 transition"
-                       placeholder="https://github.com/org/repo.git" />
-                <p class="mt-1.5 text-[11px] text-surface-400 dark:text-surface-500">HTTPS or SSH URL for the DotMac ERP repository.</p>
-            </div>
-
-            <div>
-                <label for="dotmac_git_branch" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Git Branch</label>
-                <input type="text" id="dotmac_git_branch" name="dotmac_git_branch"
-                       value="{{ platform_settings.dotmac_git_branch }}"
-                       data-testid="settings-git-branch"
-                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] text-surface-900 placeholder-surface-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200/50 dark:border-surface-700 dark:bg-surface-800 dark:text-white dark:placeholder-surface-500 dark:focus:ring-primary-500/20 transition"
-                       placeholder="main" />
-                <p class="mt-1.5 text-[11px] text-surface-400 dark:text-surface-500">Branch to check out when cloning. Defaults to <code class="rounded bg-surface-100 px-1 text-surface-500 dark:bg-surface-800 dark:text-surface-400">main</code>.</p>
-            </div>
-        </div>
-    </div>
 
     <!-- Server Paths -->
     <div class="rounded-xl border border-surface-200/80 bg-white p-7 dark:border-surface-800/50 dark:bg-surface-900/80">
@@ -46,16 +19,6 @@
         <p class="mt-1 mb-6 text-[13px] text-surface-400 dark:text-surface-500">Default filesystem paths used on target servers during deployment.</p>
 
         <div class="space-y-5">
-            <div>
-                <label for="dotmac_source_path" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Source Path</label>
-                <input type="text" id="dotmac_source_path" name="dotmac_source_path"
-                       value="{{ platform_settings.dotmac_source_path }}"
-                       data-testid="settings-source-path"
-                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] font-mono text-surface-900 placeholder-surface-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200/50 dark:border-surface-700 dark:bg-surface-800 dark:text-white dark:placeholder-surface-500 dark:focus:ring-primary-500/20 transition"
-                       placeholder="/opt/dotmac" />
-                <p class="mt-1.5 text-[11px] text-surface-400 dark:text-surface-500">Where the DotMac ERP source code is cloned on target servers.</p>
-            </div>
-
             <div>
                 <label for="default_deploy_path" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Instances Path</label>
                 <input type="text" id="default_deploy_path" name="default_deploy_path"

@@ -1,17 +1,25 @@
 """Tests for GitRepoService."""
 
-import os
 import uuid
 
 import pytest
 
-from app.models.git_repository import GitAuthType
+from app.models.git_repository import GitAuthType, GitRepository
 from app.models.instance import Instance
 from app.models.server import Server
-from app.services.git_repo_service import GitRepoService, cleanup_temp_keys
+from app.services.git_repo_service import GitRepoService
 from tests.conftest import TestBase, _test_engine
 
 TestBase.metadata.create_all(_test_engine)
+
+
+@pytest.fixture(autouse=True)
+def _clean_git_repo_data(db_session):
+    db_session.query(Instance).delete()
+    db_session.query(Server).delete()
+    db_session.query(GitRepository).delete()
+    db_session.commit()
+    yield
 
 
 def _make_server(db_session):
@@ -49,14 +57,14 @@ def test_get_repo_for_instance_prefers_instance(db_session):
     svc = GitRepoService(db_session)
     repo_default = svc.create_repo(
         label="default",
-        url="https://github.com/acme/default.git",
         auth_type=GitAuthType.none,
         is_platform_default=True,
+        registry_url="ghcr.io/acme/default",
     )
     repo_instance = svc.create_repo(
         label="instance",
-        url="https://github.com/acme/instance.git",
         auth_type=GitAuthType.none,
+        registry_url="ghcr.io/acme/instance",
     )
     server = _make_server(db_session)
     instance = _make_instance(db_session, server.server_id, repo_instance.repo_id)
@@ -71,9 +79,9 @@ def test_get_repo_for_instance_uses_platform_default(db_session):
     svc = GitRepoService(db_session)
     repo_default = svc.create_repo(
         label="default-2",
-        url="https://github.com/acme/default2.git",
         auth_type=GitAuthType.none,
         is_platform_default=True,
+        registry_url="ghcr.io/acme/default2",
     )
     server = _make_server(db_session)
     instance = _make_instance(db_session, server.server_id)
@@ -87,8 +95,8 @@ def test_delete_repo_refuses_in_use(db_session):
     svc = GitRepoService(db_session)
     repo = svc.create_repo(
         label="in-use",
-        url="https://github.com/acme/inuse.git",
         auth_type=GitAuthType.none,
+        registry_url="ghcr.io/acme/inuse",
     )
     server = _make_server(db_session)
     _make_instance(db_session, server.server_id, repo.repo_id)
@@ -97,68 +105,61 @@ def test_delete_repo_refuses_in_use(db_session):
         svc.delete_repo(repo.repo_id)
 
 
-def test_get_clone_command_token_injects(db_session):
+def test_create_repo_requires_registry_url(db_session):
+    svc = GitRepoService(db_session)
+    with pytest.raises(ValueError, match="Registry URL is required"):
+        svc.create_repo(
+            label=f"missing-{uuid.uuid4().hex[:6]}",
+            auth_type=GitAuthType.none,
+            registry_url="",
+        )
+
+
+def test_create_repo_rejects_ssh_key_auth(db_session):
+    svc = GitRepoService(db_session)
+    with pytest.raises(ValueError, match="SSH key auth is not supported"):
+        svc.create_repo(
+            label=f"ssh-{uuid.uuid4().hex[:6]}",
+            auth_type=GitAuthType.ssh_key,
+            registry_url="ghcr.io/acme/repo",
+            credential="-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----",
+        )
+
+
+def test_create_repo_allows_registry_only(db_session):
     svc = GitRepoService(db_session)
     repo = svc.create_repo(
-        label="token",
-        url="https://github.com/acme/private.git",
+        label=f"registry-only-{uuid.uuid4().hex[:6]}",
+        auth_type=GitAuthType.none,
+        registry_url="ghcr.io/acme/repo",
+    )
+    db_session.commit()
+
+    assert repo.url is None
+    assert repo.registry_url == "ghcr.io/acme/repo"
+
+
+def test_create_repo_with_token(db_session):
+    svc = GitRepoService(db_session)
+    repo = svc.create_repo(
+        label=f"token-{uuid.uuid4().hex[:6]}",
         auth_type=GitAuthType.token,
-        credential="abc123",
+        registry_url="ghcr.io/acme/repo",
+        credential="ghp_test123",
     )
+    db_session.commit()
 
-    cmd, env = svc.get_clone_command(repo.repo_id, branch="develop")
-    assert env == {}
-    assert "https://abc123@github.com/acme/private.git" in cmd
-    assert "--branch develop" in cmd
+    assert repo.registry_url == "ghcr.io/acme/repo"
+    assert repo.token_encrypted is not None
+    assert repo.auth_type == GitAuthType.token
 
 
-def test_get_clone_command_ssh_env(db_session):
+def test_update_repo_rejects_ssh_key_auth(db_session):
     svc = GitRepoService(db_session)
     repo = svc.create_repo(
-        label="ssh",
-        url="git@github.com:acme/private.git",
-        auth_type=GitAuthType.ssh_key,
-        credential="-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----",
+        label=f"upd-{uuid.uuid4().hex[:6]}",
+        auth_type=GitAuthType.none,
+        registry_url="ghcr.io/acme/repo",
     )
-
-    cmd, env = svc.get_clone_command(repo.repo_id, ssh_key_path="/opt/dotmac/keys/repo.pem")
-    assert "--branch" in cmd
-    assert env
-    assert "GIT_SSH_COMMAND" in env
-    assert "/opt/dotmac/keys/repo.pem" in env["GIT_SSH_COMMAND"]
-
-
-def _extract_key_path(cmd: str) -> str:
-    parts = cmd.split()
-    for i, part in enumerate(parts):
-        if part == "-i" and i + 1 < len(parts):
-            return parts[i + 1]
-    raise AssertionError("ssh key path not found")
-
-
-def test_temp_ssh_key_is_unique_and_cleanable(db_session):
-    svc = GitRepoService(db_session)
-    repo = svc.create_repo(
-        label="ssh-temp",
-        url="git@github.com:acme/private.git",
-        auth_type=GitAuthType.ssh_key,
-        credential="-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----",
-    )
-
-    env1, _ = svc.get_repo_env(repo.repo_id)
-    env2, _ = svc.get_repo_env(repo.repo_id)
-    path1 = _extract_key_path(env1["GIT_SSH_COMMAND"])
-    path2 = _extract_key_path(env2["GIT_SSH_COMMAND"])
-
-    assert path1 != path2
-    assert path1.startswith("/tmp/")
-    assert path2.startswith("/tmp/")
-
-    for path in (path1, path2):
-        assert os.path.isfile(path)
-        mode = os.stat(path).st_mode & 0o777
-        assert mode == 0o600
-
-    cleanup_temp_keys()
-    assert not os.path.exists(path1)
-    assert not os.path.exists(path2)
+    with pytest.raises(ValueError, match="SSH key auth is not supported"):
+        svc.update_repo(repo.repo_id, auth_type=GitAuthType.ssh_key)

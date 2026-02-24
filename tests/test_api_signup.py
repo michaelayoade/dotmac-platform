@@ -44,6 +44,7 @@ def _seed_server(db_session):
 def test_signup_start_creates_pending_request(monkeypatch, client, db_session):
     server = _seed_server(db_session)
     catalog_item = _seed_catalog(db_session)
+    unique = uuid.uuid4().hex[:8]
 
     def _fake_send(*_args, **_kwargs):
         return True
@@ -51,9 +52,9 @@ def test_signup_start_creates_pending_request(monkeypatch, client, db_session):
     monkeypatch.setattr("app.services.signup_service.send_signup_verification_email", _fake_send)
 
     payload = {
-        "org_name": "Acme Inc",
+        "org_name": f"Acme Inc {unique}",
         "catalog_item_id": str(catalog_item.catalog_id),
-        "admin_email": "owner@example.com",
+        "admin_email": f"owner-{unique}@example.com",
         "admin_password": "Secret123!",
         "server_id": str(server.server_id),
     }

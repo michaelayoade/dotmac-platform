@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 
 # Default values for platform settings
 PLATFORM_DEFAULTS: dict[str, str] = {
-    "dotmac_git_repo_url": "https://github.com/michaelayoade/dotmac.git",
+    # Deprecated: source-build removed — kept for stored data backward compatibility
+    "dotmac_git_repo_url": "",
     "dotmac_git_branch": "main",
     "dotmac_source_path": "/opt/dotmac/src",
     "default_deploy_path": "/opt/dotmac/instances",

@@ -287,19 +287,19 @@ def _validate_cron(expr: str) -> None:
 
 
 def _validate_cron_field(field: str, min_val: int, max_val: int) -> None:
-    for token in field.split(","):
-        token = token.strip()
-        if token == "*":
+    for part in field.split(","):
+        part = part.strip()
+        if part == "*":
             continue
-        if "/" in token:
-            base, step = token.split("/", 1)
+        if "/" in part:
+            base, step = part.split("/", 1)
             if not step.isdigit() or int(step) < 1:
                 raise ValueError("Invalid cron step")
             if base == "*":
                 continue
-            token = base
-        if "-" in token:
-            start, end = token.split("-", 1)
+            part = base
+        if "-" in part:
+            start, end = part.split("-", 1)
             if not (start.isdigit() and end.isdigit()):
                 raise ValueError("Invalid cron range")
             start_i = int(start)
@@ -307,8 +307,8 @@ def _validate_cron_field(field: str, min_val: int, max_val: int) -> None:
             if start_i > end_i or start_i < min_val or end_i > max_val:
                 raise ValueError("Invalid cron range")
             continue
-        if not token.isdigit():
+        if not part.isdigit():
             raise ValueError("Invalid cron field")
-        value = int(token)
+        value = int(part)
         if value < min_val or value > max_val:
             raise ValueError("Invalid cron value")

@@ -2,16 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Generic, TypeVar
 
 from app.models.health_check import HealthCheck
 from app.models.instance import Instance
 
-T = TypeVar("T")
-
 
 @dataclass(frozen=True)
-class PagedResult(Generic[T]):
+class PagedResult[T]:
     items: list[T]
     total: int
     page: int

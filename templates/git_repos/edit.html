@@ -1,0 +1,62 @@
+{% extends "platform_base.html" %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-display text-surface-900 dark:text-white">Edit Repository</h1>
+    <p class="mt-1 text-[13px] text-surface-400 dark:text-surface-500">Update registry settings.</p>
+</div>
+
+<div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+    {% if errors %}
+    <div class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-[13px] text-red-700 dark:bg-red-900/20 dark:text-red-400">
+        {% for e in errors %}{{ e }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/git-repos/{{ repo.repo_id }}/edit" class="space-y-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+        <div class="grid gap-4 lg:grid-cols-2">
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Label</label>
+                <input type="text" name="label" required value="{{ repo.label }}" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Registry URL</label>
+                <input type="text" name="registry_url" required value="{{ repo.registry_url or '' }}" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            </div>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-3">
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Auth Type</label>
+                <select name="auth_type" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                    <option value="none" {% if repo.auth_type.value == 'none' %}selected{% endif %}>none</option>
+                    <option value="token" {% if repo.auth_type.value == 'token' %}selected{% endif %}>token</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Default Branch</label>
+                <input type="text" name="default_branch" value="{{ repo.default_branch }}" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            </div>
+            <div class="flex items-end gap-2">
+                <label class="inline-flex items-center gap-2 text-[12px] text-surface-500 dark:text-surface-400">
+                    <input type="checkbox" name="is_platform_default" {% if repo.is_platform_default %}checked{% endif %} class="rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
+                    Platform default
+                </label>
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Credential (optional)</label>
+            <textarea name="credential" rows="4" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[12px] font-mono dark:border-surface-700 dark:bg-surface-800 dark:text-white"></textarea>
+            <p class="mt-1 text-[11px] text-surface-400">Leave blank to keep the existing token.</p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button type="submit" class="rounded-lg bg-surface-900 px-4 py-2 text-[13px] font-semibold text-white hover:bg-surface-800 dark:bg-primary-500 dark:text-surface-950 dark:hover:bg-primary-400 transition">Save Changes</button>
+            <a href="/git-repos" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-semibold text-surface-600 dark:border-surface-700 dark:text-surface-300">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

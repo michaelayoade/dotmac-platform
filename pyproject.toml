@@ -67,7 +67,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S105", "S106", "S108", "E402", "N806", "F841", "B017"]
 "alembic/**" = ["E402", "F821"]
-"scripts/**" = ["S105"]
+"scripts/**" = ["S105", "T201"]
 "app/schemas/auth_flow.py" = ["S105"]  # token_type = "bearer" is not a password
 "app/services/deploy_service.py" = ["S602"]  # shell=True for chained git commands
 "app/api/auth_flow.py" = ["N806"]  # _ME_UPDATABLE_FIELDS constant inside function

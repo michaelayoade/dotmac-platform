@@ -208,16 +208,9 @@ def db_session(engine):
     """
     Session = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     session = Session()
-    for table in reversed(TestBase.metadata.sorted_tables):
-        session.execute(table.delete())
-    session.commit()
     try:
         yield session
     finally:
-        session.rollback()
-        for table in reversed(TestBase.metadata.sorted_tables):
-            session.execute(table.delete())
-        session.commit()
         session.close()
 
 

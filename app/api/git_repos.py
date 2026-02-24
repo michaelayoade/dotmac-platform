@@ -16,8 +16,8 @@ router = APIRouter(prefix="/git-repos", tags=["git-repos"])
 def list_repos(
     active_only: bool = True,
     db: Session = Depends(get_db),
-    auth=Depends(require_role("admin")),
-):
+    auth: object = Depends(require_role("admin")),
+) -> list[dict[str, object]]:
     from app.services.git_repo_service import GitRepoService
 
     svc = GitRepoService(db)
@@ -28,15 +28,14 @@ def list_repos(
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_repo(
     label: str = Body(...),
-    url: str = Body(...),
     auth_type: str = Body("none"),
     credential: str | None = Body(None),
     default_branch: str = Body("main"),
     is_platform_default: bool = Body(False),
-    registry_url: str | None = Body(None),
+    registry_url: str = Body(...),
     db: Session = Depends(get_db),
-    auth=Depends(require_role("admin")),
-):
+    auth: object = Depends(require_role("admin")),
+) -> dict[str, object]:
     from app.services.git_repo_service import GitRepoService
 
     try:
@@ -47,7 +46,6 @@ def create_repo(
     try:
         repo = GitRepoService(db).create_repo(
             label=label,
-            url=url,
             auth_type=auth_enum,
             credential=credential,
             default_branch=default_branch,
@@ -65,7 +63,6 @@ def create_repo(
 def update_repo(
     repo_id: UUID,
     label: str | None = Body(None),
-    url: str | None = Body(None),
     auth_type: str | None = Body(None),
     credential: str | None = Body(None),
     default_branch: str | None = Body(None),
@@ -73,13 +70,12 @@ def update_repo(
     is_active: bool | None = Body(None),
     registry_url: str | None = Body(None),
     db: Session = Depends(get_db),
-    auth=Depends(require_role("admin")),
-):
+    auth: object = Depends(require_role("admin")),
+) -> dict[str, object]:
     from app.services.git_repo_service import GitRepoService
 
     kwargs: dict[str, object] = {
         "label": label,
-        "url": url,
         "credential": credential,
         "default_branch": default_branch,
         "is_platform_default": is_platform_default,
@@ -101,26 +97,12 @@ def update_repo(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{repo_id}/test")
-def test_repo(
-    repo_id: UUID,
-    db: Session = Depends(get_db),
-    auth=Depends(require_role("admin")),
-):
-    from app.services.git_repo_service import GitRepoService
-
-    try:
-        return GitRepoService(db).test_connection(repo_id)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
 @router.delete("/{repo_id}")
 def delete_repo(
     repo_id: UUID,
     db: Session = Depends(get_db),
-    auth=Depends(require_role("admin")),
-):
+    auth: object = Depends(require_role("admin")),
+) -> dict[str, str]:
     from app.services.git_repo_service import GitRepoService
 
     try:

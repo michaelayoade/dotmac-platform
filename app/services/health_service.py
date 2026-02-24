@@ -35,6 +35,14 @@ class _ConsumerRow(TypedDict):
     active_connections: int
 
 
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 class HealthService:
     def __init__(self, db: Session):
         self.db = db
@@ -412,9 +420,10 @@ class HealthService:
         if not check:
             return "unknown"
         now = now or datetime.now(UTC)
-        if not check.checked_at:
+        checked_at = _as_utc(check.checked_at)
+        if not checked_at:
             return "unknown"
-        age = (now - check.checked_at).total_seconds()
+        age = (now - checked_at).total_seconds()
         if age > platform_settings.health_stale_seconds:
             return "unknown"
         if check.status == HealthStatus.healthy:
@@ -448,7 +457,7 @@ class HealthService:
             etag_parts.append(
                 f"{inst.instance_id}:{inst.status.value}:{health_state}:{check.response_ms if check else ''}"
             )
-        etag = '"' + hashlib.md5("|".join(etag_parts).encode()).hexdigest()[:16] + '"'  # noqa: S324
+        etag = '"' + hashlib.sha256("|".join(etag_parts).encode()).hexdigest()[:16] + '"'
         return instance_data, etag
 
     def get_badge_state(self, instance_id: UUID) -> dict:
@@ -466,7 +475,7 @@ class HealthService:
         tag_parts += f":{check.response_ms if check else ''}"
         tag_parts += f":{check.checked_at.isoformat() if check and check.checked_at else ''}"
         tag_parts += f":{is_stale}"
-        etag = '"' + hashlib.md5(tag_parts.encode()).hexdigest()[:16] + '"'
+        etag = '"' + hashlib.sha256(tag_parts.encode()).hexdigest()[:16] + '"'
 
         return {"health": check, "is_stale": is_stale, "etag": etag}
 

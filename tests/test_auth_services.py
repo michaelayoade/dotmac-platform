@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 from fastapi import HTTPException
 
@@ -26,7 +28,7 @@ class _FakeRedis:
 def test_user_credentials_soft_delete(db_session, person):
     payload = UserCredentialCreate(
         person_id=person.id,
-        username="user@example.com",
+        username=f"user_{uuid.uuid4().hex[:8]}@example.com",
         password="secret123",
     )
     credential = auth_service.user_credentials.create(db_session, payload)

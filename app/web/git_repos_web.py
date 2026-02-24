@@ -47,12 +47,11 @@ def git_repos_create(
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
     label: str = Form(...),
-    url: str = Form(...),
     auth_type: str = Form("none"),
     credential: str | None = Form(None),
     default_branch: str = Form("main"),
     is_platform_default: bool = Form(False),
-    registry_url: str | None = Form(None),
+    registry_url: str = Form(...),
     csrf_token: str = Form(""),
 ):
     require_admin(auth)
@@ -62,18 +61,94 @@ def git_repos_create(
     try:
         GitRepoService(db).create_from_form(
             label=label,
-            url=url,
             auth_type=auth_type,
             credential=credential,
             default_branch=default_branch,
             is_platform_default=is_platform_default,
-            registry_url=registry_url or None,
+            registry_url=registry_url,
         )
         db.commit()
     except Exception as e:
         db.rollback()
         logger.exception("Failed to create git repo: %s", e)
     return RedirectResponse("/git-repos", status_code=302)
+
+
+@router.get("/{repo_id}/edit", response_class=HTMLResponse)
+def git_repos_edit_form(
+    request: Request,
+    repo_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+):
+    require_admin(auth)
+    from app.services.git_repo_service import GitRepoService
+
+    repo = GitRepoService(db).get_by_id(repo_id)
+    if not repo:
+        return RedirectResponse("/git-repos", status_code=302)
+    return templates.TemplateResponse(
+        "git_repos/edit.html",
+        ctx(
+            request,
+            auth,
+            "Edit Repository",
+            active_page="git_repos",
+            repo=repo,
+            errors=None,
+        ),
+    )
+
+
+@router.post("/{repo_id}/edit")
+def git_repos_edit(
+    request: Request,
+    repo_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    label: str = Form(...),
+    auth_type: str = Form("none"),
+    credential: str | None = Form(None),
+    default_branch: str = Form("main"),
+    is_platform_default: bool = Form(False),
+    registry_url: str = Form(...),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+    from app.services.git_repo_service import GitRepoService
+
+    svc = GitRepoService(db)
+    try:
+        update_payload: dict[str, object] = {
+            "label": label,
+            "auth_type": svc.parse_auth_type(auth_type),
+            "default_branch": default_branch,
+            "is_platform_default": is_platform_default,
+            "registry_url": registry_url,
+            "is_active": True,
+        }
+        # Preserve existing secret/key when credential field is intentionally left blank.
+        if credential and credential.strip():
+            update_payload["credential"] = credential
+        svc.update_repo(repo_id, **update_payload)
+        db.commit()
+        return RedirectResponse("/git-repos", status_code=302)
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to update git repo: %s", e)
+        repo = svc.get_by_id(repo_id)
+        return templates.TemplateResponse(
+            "git_repos/edit.html",
+            ctx(
+                request,
+                auth,
+                "Edit Repository",
+                active_page="git_repos",
+                repo=repo,
+                errors=[str(e)],
+            ),
+        )
 
 
 @router.post("/{repo_id}/set-default")

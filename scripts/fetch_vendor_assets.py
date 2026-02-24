@@ -1,8 +1,8 @@
 import argparse
 import os
 import sys
-from typing import cast
-from urllib.request import Request, urlopen
+
+import httpx
 
 ASSETS = {
     "tailwind.js": "https://cdn.tailwindcss.com",
@@ -21,9 +21,9 @@ FONTS_CSS_URL = (
 
 
 def download(url: str) -> bytes:
-    req = Request(url, headers={"User-Agent": "dotmac-platform-fetch/1.0"})
-    with urlopen(req, timeout=30) as resp:
-        return cast(bytes, resp.read())
+    resp = httpx.get(url, headers={"User-Agent": "dotmac-platform-fetch/1.0"}, timeout=30.0, follow_redirects=True)
+    resp.raise_for_status()
+    return resp.content
 
 
 def write_file(path: str, content: bytes) -> None:

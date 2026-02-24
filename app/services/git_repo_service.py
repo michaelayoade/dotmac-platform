@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-import atexit
-import os
-import shlex
-import tempfile
-import threading
 from uuid import UUID
 
 from sqlalchemy import select
@@ -14,9 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.git_repository import GitAuthType, GitRepository
 from app.models.instance import Instance
-from app.models.server import Server
 from app.services.settings_crypto import decrypt_value, encrypt_value
-from app.services.ssh_service import get_ssh_for_server
 
 
 class GitRepoService:
@@ -26,30 +19,29 @@ class GitRepoService:
     def create_repo(
         self,
         label: str,
-        url: str,
         auth_type: GitAuthType,
+        registry_url: str,
         credential: str | None = None,
         default_branch: str = "main",
         is_platform_default: bool = False,
-        registry_url: str | None = None,
     ) -> GitRepository:
         if not label.strip():
             raise ValueError("Label is required")
-        if not url.strip():
-            raise ValueError("URL is required")
-        if auth_type in (GitAuthType.ssh_key, GitAuthType.token) and not credential:
+        registry_val = registry_url.strip() if registry_url else ""
+        if not registry_val:
+            raise ValueError("Registry URL is required")
+        if auth_type == GitAuthType.ssh_key:
+            raise ValueError("SSH key auth is not supported for registry-only deployments")
+        if auth_type == GitAuthType.token and not credential:
             raise ValueError("Credential is required for this auth type")
         repo = GitRepository(
             label=label.strip(),
-            url=url.strip(),
             auth_type=auth_type,
             default_branch=(default_branch or "main").strip(),
             is_platform_default=is_platform_default,
-            registry_url=registry_url.strip() if registry_url else None,
+            registry_url=registry_val,
             is_active=True,
         )
-        if auth_type == GitAuthType.ssh_key and credential:
-            repo.ssh_key_encrypted = encrypt_value(credential)
         if auth_type == GitAuthType.token and credential:
             repo.token_encrypted = encrypt_value(credential)
 
@@ -60,13 +52,16 @@ class GitRepoService:
         self.db.flush()
         return repo
 
-    def update_repo(self, repo_id: UUID, **kwargs) -> GitRepository:
+    def update_repo(self, repo_id: UUID, **kwargs: object) -> GitRepository:
         repo = self.get_by_id(repo_id)
         if not repo:
             raise ValueError("Repo not found")
 
         if "auth_type" in kwargs and kwargs["auth_type"] is not None:
-            repo.auth_type = kwargs.pop("auth_type")
+            auth_type = kwargs.pop("auth_type")
+            if auth_type == GitAuthType.ssh_key:
+                raise ValueError("SSH key auth is not supported for registry-only deployments")
+            repo.auth_type = auth_type  # type: ignore[assignment]
             if repo.auth_type != GitAuthType.ssh_key:
                 repo.ssh_key_encrypted = None
             if repo.auth_type != GitAuthType.token:
@@ -74,23 +69,26 @@ class GitRepoService:
 
         if "credential" in kwargs:
             credential = kwargs.pop("credential")
-            if repo.auth_type == GitAuthType.ssh_key:
-                if not credential:
-                    raise ValueError("SSH key is required for ssh auth")
-                repo.ssh_key_encrypted = encrypt_value(credential)
             if repo.auth_type == GitAuthType.token:
                 if not credential:
                     raise ValueError("Token is required for token auth")
-                repo.token_encrypted = encrypt_value(credential)
+                repo.token_encrypted = encrypt_value(str(credential))
+
+        if "registry_url" in kwargs and isinstance(kwargs["registry_url"], str):
+            repo.registry_url = kwargs["registry_url"].strip() or None
 
         for key, value in kwargs.items():
-            if hasattr(repo, key) and value is not None:
+            if key in {"registry_url"}:
+                continue
+            if not hasattr(repo, key):
+                continue
+            if value is not None:
                 setattr(repo, key, value)
 
-        if repo.auth_type == GitAuthType.ssh_key and not repo.ssh_key_encrypted:
-            raise ValueError("SSH key is required for ssh auth")
         if repo.auth_type == GitAuthType.token and not repo.token_encrypted:
             raise ValueError("Token is required for token auth")
+        if not repo.registry_url:
+            raise ValueError("Registry URL is required")
 
         if repo.is_platform_default:
             self._clear_platform_default(except_id=repo.repo_id)
@@ -123,17 +121,15 @@ class GitRepoService:
         self,
         *,
         label: str,
-        url: str,
         auth_type: str,
         credential: str | None,
         default_branch: str,
         is_platform_default: bool,
-        registry_url: str | None = None,
+        registry_url: str,
     ) -> GitRepository:
         auth_enum = GitAuthType(auth_type)
         return self.create_repo(
             label=label,
-            url=url,
             auth_type=auth_enum,
             credential=credential,
             default_branch=default_branch,
@@ -154,56 +150,6 @@ class GitRepoService:
         stmt = select(GitRepository).where(GitRepository.is_platform_default.is_(True))
         repo = self.db.scalar(stmt)
         return repo if repo and repo.is_active else None
-
-    def get_clone_command(
-        self,
-        repo_id: UUID,
-        branch: str | None = None,
-        ssh_key_path: str | None = None,
-    ) -> tuple[str, dict[str, str]]:
-        repo = self.get_by_id(repo_id)
-        if not repo:
-            raise ValueError("Repo not found")
-        env, clone_url = _repo_env(repo, ssh_key_path=ssh_key_path)
-        effective_branch = branch or repo.default_branch or "main"
-        cmd = f"git clone --branch {shlex.quote(effective_branch)} {shlex.quote(clone_url)}"
-        return cmd, env
-
-    def test_connection(self, repo_id: UUID) -> dict:
-        repo = self.get_by_id(repo_id)
-        if not repo:
-            raise ValueError("Repo not found")
-        env, url = _repo_env(repo)
-        cmd = f"{format_env_prefix(env)}git ls-remote {shlex.quote(url)}"
-        return {"command": cmd}
-
-    def get_repo_env(self, repo_id: UUID, ssh_key_path: str | None = None) -> tuple[dict[str, str], str]:
-        repo = self.get_by_id(repo_id)
-        if not repo:
-            raise ValueError("Repo not found")
-        return _repo_env(repo, ssh_key_path=ssh_key_path)
-
-    def deploy_ssh_key(self, repo_id: UUID, server_id: UUID) -> str:
-        repo = self.get_by_id(repo_id)
-        if not repo:
-            raise ValueError("Repo not found")
-        if repo.auth_type != GitAuthType.ssh_key:
-            raise ValueError("Repo is not using ssh key auth")
-        key = decrypt_value(repo.ssh_key_encrypted or "")
-        if not key:
-            raise ValueError("SSH key missing")
-
-        server = self.db.get(Server, server_id)
-        if not server:
-            raise ValueError("Server not found")
-
-        ssh = get_ssh_for_server(server)
-        remote_dir = "/opt/dotmac/keys"
-        filename = f"repo_{repo.repo_id}.pem"
-        remote_path = f"{remote_dir}/{filename}"
-        ssh.exec_command(f"mkdir -p {shlex.quote(remote_dir)} && chmod 700 {shlex.quote(remote_dir)}")
-        ssh.sftp_put_string(key, remote_path, mode=0o600)
-        return remote_path
 
     def _clear_platform_default(self, except_id: UUID | None = None) -> None:
         stmt = select(GitRepository).where(GitRepository.is_platform_default.is_(True))
@@ -234,7 +180,7 @@ class GitRepoService:
         git_ref: str | None = None,
         instance: Instance | None = None,
     ) -> str:
-        """Resolve a full container image reference for a prebuilt image.
+        """Resolve a full container image reference.
 
         Tag priority: git_ref > instance.git_tag > instance.git_branch
         > repo.default_branch > "latest".
@@ -282,77 +228,3 @@ class GitRepoService:
             return GitAuthType(value)
         except ValueError as exc:
             raise ValueError("Invalid auth_type") from exc
-
-
-def _inject_token(url: str, token: str) -> str:
-    if "@" in url:
-        return url
-    if url.startswith("https://"):
-        return url.replace("https://", f"https://{token}@", 1)
-    if url.startswith("http://"):
-        return url.replace("http://", f"http://{token}@", 1)
-    return url
-
-
-def _repo_env(repo: GitRepository, ssh_key_path: str | None = None) -> tuple[dict[str, str], str]:
-    env = {}
-    url = repo.url
-    if repo.auth_type == GitAuthType.token:
-        token = decrypt_value(repo.token_encrypted or "")
-        if token:
-            url = _inject_token(repo.url, token)
-    if repo.auth_type == GitAuthType.ssh_key:
-        key = decrypt_value(repo.ssh_key_encrypted or "")
-        if key:
-            path = ssh_key_path or _write_temp_key(key)
-            env["GIT_SSH_COMMAND"] = f"ssh -i {shlex.quote(path)} -o StrictHostKeyChecking=no"
-    return env, url
-
-
-def format_env_prefix(env: dict[str, str]) -> str:
-    if not env:
-        return ""
-    return " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items()) + " "
-
-
-def _write_temp_key(key: str) -> str:
-    fd, path = tempfile.mkstemp(prefix="git_key_", suffix=".pem", dir="/tmp")
-    try:
-        with os.fdopen(fd, "w") as f:
-            f.write(key)
-        os.chmod(path, 0o600)
-    except Exception:
-        try:
-            os.close(fd)
-        except Exception:
-            pass
-        try:
-            os.remove(path)
-        except Exception:
-            pass
-        raise
-    _register_temp_key(path)
-    return path
-
-
-_TEMP_KEY_PATHS: set[str] = set()
-_TEMP_KEY_LOCK = threading.Lock()
-
-
-def _register_temp_key(path: str) -> None:
-    with _TEMP_KEY_LOCK:
-        _TEMP_KEY_PATHS.add(path)
-
-
-def cleanup_temp_keys() -> None:
-    with _TEMP_KEY_LOCK:
-        paths = list(_TEMP_KEY_PATHS)
-        _TEMP_KEY_PATHS.clear()
-    for path in paths:
-        try:
-            os.remove(path)
-        except OSError:
-            pass
-
-
-atexit.register(cleanup_temp_keys)

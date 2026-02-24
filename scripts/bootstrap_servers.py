@@ -35,6 +35,7 @@ import argparse
 import shlex
 from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import cast
 
 from app.db import SessionLocal
 from app.models.server import Server, ServerStatus
@@ -59,7 +60,7 @@ def _bash(cmd: str) -> str:
 
 
 def _run(ssh, cmd: str, timeout: int = 120) -> SSHResult:
-    return ssh.exec_command(cmd, timeout=timeout)
+    return cast(SSHResult, ssh.exec_command(cmd, timeout=timeout))
 
 
 def _print_result(server: Server, label: str, r: SSHResult) -> None:
@@ -167,7 +168,8 @@ def _bootstrap_steps_debian(server: Server, ssh, *, execute: bool) -> None:
         Step(
             "ensure Caddyfile imports sites-enabled",
             # Append an import only if not present; keep it simple and idempotent.
-            "sudo -n bash -lc \"grep -qE '^\\s*import\\s+/etc/caddy/sites-enabled/\\*' /etc/caddy/Caddyfile || echo 'import /etc/caddy/sites-enabled/*' >> /etc/caddy/Caddyfile\"",
+            "sudo -n bash -lc \"grep -qE '^\\s*import\\s+/etc/caddy/sites-enabled/\\*' /etc/caddy/Caddyfile"
+            " || echo 'import /etc/caddy/sites-enabled/*' >> /etc/caddy/Caddyfile\"",
             needs_sudo=True,
             timeout=30,
         ),
@@ -181,9 +183,8 @@ def _bootstrap_steps_debian(server: Server, ssh, *, execute: bool) -> None:
             print(f"[{server.name}] stop: failed step {st.name!r}")
             return
 
-    print(
-        f"[{server.name}] note: group membership changes (docker group) require {user} to log out/in before `docker ps` works."
-    )
+    print(f"[{server.name}] note: group membership changes (docker group) require {user} to log out/in")
+    print(f"[{server.name}] before `docker ps` works.")
 
 
 def _iter_target_servers(db, *, all_servers: bool, server_names: list[str] | None) -> Iterable[Server]:

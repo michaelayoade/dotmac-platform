@@ -601,16 +601,10 @@ class InstanceService:
                           When provided, critical secrets (TOTP_ENCRYPTION_KEY,
                           POSTGRES_PASSWORD, REDIS_PASSWORD, JWT_SECRET) and
                           any custom variables not in the template are preserved.
-            image_ref: Pre-built container image reference (e.g.
-                       ``ghcr.io/org/repo:tag``).  When provided, the
-                       ``DOTMAC_IMAGE`` variable is emitted so that
-                       ``docker-compose.yml`` can reference it.
+            image_ref: Container image reference (e.g. ``ghcr.io/org/repo:tag``).
+                       When provided, the ``DOTMAC_IMAGE`` variable is emitted
+                       so that ``docker-compose.yml`` can reference it.
         """
-        from app.services.platform_settings import PlatformSettingsService
-
-        ps = PlatformSettingsService(self.db)
-        source_path = ps.get("dotmac_source_path") or "/opt/dotmac/src"
-
         existing = existing_env or {}
 
         # --- Preserve or generate secrets ---
@@ -641,7 +635,6 @@ class InstanceService:
 
             INSTANCE_ORG_CODE={instance.org_code}
             DEFAULT_ORGANIZATION_ID={instance.org_uuid}
-            APP_BUILD_CONTEXT={source_path}
 
             APP_PORT={instance.app_port}
             DB_PORT={instance.db_port}
@@ -753,30 +746,13 @@ class InstanceService:
 
         return env_content
 
-    def generate_docker_compose(self, instance: Instance, image_ref: str | None = None) -> str:
+    def generate_docker_compose(self, instance: Instance) -> str:
         """Generate docker-compose.yml for an instance.
 
-        When *image_ref* is provided the app, worker and beat services use
-        ``image: ${{DOTMAC_IMAGE}}`` instead of a build context so that the
-        pre-built image from a container registry is used directly.
+        All deployments use registry images via ``image: ${{DOTMAC_IMAGE}}``.
         """
         slug = instance.org_code.lower()
-        from app.services.platform_settings import PlatformSettingsService
-
-        ps = PlatformSettingsService(self.db)
-        source_path = ps.get("dotmac_source_path") or "/opt/dotmac/src"
-
-        # Build the image/build directive for app services.  When a pre-built
-        # image is available we reference ${DOTMAC_IMAGE} (set in .env);
-        # otherwise we use the standard build context.
-        if image_ref:
-            _svc_src = "image: ${DOTMAC_IMAGE}"
-        else:
-            _svc_src = (
-                f"build:\n"
-                f"                  context: ${{APP_BUILD_CONTEXT:-{source_path}}}\n"
-                f"                  dockerfile: Dockerfile"
-            )
+        _svc_src = "image: ${DOTMAC_IMAGE}"
 
         return textwrap.dedent(f"""\
             # DotMac ERP Instance: {instance.org_code}
@@ -903,14 +879,10 @@ class InstanceService:
               dotmac_logs:
         """)
 
-    def generate_setup_script(self, instance: Instance, image_ref: str | None = None) -> str:
+    def generate_setup_script(self, instance: Instance) -> str:
         """Generate setup.sh for an instance."""
-        if image_ref:
-            app_up_cmd = "docker compose up -d app worker beat"
-            app_step_label = "Pulling and starting app containers..."
-        else:
-            app_up_cmd = "docker compose up -d --build app worker beat"
-            app_step_label = "Building and starting app containers..."
+        app_up_cmd = "docker compose up -d app worker beat"
+        app_step_label = "Pulling and starting app containers..."
         return textwrap.dedent(f"""\
             #!/usr/bin/env bash
             set -euo pipefail
@@ -1151,17 +1123,17 @@ class InstanceService:
         if not deploy_path:
             raise ValueError("Deploy path not configured")
 
-        # Resolve pre-built image ref if the repo has a registry URL
+        # Resolve container image ref from the repo's registry URL
         image_ref: str | None = None
         try:
             from app.services.git_repo_service import GitRepoService
 
             repo = GitRepoService(self.db).get_repo_for_instance(instance.instance_id)
-            if repo and repo.uses_prebuilt_image:
+            if repo and repo.registry_url:
                 image_ref = GitRepoService.resolve_image_ref(repo, git_ref=git_ref, instance=instance)
-                logger.info("Using pre-built image for %s: %s", instance.org_code, image_ref)
+                logger.info("Using container image for %s: %s", instance.org_code, image_ref)
         except Exception:
-            logger.debug("Could not resolve pre-built image ref for %s", instance.org_code, exc_info=True)
+            logger.debug("Could not resolve container image ref for %s", instance.org_code, exc_info=True)
 
         # Create deploy directory
         ssh.sftp_mkdir_p(deploy_path)
@@ -1182,10 +1154,10 @@ class InstanceService:
         env_content = self.generate_env(instance, admin_password, existing_env, image_ref=image_ref)
         ssh.sftp_put_string(env_content, env_path)
 
-        compose_content = self.generate_docker_compose(instance, image_ref=image_ref)
+        compose_content = self.generate_docker_compose(instance)
         ssh.sftp_put_string(compose_content, os.path.join(deploy_path, "docker-compose.yml"))
 
-        setup_content = self.generate_setup_script(instance, image_ref=image_ref)
+        setup_content = self.generate_setup_script(instance)
         ssh.sftp_put_string(setup_content, os.path.join(deploy_path, "setup.sh"), mode=0o755)
 
         bootstrap_content = self.generate_bootstrap_db_script()

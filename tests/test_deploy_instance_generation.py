@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import uuid
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -30,51 +33,35 @@ def _make_instance(db_session, *, org_code: str = "TST", deployed_git_ref: str |
     return instance
 
 
-def test_generate_docker_compose_uses_source_path_fallback(db_session):
-    instance = _make_instance(db_session, org_code="TST")
+def test_generate_docker_compose_always_uses_image(db_session):
+    instance = _make_instance(db_session, org_code=f"TST_{uuid.uuid4().hex[:6].upper()}")
     content = InstanceService(db_session).generate_docker_compose(instance)
 
-    assert "context: ${APP_BUILD_CONTEXT:-/opt/dotmac/src}" in content
-    assert content.count("dockerfile: Dockerfile") == 3
+    assert "image: ${DOTMAC_IMAGE}" in content
+    assert "build:" not in content
+    assert "dockerfile: Dockerfile" not in content
 
 
-def test_generate_env_defaults_build_context_when_setting_empty(db_session):
-    instance = _make_instance(db_session, org_code="TST")
+def test_generate_env_no_build_context(db_session):
+    instance = _make_instance(db_session, org_code=f"TST_{uuid.uuid4().hex[:6].upper()}")
     svc = InstanceService(db_session)
+    content = svc.generate_env(instance, admin_password="secret")
 
-    with patch("app.services.platform_settings.PlatformSettingsService.get", return_value=""):
-        content = svc.generate_env(instance, admin_password="secret")
-
-    assert "APP_BUILD_CONTEXT=/opt/dotmac/src" in content
+    assert "APP_BUILD_CONTEXT" not in content
 
 
-def test_step_build_preflight_uses_compose_context_fallback(db_session):
-    instance = _make_instance(db_session, org_code="TST", deployed_git_ref="main")
-    svc = DeployService(db_session)
-    update_calls: list[tuple] = []
-    commands: list[str] = []
+def test_setup_script_no_build_flag(db_session):
+    instance = _make_instance(db_session, org_code=f"TST_{uuid.uuid4().hex[:6].upper()}")
+    svc = InstanceService(db_session)
+    content = svc.generate_setup_script(instance)
 
-    def _capture_update(*args, **kwargs):
-        update_calls.append((args, kwargs))
-
-    class _FakeSSH:
-        def exec_command(self, cmd, timeout=None, cwd=None):
-            commands.append(cmd)
-            return SimpleNamespace(ok=True, stdout="ok", stderr="")
-
-    svc._update_step = _capture_update  # type: ignore[method-assign]
-
-    ok = svc._step_build(instance, "dep-test-2", _FakeSSH())
-
-    assert ok is True
-    assert len(commands) >= 2
-    assert "docker-compose.yml not found" in commands[0]
-    assert "no compose fallback was found" in commands[0]
-    assert any(call_args[0][3] == DeployStepStatus.success for call_args in update_calls)
+    assert "--build" not in content
+    assert "Pulling and starting" in content
 
 
 def test_step_backup_skips_when_db_container_missing(db_session):
-    instance = _make_instance(db_session, org_code="TST", deployed_git_ref="main")
+    code = f"TST_{uuid.uuid4().hex[:6].upper()}"
+    instance = _make_instance(db_session, org_code=code, deployed_git_ref="main")
     svc = DeployService(db_session)
     update_calls: list[tuple] = []
 
@@ -85,7 +72,7 @@ def test_step_backup_skips_when_db_container_missing(db_session):
 
     fake_backup = SimpleNamespace(
         status=SimpleNamespace(value="failed"),
-        error_message="Error response from daemon: No such container: dotmac_tst_db",
+        error_message=f"Error response from daemon: No such container: dotmac_{code.lower()}_db",
         file_path=None,
         size_bytes=None,
     )

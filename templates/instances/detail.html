@@ -223,7 +223,7 @@
                     {% if instance.git_repo_id %}
                         {% for r in repos %}
                             {% if r.repo_id == instance.git_repo_id %}
-                                <span class="font-medium">{{ r.label }}</span> — <span class="text-surface-400">{{ r.url }}</span>
+                                <span class="font-medium">{{ r.label }}</span> — <span class="text-surface-400">{{ r.registry_url }}</span>
                             {% endif %}
                         {% endfor %}
                     {% else %}
@@ -236,7 +236,7 @@
                     <select name="git_repo_id" required class="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[12px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
                         <option value="">Select a repository...</option>
                         {% for r in repos %}
-                        <option value="{{ r.repo_id }}" {% if instance.git_repo_id == r.repo_id %}selected{% endif %}>{{ r.label }} — {{ r.url }}</option>
+                        <option value="{{ r.repo_id }}" {% if instance.git_repo_id == r.repo_id %}selected{% endif %}>{{ r.label }} — {{ r.registry_url }}</option>
                         {% endfor %}
                     </select>
                     <button type="submit" class="rounded-lg border border-surface-200 px-3 py-2 text-[12px] font-medium text-surface-600 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-300 dark:hover:bg-surface-800 transition">Update</button>

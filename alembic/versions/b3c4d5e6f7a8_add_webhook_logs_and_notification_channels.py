@@ -53,10 +53,12 @@ def upgrade() -> None:
 
     # Create channeltype enum if not exists
     channeltype_enum = ENUM("email", "slack", "telegram", name="channeltype", create_type=False)
+    create_channeltype_sql = (
+        "DO $$ BEGIN CREATE TYPE channeltype AS ENUM ('email', 'slack', 'telegram'); "
+        "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+    )
     conn.execute(
-        sa.text(
-            "DO $$ BEGIN CREATE TYPE channeltype AS ENUM ('email', 'slack', 'telegram'); EXCEPTION WHEN duplicate_object THEN NULL; END $$"
-        )
+        sa.text(create_channeltype_sql)
     )
 
     if "notification_channels" not in tables:

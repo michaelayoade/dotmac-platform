@@ -30,6 +30,22 @@ def test_audit_log_request(db_session):
     }
     request = Request(scope)
     response = Response(status_code=200)
+    before = audit_service.audit_events.list(
+        db_session,
+        actor_id=None,
+        actor_type=None,
+        action="POST",
+        entity_type="/test",
+        request_id=None,
+        is_success=True,
+        status_code=200,
+        is_active=None,
+        order_by="occurred_at",
+        order_dir="desc",
+        limit=100,
+        offset=0,
+    )
+
     audit_service.audit_events.log_request(db_session, request, response)
     events = audit_service.audit_events.list(
         db_session,
@@ -43,10 +59,10 @@ def test_audit_log_request(db_session):
         is_active=None,
         order_by="occurred_at",
         order_dir="desc",
-        limit=5,
+        limit=100,
         offset=0,
     )
-    assert len(events) == 1
+    assert len(events) == len(before) + 1
 
 
 def test_scheduler_refresh_response():

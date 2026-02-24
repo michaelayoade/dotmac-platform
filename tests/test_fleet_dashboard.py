@@ -2,11 +2,22 @@ from __future__ import annotations
 
 import uuid
 
+import pytest
+
 from app.models.health_check import HealthCheck, HealthStatus
 from app.models.instance import Instance, InstanceStatus
 from app.models.server import Server, ServerStatus
 from app.services.fleet_service import FleetService
 from app.services.health_service import HealthService
+
+
+@pytest.fixture(autouse=True)
+def _clean_fleet_tables(db_session):
+    db_session.query(HealthCheck).delete()
+    db_session.query(Instance).delete()
+    db_session.query(Server).delete()
+    db_session.commit()
+    yield
 
 
 def _make_server(db_session, name: str = "srv") -> Server:
