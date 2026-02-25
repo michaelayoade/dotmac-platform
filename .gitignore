@@ -85,22 +85,21 @@ static/css/tailwind.out.css
 pytest_results*.txt
 playwright-*.png
 file:dotmac_test*
-<<<<<<< Updated upstream
+erp-*.png
 .aider*
-=======
+.agent-run.sh
 
 # Seabone agent swarm
 .seabone/
 .worktrees/
 .env.agent-swarm
 tasks.txt
-scripts/spawn-agent.sh
-scripts/check-agents.sh
-scripts/cleanup-worktrees.sh
-scripts/batch-tasks.sh
-scripts/list-tasks.sh
-scripts/notify-telegram.sh
-scripts/review-pr.sh
-scripts/json-lock.sh
->>>>>>> Stashed changes
-.agent-run.sh
+
+# MCP config (local dev tool)
+.mcp.json
+
+# uv (project uses Poetry)
+uv.lock
+
+# Ad-hoc scripts with credentials
+scripts/
