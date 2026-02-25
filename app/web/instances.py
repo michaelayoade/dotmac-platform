@@ -148,6 +148,7 @@ def instance_create(
     app_port: str = Form(""),
     db_port: str = Form(""),
     redis_port: str = Form(""),
+    admin_password: str = Form(""),
     csrf_token: str = Form(""),
 ):
     require_admin(auth)
@@ -161,11 +162,11 @@ def instance_create(
         if not catalog_item_id:
             raise ValueError("Catalog item is required")
         catalog_id = UUID(catalog_item_id)
-        git_repo_id = svc.resolve_catalog_repo(catalog_id)
-        instance = svc.create(
+        instance, deployment_id = svc.create_with_catalog(
             server_id=UUID(server_id),
             org_code=org_code,
             org_name=org_name,
+            catalog_item_id=catalog_id,
             sector_type=sector_type or None,
             framework=framework or None,
             currency=currency or None,
@@ -175,10 +176,18 @@ def instance_create(
             app_port=int(app_port) if app_port else None,
             db_port=int(db_port) if db_port else None,
             redis_port=int(redis_port) if redis_port else None,
-            git_repo_id=git_repo_id,
-            catalog_item_id=catalog_id,
+            admin_password=admin_password or None,
         )
         db.commit()
+
+        if deployment_id:
+            from app.tasks.deploy import deploy_instance
+
+            deploy_instance.delay(str(instance.instance_id), deployment_id)
+            return RedirectResponse(
+                f"/instances/{instance.instance_id}/deploy-log?deployment_id={deployment_id}",
+                status_code=302,
+            )
         return RedirectResponse(f"/instances/{instance.instance_id}", status_code=302)
     except ValueError as e:
         db.rollback()

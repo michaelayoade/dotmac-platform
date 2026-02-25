@@ -142,6 +142,27 @@ def catalog_deactivate_release(
     return RedirectResponse("/catalog", status_code=302)
 
 
+@router.post("/releases/{release_id}/delete")
+def catalog_delete_release(
+    request: Request,
+    release_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+    from app.services.catalog_service import CatalogService
+
+    try:
+        CatalogService(db).delete_release(release_id)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to delete release: %s", e)
+    return RedirectResponse("/catalog", status_code=302)
+
+
 @router.post("/bundles/{bundle_id}/deactivate")
 def catalog_deactivate_bundle(
     request: Request,
@@ -163,6 +184,27 @@ def catalog_deactivate_bundle(
     return RedirectResponse("/catalog", status_code=302)
 
 
+@router.post("/bundles/{bundle_id}/delete")
+def catalog_delete_bundle(
+    request: Request,
+    bundle_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+    from app.services.catalog_service import CatalogService
+
+    try:
+        CatalogService(db).delete_bundle(bundle_id)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to delete bundle: %s", e)
+    return RedirectResponse("/catalog", status_code=302)
+
+
 @router.post("/items/{catalog_id}/deactivate")
 def catalog_deactivate_item(
     request: Request,
@@ -181,4 +223,25 @@ def catalog_deactivate_item(
     except Exception as e:
         db.rollback()
         logger.exception("Failed to deactivate catalog item: %s", e)
+    return RedirectResponse("/catalog", status_code=302)
+
+
+@router.post("/items/{catalog_id}/delete")
+def catalog_delete_item(
+    request: Request,
+    catalog_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+    from app.services.catalog_service import CatalogService
+
+    try:
+        CatalogService(db).delete_catalog_item(catalog_id)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to delete catalog item: %s", e)
     return RedirectResponse("/catalog", status_code=302)

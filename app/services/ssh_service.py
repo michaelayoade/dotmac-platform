@@ -75,6 +75,9 @@ _SSH_POOL: dict[str, _PoolEntry] = {}
 _SSH_POOL_LOCK = threading.Lock()
 _POOL_TTL = 300  # 5 minutes
 _POOL_MAX = 100
+_SSH_CONNECT_TIMEOUT = int(os.getenv("SSH_CONNECT_TIMEOUT", "10"))
+_SSH_BANNER_TIMEOUT = int(os.getenv("SSH_BANNER_TIMEOUT", "45"))
+_SSH_AUTH_TIMEOUT = int(os.getenv("SSH_AUTH_TIMEOUT", "45"))
 
 
 class SSHResult:
@@ -138,7 +141,9 @@ class SSHService:
             "hostname": self.hostname,
             "port": self.port,
             "username": self.username,
-            "timeout": 10,
+            "timeout": _SSH_CONNECT_TIMEOUT,
+            "banner_timeout": _SSH_BANNER_TIMEOUT,
+            "auth_timeout": _SSH_AUTH_TIMEOUT,
         }
 
         # Try key-based auth

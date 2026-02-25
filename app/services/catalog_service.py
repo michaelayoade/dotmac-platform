@@ -62,6 +62,20 @@ class CatalogService:
         release.is_active = False
         self.db.flush()
 
+    def delete_release(self, release_id: UUID) -> None:
+        release = self.get_release(release_id)
+        if not release:
+            raise ValueError("Release not found")
+        if release.is_active:
+            raise ValueError("Release must be inactive before deletion")
+        has_items = self.db.scalar(
+            select(AppCatalogItem.catalog_id).where(AppCatalogItem.release_id == release_id).limit(1)
+        )
+        if has_items:
+            raise ValueError("Release is still referenced by catalog items")
+        self.db.delete(release)
+        self.db.flush()
+
     # Bundles
     def create_bundle(
         self,
@@ -97,6 +111,20 @@ class CatalogService:
         if not bundle:
             raise ValueError("Bundle not found")
         bundle.is_active = False
+        self.db.flush()
+
+    def delete_bundle(self, bundle_id: UUID) -> None:
+        bundle = self.get_bundle(bundle_id)
+        if not bundle:
+            raise ValueError("Bundle not found")
+        if bundle.is_active:
+            raise ValueError("Bundle must be inactive before deletion")
+        has_items = self.db.scalar(
+            select(AppCatalogItem.catalog_id).where(AppCatalogItem.bundle_id == bundle_id).limit(1)
+        )
+        if has_items:
+            raise ValueError("Bundle is still referenced by catalog items")
+        self.db.delete(bundle)
         self.db.flush()
 
     # Catalog items
@@ -147,6 +175,36 @@ class CatalogService:
         if not item:
             raise ValueError("Catalog item not found")
         item.is_active = False
+        self.db.flush()
+
+    def delete_catalog_item(self, catalog_id: UUID) -> None:
+        from app.models.app_upgrade import AppUpgrade
+        from app.models.instance import Instance
+        from app.models.signup_request import SignupRequest
+
+        item = self.db.get(AppCatalogItem, catalog_id)
+        if not item:
+            raise ValueError("Catalog item not found")
+        if item.is_active:
+            raise ValueError("Catalog item must be inactive before deletion")
+
+        has_instances = self.db.scalar(
+            select(Instance.instance_id).where(Instance.catalog_item_id == catalog_id).limit(1)
+        )
+        if has_instances:
+            raise ValueError("Catalog item is still referenced by instances")
+        has_signups = self.db.scalar(
+            select(SignupRequest.signup_id).where(SignupRequest.catalog_item_id == catalog_id).limit(1)
+        )
+        if has_signups:
+            raise ValueError("Catalog item is still referenced by signup requests")
+        has_upgrades = self.db.scalar(
+            select(AppUpgrade.upgrade_id).where(AppUpgrade.catalog_item_id == catalog_id).limit(1)
+        )
+        if has_upgrades:
+            raise ValueError("Catalog item is still referenced by upgrades")
+
+        self.db.delete(item)
         self.db.flush()
 
     def serialize_release(self, release: AppRelease) -> dict:

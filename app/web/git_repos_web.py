@@ -191,3 +191,24 @@ def git_repos_deactivate(
         db.rollback()
         logger.exception("Failed to deactivate repo: %s", e)
     return RedirectResponse("/git-repos", status_code=302)
+
+
+@router.post("/{repo_id}/delete")
+def git_repos_delete(
+    request: Request,
+    repo_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+    from app.services.git_repo_service import GitRepoService
+
+    try:
+        GitRepoService(db).purge_repo(repo_id)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to delete repo: %s", e)
+    return RedirectResponse("/git-repos", status_code=302)

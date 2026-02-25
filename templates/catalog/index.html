@@ -73,7 +73,10 @@
                 <button class="text-[11px] text-red-500">Deactivate</button>
             </form>
             {% else %}
-            <span class="text-[11px] text-surface-400">Inactive</span>
+            <form method="POST" action="/catalog/releases/{{ r.release_id }}/delete" onsubmit="return confirm('Delete this inactive release?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button class="text-[11px] text-red-500">Delete</button>
+            </form>
             {% endif %}
         </div>
         {% else %}
@@ -95,7 +98,10 @@
                 <button class="text-[11px] text-red-500">Deactivate</button>
             </form>
             {% else %}
-            <span class="text-[11px] text-surface-400">Inactive</span>
+            <form method="POST" action="/catalog/bundles/{{ b.bundle_id }}/delete" onsubmit="return confirm('Delete this inactive bundle?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button class="text-[11px] text-red-500">Delete</button>
+            </form>
             {% endif %}
         </div>
         {% else %}
@@ -117,7 +123,10 @@
                 <button class="text-[11px] text-red-500">Deactivate</button>
             </form>
             {% else %}
-            <span class="text-[11px] text-surface-400">Inactive</span>
+            <form method="POST" action="/catalog/items/{{ i.catalog_id }}/delete" onsubmit="return confirm('Delete this inactive catalog item?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button class="text-[11px] text-red-500">Delete</button>
+            </form>
             {% endif %}
         </div>
         {% else %}

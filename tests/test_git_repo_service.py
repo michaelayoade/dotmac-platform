@@ -4,6 +4,7 @@ import uuid
 
 import pytest
 
+from app.models.catalog import AppRelease
 from app.models.git_repository import GitAuthType, GitRepository
 from app.models.instance import Instance
 from app.models.server import Server
@@ -16,6 +17,7 @@ TestBase.metadata.create_all(_test_engine)
 @pytest.fixture(autouse=True)
 def _clean_git_repo_data(db_session):
     db_session.query(Instance).delete()
+    db_session.query(AppRelease).delete()
     db_session.query(Server).delete()
     db_session.query(GitRepository).delete()
     db_session.commit()
@@ -163,3 +165,50 @@ def test_update_repo_rejects_ssh_key_auth(db_session):
     )
     with pytest.raises(ValueError, match="SSH key auth is not supported"):
         svc.update_repo(repo.repo_id, auth_type=GitAuthType.ssh_key)
+
+
+def test_purge_repo_requires_inactive(db_session):
+    svc = GitRepoService(db_session)
+    repo = svc.create_repo(
+        label=f"active-{uuid.uuid4().hex[:6]}",
+        auth_type=GitAuthType.none,
+        registry_url="ghcr.io/acme/repo",
+    )
+    with pytest.raises(ValueError, match="inactive"):
+        svc.purge_repo(repo.repo_id)
+
+
+def test_purge_repo_deletes_inactive_repo(db_session):
+    svc = GitRepoService(db_session)
+    repo = svc.create_repo(
+        label=f"inactive-{uuid.uuid4().hex[:6]}",
+        auth_type=GitAuthType.none,
+        registry_url="ghcr.io/acme/repo",
+    )
+    svc.delete_repo(repo.repo_id)
+    svc.purge_repo(repo.repo_id)
+    db_session.commit()
+
+    assert db_session.get(GitRepository, repo.repo_id) is None
+
+
+def test_purge_repo_refuses_when_referenced_by_release(db_session):
+    svc = GitRepoService(db_session)
+    repo = svc.create_repo(
+        label=f"with-release-{uuid.uuid4().hex[:6]}",
+        auth_type=GitAuthType.none,
+        registry_url="ghcr.io/acme/repo",
+    )
+    release = AppRelease(
+        name="R1",
+        version="1.0.0",
+        git_ref="main",
+        git_repo_id=repo.repo_id,
+        is_active=False,
+    )
+    db_session.add(release)
+    db_session.commit()
+
+    svc.delete_repo(repo.repo_id)
+    with pytest.raises(ValueError, match="referenced"):
+        svc.purge_repo(repo.repo_id)

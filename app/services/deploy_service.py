@@ -338,7 +338,7 @@ class DeployService:
         self.db.commit()
 
     def _record_deploy_metric(self, instance_id: UUID, success: bool) -> None:
-        """Record a deployment metric (best‑effort)."""
+        """Record a deployment metric (best-effort)."""
         try:
             from app.services.metrics_export import MetricsExportService
 
@@ -349,6 +349,48 @@ class DeployService:
                 instance_id,
                 exc_info=True,
             )
+
+    def _mark_incomplete_steps_terminal(self, instance_id: UUID, deployment_id: str, error_message: str) -> None:
+        """Best-effort transition for running/pending steps after an unexpected failure."""
+        from sqlalchemy import select
+
+        stmt = (
+            select(DeploymentLog)
+            .where(
+                DeploymentLog.instance_id == instance_id,
+                DeploymentLog.deployment_id == deployment_id,
+            )
+            .order_by(DeploymentLog.id)
+        )
+        logs = list(self.db.scalars(stmt).all())
+        now = datetime.now(UTC)
+        for log in logs:
+            if log.status == DeployStepStatus.running:
+                log.status = DeployStepStatus.failed
+                log.message = error_message[:500]
+                log.completed_at = now
+            elif log.status == DeployStepStatus.pending:
+                log.status = DeployStepStatus.skipped
+                log.message = "Skipped due to earlier failure"
+                log.completed_at = now
+        self.db.commit()
+
+    @staticmethod
+    def _format_exception(exc: Exception, max_depth: int = 4) -> str:
+        """Flatten exception plus cause/context chain into one readable message."""
+        parts: list[str] = []
+        current: BaseException | None = exc
+        depth = 0
+        while current and depth < max_depth:
+            text = str(current).strip() or current.__class__.__name__
+            if text not in parts:
+                parts.append(text)
+            next_exc = current.__cause__ or current.__context__
+            if next_exc is current:
+                break
+            current = next_exc
+            depth += 1
+        return " | ".join(parts)
 
     def run_deployment(
         self,
@@ -479,6 +521,7 @@ class DeployService:
 
         except DeployError as e:
             logger.error("Deployment failed at step %s: %s", e.step, e.message)
+            self.db.rollback()
             # Mark remaining steps as skipped
             for step in steps:
                 if step not in results:
@@ -495,6 +538,12 @@ class DeployService:
 
         except Exception as e:
             logger.exception("Unexpected deployment error")
+            self.db.rollback()
+            err_text = self._format_exception(e)
+            try:
+                self._mark_incomplete_steps_terminal(instance_id, deployment_id, err_text)
+            except Exception:
+                logger.exception("Failed to mark incomplete steps terminal")
             try:
                 self._rollback_containers(instance, ssh, "unknown")
             except Exception:
@@ -642,7 +691,13 @@ class DeployService:
             )
             return True
         except Exception as e:
-            self._update_step(instance.instance_id, deployment_id, step, DeployStepStatus.failed, str(e))
+            self._update_step(
+                instance.instance_id,
+                deployment_id,
+                step,
+                DeployStepStatus.failed,
+                self._format_exception(e),
+            )
             return False
 
     def _step_transfer(self, instance: Instance, deployment_id: str, ssh: SSHService) -> bool:

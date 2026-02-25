@@ -57,9 +57,7 @@ def upgrade() -> None:
         "DO $$ BEGIN CREATE TYPE channeltype AS ENUM ('email', 'slack', 'telegram'); "
         "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
     )
-    conn.execute(
-        sa.text(create_channeltype_sql)
-    )
+    conn.execute(sa.text(create_channeltype_sql))
 
     if "notification_channels" not in tables:
         op.create_table(

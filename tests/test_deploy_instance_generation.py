@@ -59,6 +59,17 @@ def test_setup_script_no_build_flag(db_session):
     assert "Pulling and starting" in content
 
 
+def test_bootstrap_script_defaults_blank_org_bootstrap_values(db_session):
+    instance = _make_instance(db_session, org_code=f"TST_{uuid.uuid4().hex[:6].upper()}")
+    content = InstanceService(db_session).generate_bootstrap_db_script()
+
+    assert '(os.environ.get("BOOTSTRAP_SECTOR_TYPE", "PRIVATE") or "PRIVATE")' in content
+    assert '(os.environ.get("BOOTSTRAP_FRAMEWORK", "IFRS") or "IFRS")' in content
+    assert '(os.environ.get("BOOTSTRAP_CURRENCY", "NGN") or "NGN")' in content
+    assert "organization_id=org.organization_id," in content
+    assert "organization_id=org.organization_id if org else None" not in content
+
+
 def test_step_backup_skips_when_db_container_missing(db_session):
     code = f"TST_{uuid.uuid4().hex[:6].upper()}"
     instance = _make_instance(db_session, org_code=code, deployed_git_ref="main")

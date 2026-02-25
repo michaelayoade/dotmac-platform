@@ -92,7 +92,10 @@
                             <button class="text-[11px] text-red-500 hover:text-red-600">Deactivate</button>
                         </form>
                         {% else %}
-                        <span class="text-[11px] text-surface-400">Inactive</span>
+                        <form method="POST" action="/git-repos/{{ repo.repo_id }}/delete" onsubmit="return confirm('Delete this inactive repo?')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <button class="text-[11px] text-red-500 hover:text-red-600">Delete</button>
+                        </form>
                         {% endif %}
                     </td>
                 </tr>

@@ -113,3 +113,20 @@ def delete_repo(
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{repo_id}/purge")
+def purge_repo(
+    repo_id: UUID,
+    db: Session = Depends(get_db),
+    auth: object = Depends(require_role("admin")),
+) -> dict[str, str]:
+    from app.services.git_repo_service import GitRepoService
+
+    try:
+        GitRepoService(db).purge_repo(repo_id)
+        db.commit()
+        return {"deleted": str(repo_id)}
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))

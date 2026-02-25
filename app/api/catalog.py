@@ -64,6 +64,23 @@ def deactivate_release(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.delete("/releases/{release_id}/purge")
+def delete_release(
+    release_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.catalog_service import CatalogService
+
+    try:
+        CatalogService(db).delete_release(release_id)
+        db.commit()
+        return {"deleted": str(release_id)}
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/bundles", response_model=list[CatalogBundleRead])
 def list_bundles(
     active_only: bool = True,
@@ -114,6 +131,23 @@ def deactivate_bundle(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.delete("/bundles/{bundle_id}/purge")
+def delete_bundle(
+    bundle_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.catalog_service import CatalogService
+
+    try:
+        CatalogService(db).delete_bundle(bundle_id)
+        db.commit()
+        return {"deleted": str(bundle_id)}
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/items", response_model=list[CatalogItemRead])
 def list_catalog_items(
     active_only: bool = True,
@@ -159,6 +193,23 @@ def deactivate_catalog_item(
         CatalogService(db).deactivate_catalog_item(catalog_id)
         db.commit()
         return None
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/items/{catalog_id}/purge")
+def delete_catalog_item(
+    catalog_id: UUID,
+    db: Session = Depends(get_db),
+    auth=Depends(require_role("admin")),
+):
+    from app.services.catalog_service import CatalogService
+
+    try:
+        CatalogService(db).delete_catalog_item(catalog_id)
+        db.commit()
+        return {"deleted": str(catalog_id)}
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))

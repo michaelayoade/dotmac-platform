@@ -37,7 +37,7 @@ def create_instance(
 
     svc = InstanceService(db)
     try:
-        instance = svc.create_with_catalog(
+        instance, _ = svc.create_with_catalog(
             server_id=payload.server_id,
             org_code=payload.org_code,
             org_name=payload.org_name,

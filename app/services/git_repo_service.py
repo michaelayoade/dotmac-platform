@@ -107,6 +107,27 @@ class GitRepoService:
         repo.is_platform_default = False
         self.db.flush()
 
+    def purge_repo(self, repo_id: UUID) -> None:
+        from app.models.catalog import AppRelease
+
+        repo = self.get_by_id(repo_id)
+        if not repo:
+            raise ValueError("Repo not found")
+        if repo.is_active:
+            raise ValueError("Repo must be inactive before deletion")
+        in_use_instance = self.db.scalar(
+            select(Instance.instance_id).where(Instance.git_repo_id == repo.repo_id).limit(1)
+        )
+        if in_use_instance:
+            raise ValueError("Repo is assigned to instance(s)")
+        in_use_release = self.db.scalar(
+            select(AppRelease.release_id).where(AppRelease.git_repo_id == repo.repo_id).limit(1)
+        )
+        if in_use_release:
+            raise ValueError("Repo is still referenced by catalog releases")
+        self.db.delete(repo)
+        self.db.flush()
+
     def list_repos(self, active_only: bool = True) -> list[GitRepository]:
         stmt = select(GitRepository)
         if active_only:
