@@ -1,5 +1,6 @@
 import os
 import secrets
+import uuid
 from contextlib import asynccontextmanager
 from threading import Lock
 from time import monotonic
@@ -7,6 +8,7 @@ from time import monotonic
 from fastapi import Depends, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.responses import Response
@@ -96,6 +98,29 @@ configure_logging()
 setup_otel(app)
 app.add_middleware(ObservabilityMiddleware)
 register_error_handlers(app)
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    """Generate a UUID X-Request-ID header for every request and include it in all log output."""
+    # Get existing request ID from headers or generate a new one
+    request_id = request.headers.get("x-request-id", str(uuid.uuid4()))
+    
+    # Store in request state for later use
+    request.state.request_id = request_id
+    
+    # Bind request_id to structlog context for all log entries in this request
+    structlog.contextvars.bind_contextvars(request_id=request_id)
+    
+    try:
+        response = await call_next(request)
+    finally:
+        # Clear context vars to prevent leakage
+        structlog.contextvars.clear_contextvars()
+    
+    # Add request ID to response headers
+    response.headers["X-Request-ID"] = request_id
+    return response
 
 
 @app.middleware("http")
