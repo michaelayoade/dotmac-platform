@@ -267,6 +267,7 @@ def instance_detail(
             catalog_map=bundle["catalog_map"],
             upgrades=bundle["upgrades"],
             pending_upgrade_ids=bundle["pending_upgrade_ids"],
+            uptime_seconds=bundle["uptime_seconds"],
         ),
     )
 
