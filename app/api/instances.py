@@ -4,6 +4,7 @@ Instance API — Modules, feature flags, plans, backups, domains, lifecycle, and
 
 from __future__ import annotations
 
+import re
 from datetime import UTC
 from uuid import UUID
 
@@ -19,6 +20,7 @@ from app.schemas.instances import (
 from app.services.common import paginate_list
 
 router = APIRouter(prefix="/instances", tags=["instances"])
+_GIT_REF_FORMAT_RE = re.compile(r"^[a-zA-Z0-9._/\-]{1,200}$")
 
 
 # ──────────────────────────── Instance Creation ────────────────────────────
@@ -548,6 +550,11 @@ def set_version(
     auth=Depends(require_role("admin")),
 ):
     from app.services.instance_service import InstanceService
+
+    if git_branch is not None and not _GIT_REF_FORMAT_RE.match(git_branch):
+        raise HTTPException(status_code=422, detail="Invalid git ref format")
+    if git_tag is not None and not _GIT_REF_FORMAT_RE.match(git_tag):
+        raise HTTPException(status_code=422, detail="Invalid git ref format")
 
     try:
         instance = InstanceService(db).set_git_refs(
