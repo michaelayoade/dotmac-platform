@@ -1,5 +1,6 @@
 import os
 import secrets
+import sys
 from contextlib import asynccontextmanager
 from threading import Lock
 from time import monotonic
@@ -65,9 +66,47 @@ from app.web.ssh_keys_web import router as ssh_keys_web_router
 from app.web.usage_web import router as usage_web_router
 from app.web.webhooks_web import router as webhooks_web_router
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Startup: log application information
+    logger.info("Application starting up")
+    logger.info(f"App version: {settings.VERSION if hasattr(settings, 'VERSION') else 'unknown'}")
+    logger.info(f"Python version: {sys.version}")
+    
+    # Check database connectivity
+    db = SessionLocal()
+    db_status = False
+    try:
+        db.execute(DomainSetting.__table__.select().limit(1))
+        db_status = True
+        logger.info("Database connectivity: OK")
+    except Exception as e:
+        logger.error(f"Database connectivity: FAILED - {e}")
+    finally:
+        db.close()
+    
+    # Check Redis connectivity
+    redis_status = False
+    try:
+        import redis as redis_lib
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        r = redis_lib.from_url(redis_url, socket_timeout=2)
+        r.ping()
+        redis_status = True
+        logger.info("Redis connectivity: OK")
+    except ImportError:
+        logger.error("Redis connectivity: FAILED - redis library not installed")
+    except Exception as e:
+        logger.error(f"Redis connectivity: FAILED - {e}")
+    
+    logger.info(f"Startup checks completed - Database: {'OK' if db_status else 'FAILED'}, Redis: {'OK' if redis_status else 'FAILED'}")
+    
+    # Continue with existing startup logic
     db = SessionLocal()
     try:
         seed_auth_settings(db)
