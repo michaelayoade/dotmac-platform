@@ -4,6 +4,7 @@ import time
 from unittest.mock import MagicMock
 
 import pytest
+import redis
 from fastapi import HTTPException
 
 from app.rate_limit import RateLimiter
@@ -17,6 +18,10 @@ def _mock_request(ip: str = "127.0.0.1") -> MagicMock:
 
 
 class TestRateLimiter:
+    @pytest.fixture(autouse=True)
+    def _no_redis(self, monkeypatch):
+        monkeypatch.delenv("REDIS_URL", raising=False)
+
     def test_allows_requests_under_limit(self):
         limiter = RateLimiter(max_requests=5, window_seconds=60)
         request = _mock_request()
@@ -69,3 +74,18 @@ class TestRateLimiter:
         request2.headers = {"x-forwarded-for": "192.168.1.100"}
         with pytest.raises(HTTPException):
             limiter.check(request2)
+
+    def test_falls_back_to_in_memory_when_redis_unavailable(self, monkeypatch):
+        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+
+        def _boom(*args, **kwargs):
+            raise redis.RedisError("boom")
+
+        monkeypatch.setattr("app.rate_limit.redis.Redis.from_url", _boom)
+
+        limiter = RateLimiter(max_requests=2, window_seconds=60)
+        request = _mock_request()
+        limiter.check(request)
+        limiter.check(request)
+        with pytest.raises(HTTPException):
+            limiter.check(request)

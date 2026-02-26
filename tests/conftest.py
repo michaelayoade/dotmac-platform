@@ -250,7 +250,7 @@ def auth_env():
 
 @pytest.fixture(autouse=True)
 def _reset_rate_limiters():
-    """Reset in-memory rate limiter state between tests."""
+    """Reset rate limiter state between tests."""
     from app.rate_limit import (
         github_webhook_limiter,
         login_limiter,
@@ -263,15 +263,15 @@ def _reset_rate_limiters():
         signup_verify_limiter,
     )
 
-    login_limiter._requests.clear()
-    password_reset_limiter._requests.clear()
-    mfa_verify_limiter._requests.clear()
-    refresh_limiter._requests.clear()
-    password_change_limiter._requests.clear()
-    signup_limiter._requests.clear()
-    signup_resend_limiter._requests.clear()
-    signup_verify_limiter._requests.clear()
-    github_webhook_limiter._requests.clear()
+    login_limiter.reset()
+    password_reset_limiter.reset()
+    mfa_verify_limiter.reset()
+    refresh_limiter.reset()
+    password_change_limiter.reset()
+    signup_limiter.reset()
+    signup_resend_limiter.reset()
+    signup_verify_limiter.reset()
+    github_webhook_limiter.reset()
 
 
 # ============ FastAPI Test Client Fixtures ============
