@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models.catalog import AppBundle, AppCatalogItem, AppRelease
@@ -114,8 +114,11 @@ class CatalogService:
         self.db.flush()
         return item
 
-    def list_catalog_items(self, active_only: bool = True) -> list[AppCatalogItem]:
+    def list_catalog_items(self, active_only: bool = True, search: str | None = None) -> list[AppCatalogItem]:
         stmt = select(AppCatalogItem)
+        if search and search.strip():
+            q = f"%{search.strip()}%"
+            stmt = stmt.join(AppCatalogItem.bundle).where(or_(AppBundle.name.ilike(q), AppBundle.description.ilike(q)))
         if active_only:
             stmt = stmt.where(AppCatalogItem.is_active.is_(True))
         stmt = stmt.order_by(AppCatalogItem.created_at.desc())

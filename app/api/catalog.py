@@ -116,13 +116,14 @@ def deactivate_bundle(
 @router.get("/items")
 def list_catalog_items(
     active_only: bool = True,
+    search: str | None = None,
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
     from app.services.catalog_service import CatalogService
 
     svc = CatalogService(db)
-    items = svc.list_catalog_items(active_only=active_only)
+    items = svc.list_catalog_items(active_only=active_only, search=search)
     return [svc.serialize_item(i) for i in items]
 
 
