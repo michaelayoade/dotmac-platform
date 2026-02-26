@@ -32,3 +32,11 @@ class InstanceCreateResponse(BaseModel):
     domain: str | None = None
     status: str
     catalog_item_id: UUID | None = None
+
+
+class InstanceWebhookCreateRequest(BaseModel):
+    url: str = Field(min_length=1, max_length=1024)
+    events: list[str] = Field(default_factory=list)
+    secret: str | None = Field(default=None, max_length=256)
+    description: str | None = Field(default=None, max_length=500)
+    instance_id: UUID | None = None
