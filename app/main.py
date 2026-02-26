@@ -131,6 +131,13 @@ register_error_handlers(app)
 
 
 @app.middleware("http")
+async def api_version_header_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-API-Version"] = getattr(settings, "VERSION", "0.1.0") or "0.1.0"
+    return response
+
+
+@app.middleware("http")
 async def csrf_middleware(request: Request, call_next):
     if not request.cookies.get("access_token") and not request.cookies.get(CSRF_COOKIE_NAME):
         request.state.csrf_session = secrets.token_urlsafe(32)

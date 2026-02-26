@@ -8,6 +8,8 @@ load_dotenv()
 
 @dataclass(frozen=True)
 class Settings:
+    VERSION: str = os.getenv("VERSION", "0.1.0")
+
     database_url: str = os.getenv(
         "DATABASE_URL",
         "postgresql+psycopg://postgres:postgres@localhost:5434/dotmac_platform",
