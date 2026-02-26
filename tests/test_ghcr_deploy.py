@@ -172,7 +172,7 @@ class TestGenerateEnv:
         svc = InstanceService(db_session)
         content = svc.generate_env(instance, admin_password="secret", image_ref="ghcr.io/acme/erp:v1.0")
 
-        assert "DOTMAC_IMAGE=ghcr.io/acme/erp:v1.0" in content
+        assert 'DOTMAC_IMAGE="ghcr.io/acme/erp:v1.0"' in content
 
     def test_without_image_ref(self, db_session: Session) -> None:
         instance = _make_instance(db_session)
@@ -180,6 +180,20 @@ class TestGenerateEnv:
         content = svc.generate_env(instance, admin_password="secret")
 
         assert "DOTMAC_IMAGE" not in content
+
+    def test_quotes_and_escapes_user_supplied_values(self, db_session: Session) -> None:
+        instance = _make_instance(db_session)
+        svc = InstanceService(db_session)
+        content = svc.generate_env(
+            instance,
+            admin_password='safe"\nINJECTED_FLAG=1',
+            existing_env={"ERPNEXT_API_KEY": 'key"\nINJECTED_API=1'},
+        )
+
+        assert 'BOOTSTRAP_ADMIN_PASSWORD="safe\\\"\\nINJECTED_FLAG=1"' in content
+        assert 'ERPNEXT_API_KEY="key\\\"\\nINJECTED_API=1"' in content
+        assert "\nINJECTED_FLAG=1\n" not in content
+        assert "\nINJECTED_API=1\n" not in content
 
 
 # ---------------------------------------------------------------------------
@@ -236,8 +250,8 @@ class TestProvisionFilesGitRef:
             admin_password="secret",
             image_ref="ghcr.io/acme/erp:hotfix-123",
         )
-        assert "DOTMAC_IMAGE=ghcr.io/acme/erp:hotfix-123" in content
-        assert "DOTMAC_IMAGE=ghcr.io/acme/erp:main" not in content
+        assert 'DOTMAC_IMAGE="ghcr.io/acme/erp:hotfix-123"' in content
+        assert 'DOTMAC_IMAGE="ghcr.io/acme/erp:main"' not in content
 
     def test_generate_docker_compose_always_uses_image(self, db_session: Session) -> None:
         """Docker-compose should always use image: ${DOTMAC_IMAGE}."""
