@@ -7,9 +7,10 @@ A production-ready platform management control plane built on FastAPI. It includ
 - **Authentication & Security**
   - JWT-based authentication with refresh token rotation
   - Multi-factor authentication (TOTP, SMS, Email)
-  - API key management with rate limiting
+  - API key management with Redis-backed rate limiting (shared across workers)
   - Session management with token hashing
   - Password policies and account lockout
+  - CORS middleware with configurable allowed origins
 
 - **Authorization**
   - Role-based access control (RBAC)
@@ -17,9 +18,10 @@ A production-ready platform management control plane built on FastAPI. It includ
   - Scope-based API access
 
 - **Audit & Compliance**
-  - Comprehensive audit logging
+  - Comprehensive audit logging with CSV export
   - Request/response tracking
   - Actor and IP address logging
+  - Sensitive query parameter redaction in audit metadata
 
 - **Background Jobs**
   - Celery workers with Redis broker
@@ -170,8 +172,10 @@ Services:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql+psycopg://postgres:postgres@localhost:5434/starter_template` |
+| `DATABASE_URL` | PostgreSQL connection string | **Required** (no default) |
 | `REDIS_URL` | Redis connection string | `redis://:redis@localhost:6379/0` |
+| `CORS_ORIGINS` | Comma-separated list of allowed CORS origins | `http://localhost:3000` |
+| `TRUSTED_PROXY_IPS` | Comma-separated list of trusted proxy IPs for `X-Forwarded-For` | _(empty)_ |
 | `CELERY_BROKER_URL` | Celery broker URL | `redis://:redis@localhost:6379/0` |
 | `CELERY_RESULT_BACKEND` | Celery result backend | `redis://:redis@localhost:6379/1` |
 | `JWT_SECRET` | JWT signing secret | Required |
@@ -245,7 +249,10 @@ OPENBAO_KV_VERSION=2
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/health` | Health check |
+| GET | `/health/ready` | Readiness probe |
+| GET | `/health/db-pool` | Database connection pool stats |
 | GET | `/metrics` | Prometheus metrics |
+| GET | `/scheduler/status` | Scheduler job counts by state |
 
 ## Development
 
