@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.responses import Response
 
+from app.api.audit import export_router as audit_export_router
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.auth_flow import router as auth_flow_router
@@ -293,6 +294,7 @@ _include_api_router(rbac_router, dependencies=[Depends(require_user_auth)])
 # people API only at /api/v1 — root /people is the web UI
 app.include_router(people_router, prefix="/api/v1", dependencies=[Depends(require_user_auth)])
 _include_api_router(audit_router)
+app.include_router(audit_export_router, prefix="/api/v1")
 _include_api_router(settings_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(scheduler_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(organizations_api_router, dependencies=[Depends(require_user_auth)])

@@ -1,14 +1,25 @@
-from fastapi import APIRouter, Depends, Query
+import csv
+import io
+import json
+
+from fastapi import APIRouter, Depends, Query, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_audit_auth
 from app.db import SessionLocal
+from app.models.audit import AuditEvent
 from app.schemas.audit import AuditEventRead
 from app.schemas.common import ListResponse
 from app.services import audit as audit_service
 
 router = APIRouter(
     prefix="/audit-events",
+    tags=["audit-events"],
+    dependencies=[Depends(require_audit_auth)],
+)
+export_router = APIRouter(
+    prefix="/audit",
     tags=["audit-events"],
     dependencies=[Depends(require_audit_auth)],
 )
@@ -58,4 +69,32 @@ def list_audit_events(
         order_dir,
         limit,
         offset,
+    )
+
+
+@export_router.get("/export")
+def export_audit_events_csv(db: Session = Depends(get_db)) -> Response:
+    stmt = select(AuditEvent).where(AuditEvent.is_active.is_(True)).order_by(AuditEvent.occurred_at.desc())
+    events = db.scalars(stmt).all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["timestamp", "user", "action", "resource", "detail"])
+    for event in events:
+        resource = event.entity_type if not event.entity_id else f"{event.entity_type}:{event.entity_id}"
+        detail = json.dumps(event.metadata_, sort_keys=True) if event.metadata_ else ""
+        writer.writerow(
+            [
+                event.occurred_at.isoformat(),
+                event.actor_id or event.actor_type.value,
+                event.action,
+                resource,
+                detail,
+            ]
+        )
+
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="audit-log.csv"'},
     )

@@ -1,3 +1,5 @@
+import csv
+import io
 import uuid
 
 from app.models.audit import AuditActorType, AuditEvent
@@ -122,6 +124,29 @@ class TestAuditEventsAPIV1:
         """Test listing audit events via v1 API."""
         response = client.get("/api/v1/audit-events", headers=admin_headers)
         assert response.status_code == 200
+
+    def test_export_audit_events_csv_v1(self, client, admin_headers, audit_event):
+        """Test exporting audit events as CSV via v1 API."""
+        response = client.get("/api/v1/audit/export", headers=admin_headers)
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/csv")
+        assert response.headers["content-disposition"] == 'attachment; filename="audit-log.csv"'
+
+        reader = csv.DictReader(io.StringIO(response.text))
+        assert reader.fieldnames == ["timestamp", "user", "action", "resource", "detail"]
+
+        rows = list(reader)
+        assert any(
+            row["user"] == str(audit_event.actor_id)
+            and row["action"] == audit_event.action
+            and row["resource"] == f"{audit_event.entity_type}:{audit_event.entity_id}"
+            for row in rows
+        )
+
+    def test_export_audit_events_csv_v1_unauthorized(self, client):
+        """Test exporting audit events requires auth."""
+        response = client.get("/api/v1/audit/export")
+        assert response.status_code == 401
 
 
 class TestAuditEventActorTypes:
