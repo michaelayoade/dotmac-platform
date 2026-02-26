@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_user_auth
+from app.models.notification_channel import ChannelType
 from app.schemas.notification_channels import (
     NotificationChannelCreate,
     NotificationChannelUpdate,
@@ -18,6 +19,7 @@ from app.services.common import coerce_uuid
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/notification-channels", tags=["notification-channels"])
+TEST_NOTIFICATION_MESSAGE = "Seabone test notification"
 
 
 def _person_id(auth: dict[str, object]) -> UUID:
@@ -117,7 +119,17 @@ def test_channel(
     pid = _person_id(auth)
     svc = NotificationChannelService(db)
     try:
-        ok = svc.test_channel(channel_id, pid)
+        channel = svc.get_by_id(channel_id)
+        if not channel:
+            raise ValueError("Channel not found")
+        if channel.channel_type not in {ChannelType.email, ChannelType.slack, ChannelType.telegram}:
+            raise ValueError("Unsupported channel type")
+        ok = svc.test_channel(
+            channel_id,
+            pid,
+            title=TEST_NOTIFICATION_MESSAGE,
+            message=TEST_NOTIFICATION_MESSAGE,
+        )
         return {"success": ok}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
