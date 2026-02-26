@@ -93,9 +93,21 @@ class ApprovalService:
         self.db.flush()
         return approval
 
-    def get_pending(self, instance_id: UUID | None = None) -> list[DeployApproval]:
+    def get_pending(
+        self,
+        instance_id: UUID | None = None,
+        *,
+        org_id: UUID | str | None = None,
+    ) -> list[DeployApproval]:
+        from app.models.instance import Instance
+
         self.expire_pending(max_age_days=7)
         stmt = select(DeployApproval).where(DeployApproval.status == ApprovalStatus.pending)
+        if org_id is not None:
+            org_uuid = org_id if isinstance(org_id, UUID) else UUID(str(org_id))
+            stmt = stmt.join(Instance, Instance.instance_id == DeployApproval.instance_id).where(
+                Instance.org_id == org_uuid
+            )
         if instance_id:
             stmt = stmt.where(DeployApproval.instance_id == instance_id)
         stmt = stmt.order_by(DeployApproval.created_at.desc())
