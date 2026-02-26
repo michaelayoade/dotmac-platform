@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func, select
 
 from app.api.deps import get_db, require_org_access, require_role, require_user_auth
 from app.schemas.common import ListResponse
@@ -13,6 +14,7 @@ from app.schemas.organization import (
     OrganizationUpdate,
 )
 from app.services.organization_service import OrganizationService
+from app.models.organization import Organization, OrganizationMember
 
 router = APIRouter(prefix="/orgs", tags=["organizations"])
 
@@ -31,7 +33,25 @@ def list_orgs(
     org = svc.get_by_id(UUID(org_id))
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
-    return {"items": [svc.serialize(org)], "count": 1, "limit": limit, "offset": offset}
+    
+    # Get member count using subquery
+    member_count_subquery = (
+        select(func.count(OrganizationMember.id))
+        .where(OrganizationMember.organization_id == org.id)
+        .scalar_subquery()
+    )
+    
+    # Execute the subquery to get the count
+    member_count = db.execute(
+        select(member_count_subquery)
+    ).scalar()
+    
+    # Get serialized organization
+    org_data = svc.serialize(org)
+    # Add member_count to the response
+    org_data["member_count"] = member_count or 0
+    
+    return {"items": [org_data], "count": 1, "limit": limit, "offset": offset}
 
 
 @router.get("/{org_id}", response_model=OrganizationRead)
