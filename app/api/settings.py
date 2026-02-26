@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Depends, Query, status
+import json
+
+from fastapi import APIRouter, Depends, Query, Response, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_role, require_user_auth
 from app.db import SessionLocal
+from app.models.domain_settings import DomainSetting, SettingDomain
 from app.schemas.common import ListResponse
 from app.schemas.settings import DomainSettingRead, DomainSettingUpdate
+from app.services.platform_settings import PLATFORM_DEFAULTS
 from app.services import settings_api as settings_service
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -16,6 +21,34 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+@router.get(
+    "/export",
+    tags=["settings-platform"],
+    dependencies=[Depends(require_role("admin"))],
+)
+def export_platform_settings(db: Session = Depends(get_db)) -> Response:
+    settings_payload: dict[str, object] = dict(PLATFORM_DEFAULTS)
+    stmt = select(DomainSetting).where(
+        DomainSetting.domain == SettingDomain.platform,
+        DomainSetting.is_active.is_(True),
+    )
+    rows = db.scalars(stmt).all()
+    for row in rows:
+        if row.is_secret:
+            settings_payload.pop(row.key, None)
+            continue
+        if row.value_json is not None:
+            settings_payload[row.key] = row.value_json
+        elif row.value_text is not None:
+            settings_payload[row.key] = row.value_text
+
+    return Response(
+        content=json.dumps(settings_payload, indent=2, sort_keys=True),
+        media_type="application/json",
+        headers={"Content-Disposition": 'attachment; filename="platform-settings.json"'},
+    )
 
 
 @router.get(

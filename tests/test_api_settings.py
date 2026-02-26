@@ -211,6 +211,45 @@ class TestSettingsAPIV1:
         assert response.status_code == 200
 
 
+class TestPlatformSettingsExportAPI:
+    """Tests for platform settings export endpoint."""
+
+    def test_export_platform_settings_downloads_non_secret_values(self, client, admin_headers, db_session):
+        db_session.add(
+            DomainSetting(
+                domain=SettingDomain.platform,
+                key="custom_export_key",
+                value_text="custom-value",
+                is_secret=False,
+                is_active=True,
+            )
+        )
+        db_session.add(
+            DomainSetting(
+                domain=SettingDomain.platform,
+                key="hidden_export_key",
+                value_text="super-secret",
+                is_secret=True,
+                is_active=True,
+            )
+        )
+        db_session.commit()
+
+        response = client.get("/api/v1/settings/export", headers=admin_headers)
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/json")
+        assert response.headers["content-disposition"] == 'attachment; filename="platform-settings.json"'
+
+        data = response.json()
+        assert data["custom_export_key"] == "custom-value"
+        assert "hidden_export_key" not in data
+        assert "default_deploy_path" in data
+
+    def test_export_platform_settings_forbidden_non_admin(self, client, auth_headers):
+        response = client.get("/api/v1/settings/export", headers=auth_headers)
+        assert response.status_code == 403
+
+
 class TestSettingsFilters:
     """Tests for settings filters and ordering."""
 
