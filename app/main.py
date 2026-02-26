@@ -1,5 +1,8 @@
 import os
 import secrets
+import uuid
+import contextvars
+import logging
 from contextlib import asynccontextmanager
 from threading import Lock
 from time import monotonic
@@ -66,6 +69,25 @@ from app.web.usage_web import router as usage_web_router
 from app.web.webhooks_web import router as webhooks_web_router
 
 
+# Request ID context variable
+_request_id_ctx_var = contextvars.ContextVar("request_id", default=None)
+
+class RequestIDFilter(logging.Filter):
+    """Inject request_id into log records."""
+    def filter(self, record):
+        request_id = _request_id_ctx_var.get()
+        record.request_id = request_id
+        return True
+
+# Add filter to root logger
+root_logger = logging.getLogger()
+# Ensure at least one handler exists
+if not root_logger.handlers:
+    handler = logging.StreamHandler()
+    root_logger.addHandler(handler)
+for handler in root_logger.handlers:
+    handler.addFilter(RequestIDFilter())
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db = SessionLocal()
@@ -97,6 +119,27 @@ setup_otel(app)
 app.add_middleware(ObservabilityMiddleware)
 register_error_handlers(app)
 
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    # Generate or reuse request ID
+    request_id = request.headers.get("X-Request-ID")
+    if not request_id:
+        request_id = str(uuid.uuid4())
+    
+    # Store in context var
+    token = _request_id_ctx_var.set(request_id)
+    
+    # Process request
+    response = await call_next(request)
+    
+    # Add request ID to response headers
+    response.headers["X-Request-ID"] = request_id
+    
+    # Clean up context var
+    _request_id_ctx_var.reset(token)
+    
+    return response
 
 @app.middleware("http")
 async def csrf_middleware(request: Request, call_next):
