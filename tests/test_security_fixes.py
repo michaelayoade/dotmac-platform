@@ -255,3 +255,28 @@ class TestM4PlanIdValidation:
         )
         assert resp.status_code == 200
         assert resp.json()["plan_id"] == str(plan.plan_id)
+
+
+# ──────────────── M5: Git ref format validation ────────────────
+
+
+class TestM5GitRefValidation:
+    def test_invalid_git_ref_format_returns_422(self, client, db_session, admin_headers, admin_org_id):
+        server = _make_server(db_session)
+        instance = _make_instance(db_session, server, admin_org_id)
+
+        branch_resp = client.put(
+            f"/instances/{instance.instance_id}/version",
+            params={"git_branch": "bad branch!"},
+            headers=admin_headers,
+        )
+        assert branch_resp.status_code == 422
+        assert branch_resp.json()["message"] == "Invalid git ref format"
+
+        tag_resp = client.put(
+            f"/instances/{instance.instance_id}/version",
+            params={"git_tag": "bad^tag"},
+            headers=admin_headers,
+        )
+        assert tag_resp.status_code == 422
+        assert tag_resp.json()["message"] == "Invalid git ref format"
