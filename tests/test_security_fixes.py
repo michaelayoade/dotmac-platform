@@ -6,9 +6,11 @@ from __future__ import annotations
 
 import uuid
 
+from app.models.alert_rule import AlertChannel, AlertEvent, AlertMetric, AlertOperator
 from app.models.backup import Backup, BackupStatus, BackupType
 from app.models.instance import Instance, InstanceStatus
 from app.models.instance_domain import DomainStatus, InstanceDomain
+from app.models.organization import Organization
 from app.models.plan import Plan
 from app.models.server import Server
 
@@ -46,6 +48,19 @@ def _make_instance(db_session, server: Server, org_id) -> Instance:
     db_session.commit()
     db_session.refresh(instance)
     return instance
+
+
+def _make_org(db_session) -> Organization:
+    code = f"ORG{uuid.uuid4().hex[:6].upper()}"
+    org = Organization(
+        org_code=code,
+        org_name=f"Org {code}",
+        is_active=True,
+    )
+    db_session.add(org)
+    db_session.commit()
+    db_session.refresh(org)
+    return org
 
 
 def _make_backup(db_session, instance: Instance) -> Backup:
@@ -125,6 +140,96 @@ class TestH2DomainVerificationToken:
             assert "verification_token" not in item
             assert "domain_id" in item
             assert "domain" in item
+
+
+# ──────────────── H5: Alerts tenant isolation ────────────────
+
+
+class TestH5AlertsTenantIsolation:
+    def test_alert_rules_list_scoped_to_callers_org(self, client, db_session, admin_headers, admin_org_id):
+        from app.services.alert_service import AlertService
+
+        server = _make_server(db_session)
+        caller_instance = _make_instance(db_session, server, admin_org_id)
+        other_org = _make_org(db_session)
+        other_instance = _make_instance(db_session, server, other_org.org_id)
+
+        svc = AlertService(db_session)
+        own_rule = svc.create_rule(
+            name="caller-rule",
+            metric=AlertMetric.cpu_percent,
+            operator=AlertOperator.gt,
+            threshold=80.0,
+            channel=AlertChannel.webhook,
+            instance_id=caller_instance.instance_id,
+        )
+        other_rule = svc.create_rule(
+            name="other-rule",
+            metric=AlertMetric.cpu_percent,
+            operator=AlertOperator.gt,
+            threshold=80.0,
+            channel=AlertChannel.webhook,
+            instance_id=other_instance.instance_id,
+        )
+        db_session.commit()
+
+        resp = client.get("/instances/alerts/rules", params={"limit": 200}, headers=admin_headers)
+        assert resp.status_code == 200
+        rule_ids = {item["rule_id"] for item in resp.json()}
+        assert str(own_rule.rule_id) in rule_ids
+        assert str(other_rule.rule_id) not in rule_ids
+
+    def test_alert_events_rejects_cross_tenant_instance_id(self, client, db_session, admin_headers, admin_org_id):
+        from app.services.alert_service import AlertService
+
+        server = _make_server(db_session)
+        caller_instance = _make_instance(db_session, server, admin_org_id)
+        other_org = _make_org(db_session)
+        other_instance = _make_instance(db_session, server, other_org.org_id)
+
+        svc = AlertService(db_session)
+        own_rule = svc.create_rule(
+            name="caller-events-rule",
+            metric=AlertMetric.cpu_percent,
+            operator=AlertOperator.gt,
+            threshold=80.0,
+            channel=AlertChannel.webhook,
+            instance_id=caller_instance.instance_id,
+        )
+        other_rule = svc.create_rule(
+            name="other-events-rule",
+            metric=AlertMetric.cpu_percent,
+            operator=AlertOperator.gt,
+            threshold=80.0,
+            channel=AlertChannel.webhook,
+            instance_id=other_instance.instance_id,
+        )
+        db_session.add(
+            AlertEvent(
+                rule_id=own_rule.rule_id,
+                instance_id=caller_instance.instance_id,
+                metric_value=95.0,
+                threshold=80.0,
+            )
+        )
+        db_session.add(
+            AlertEvent(
+                rule_id=other_rule.rule_id,
+                instance_id=other_instance.instance_id,
+                metric_value=95.0,
+                threshold=80.0,
+            )
+        )
+        db_session.commit()
+
+        resp = client.get(
+            "/instances/alerts/events",
+            params={"instance_id": str(other_instance.instance_id)},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 403
+        body = resp.json()
+        assert body.get("message", body.get("detail")) == "Access denied"
 
 
 # ──────────────── H3: Rate limits on MFA verify, refresh, password change ────────────────

@@ -8,6 +8,7 @@ import os
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -20,6 +21,7 @@ from app.models.alert_rule import (
 )
 from app.models.health_check import HealthCheck
 from app.models.instance import Instance, InstanceStatus
+from app.services.common import coerce_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -77,10 +79,14 @@ class AlertService:
             rule.is_active = False
             self.db.flush()
 
-    def list_rules(self, active_only: bool = True) -> list[AlertRule]:
+    def list_rules(self, active_only: bool = True, org_id: UUID | str | None = None) -> list[AlertRule]:
         stmt = select(AlertRule)
         if active_only:
             stmt = stmt.where(AlertRule.is_active.is_(True))
+        if org_id:
+            stmt = stmt.join(Instance, AlertRule.instance_id == Instance.instance_id).where(
+                Instance.org_id == coerce_uuid(org_id)
+            )
         return list(self.db.scalars(stmt).all())
 
     def get_index_bundle(self) -> dict:
@@ -367,8 +373,18 @@ class AlertService:
         rule_id: UUID | None = None,
         limit: int = 50,
         offset: int = 0,
+        org_id: UUID | str | None = None,
     ) -> list[AlertEvent]:
         stmt = select(AlertEvent)
+        if org_id:
+            actor_org_id = coerce_uuid(org_id)
+            if instance_id:
+                instance = self.db.get(Instance, instance_id)
+                if not instance or not instance.org_id or instance.org_id != actor_org_id:
+                    raise HTTPException(status_code=403, detail="Access denied")
+            stmt = stmt.join(Instance, AlertEvent.instance_id == Instance.instance_id).where(
+                Instance.org_id == actor_org_id
+            )
         if instance_id:
             stmt = stmt.where(AlertEvent.instance_id == instance_id)
         if rule_id:

@@ -1167,7 +1167,8 @@ def list_alert_rules(
     from app.services.alert_service import AlertService
 
     svc = AlertService(db)
-    rules = svc.list_rules()
+    org_id = auth.get("org_id") if isinstance(auth, dict) else None
+    rules = svc.list_rules(org_id=org_id)
     return [svc.serialize_rule(r) for r in paginate_list(rules, limit, offset)]
 
 
@@ -1236,7 +1237,8 @@ def list_alert_events(
     from app.services.alert_service import AlertService
 
     svc = AlertService(db)
-    events = svc.get_events(instance_id=instance_id, limit=limit, offset=offset)
+    org_id = auth.get("org_id") if isinstance(auth, dict) else None
+    events = svc.get_events(instance_id=instance_id, limit=limit, offset=offset, org_id=org_id)
     return [svc.serialize_event(e) for e in events]
 
 
