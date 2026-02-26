@@ -54,3 +54,10 @@ and this project uses semantic versioning.
 - [Security] `GET /instances/alerts/rules` and `GET /instances/alerts/events` now scoped to the caller's organisation; cross-tenant alert data exposure closed (PR #44)
 - [Security] Warning logged when API key hashing degrades to plain SHA-256 due to missing `API_KEY_HASH_SECRET` and `JWT_SECRET` configuration (PR #45)
 - [Security] JWT algorithm for per-domain auth settings restricted to allowlist `{HS256, HS384, HS512}`; runtime guard in `_jwt_algorithm()` raises HTTP 500 if an unsafe algorithm is resolved (PR #46)
+
+### CI / Housekeeping
+
+- [Fixed] Rate-limit wrapper now correctly handles `Response` objects returned by `login_response`; previously caused a 500 on login when the wrapper unwrapped the response early (PR #48)
+- [Fixed] Platform-settings unknown-key test narrowed to query a specific key so it no longer matches unrelated settings rows added by other tests (PR #49)
+- [Fixed] Trailing whitespace on blank lines (W293) and import ordering (I001) corrected across `auth_flow.py`, `settings.py`, `main.py`, `rate_limit.py`, `auth.py` to restore CI lint pass (434e9aa)
+- [Fixed] Ruff auto-format applied to 8 files (`app/main.py`, `app/services/audit.py`, `app/services/avatar.py`, `app/services/instance_service.py`, `tests/test_api_instances_webhooks.py`, `tests/test_avatar_services.py`, `tests/test_ghcr_deploy.py`, `tests/test_platform_settings.py`) to restore CI format check (ef4bd69)
