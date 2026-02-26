@@ -85,3 +85,4 @@ static/css/tailwind.out.css
 pytest_results*.txt
 playwright-*.png
 file:dotmac_test*
+.aider*
