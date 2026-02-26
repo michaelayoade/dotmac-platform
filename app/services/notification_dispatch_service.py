@@ -74,8 +74,8 @@ class NotificationDispatchService:
         test_notification = Notification(
             category=NotificationCategory.system,
             severity=NotificationSeverity.info,
-            title="Test notification",
-            message="This is a test message from DotMac Platform.",
+            title="Seabone test notification",
+            message="Seabone test notification",
             link=None,
         )
 

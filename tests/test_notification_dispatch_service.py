@@ -162,3 +162,6 @@ class TestSendTest:
         svc = NotificationDispatchService(db_session)
         ok = svc.send_test(ChannelType.email, {"email": "test@example.com"})
         assert ok is True
+        assert mock_send.called
+        sent_notification = mock_send.call_args.args[0]
+        assert sent_notification.message == "Seabone test notification"
