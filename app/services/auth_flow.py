@@ -109,8 +109,14 @@ def _jwt_secret(db: Session | None) -> str:
     return secret
 
 
+_ALLOWED_JWT_ALGORITHMS = {"HS256", "HS384", "HS512"}
+
+
 def _jwt_algorithm(db: Session | None) -> str:
-    return _env_value("JWT_ALGORITHM") or _setting_value(db, "jwt_algorithm") or "HS256"
+    algorithm = (_env_value("JWT_ALGORITHM") or _setting_value(db, "jwt_algorithm") or "HS256").upper()
+    if algorithm not in _ALLOWED_JWT_ALGORITHMS:
+        raise HTTPException(status_code=500, detail="Unsafe JWT algorithm configured")
+    return algorithm
 
 
 def _access_ttl_minutes(db: Session | None) -> int:
