@@ -9,6 +9,7 @@ and this project uses semantic versioning.
 
 ### Added
 
+- [Added] `max_rows` (default 100,000, max 1,000,000), `started_after`, and `started_before` query parameters on `GET /audit/export` to cap result size and filter by time window; `X-Row-Limit` response header reports the applied limit (PR #35)
 - [Added] GET /api/v1/health/ready readiness endpoint returning status and UTC timestamp (PR #13)
 - [Added] GET /api/v1/health/db-pool endpoint returning SQLAlchemy connection pool metrics: pool_size, checked_in, checked_out, overflow (PR #28)
 - [Added] GET /api/v1/audit/export endpoint streaming all active audit log entries as a CSV file download (PR #29)
@@ -32,6 +33,8 @@ and this project uses semantic versioning.
 
 ### Fixed
 
+- [Fixed] `channel_config` on notification channel endpoints now raises HTTP 422 on invalid JSON instead of silently coercing to `None` (PR #47)
+- [Fixed] CI test `test_export_audit_events_csv_v1_filters_started_window` corrected time window bounds (PR #47)
 - [Fixed] Startup health check removed duplicate `SessionLocal()` and fixed import ordering (PR #12)
 
 ### Security
@@ -40,3 +43,14 @@ and this project uses semantic versioning.
 - [Security] Rate limits now shared across all worker processes via Redis sorted-set sliding window (PR #31)
 - [Security] Sensitive query parameters (`api_key`, `token`, `access_token`, `secret`, `password`, `key`, `authorization`) are redacted to `***` in audit log metadata before storage (PR #33)
 - [Security] `DATABASE_URL` hard-coded default with insecure credentials (`postgres:postgres`) removed; value is now required in production and validated at startup (PR #34)
+- [Security] Audit CSV export now enforces a configurable row limit (`max_rows`) to prevent out-of-memory conditions on large datasets (PR #35)
+- [Security] Warning logged at startup when `TRUSTED_PROXY_IPS` is not configured — rate-limit tracking may collapse to the proxy IP when behind a load balancer (PR #37)
+- [Security] RBAC web `role_id` form parameter now validated as UUID; redirect URL built with `urllib.parse.urlencode` to prevent query-parameter injection (PR #38)
+- [Security] Avatar upload now validates magic bytes (JPEG, PNG, GIF, WebP) against actual file content; HTTP 422 returned if magic bytes do not match the declared type (PR #39)
+- [Security] `admin_password` and other user-supplied strings in generated `.env` files are now quoted and escaped (double-quotes and newlines), preventing `.env` key-value injection (PR #40)
+- [Security] Warning logged at startup when `CSRF_SECRET_KEY` is absent — an ephemeral random key is used, which invalidates all CSRF tokens on every process restart (PR #41)
+- [Security] `PUT /instances/{instance_id}/version` now validates `git_branch` and `git_tag` against a safe-ref regex (`^[a-zA-Z0-9._/\-]{1,200}$`); HTTP 422 returned on invalid format (PR #42)
+- [Security] `GET /instances/approvals` now scoped to the caller's organisation — cross-tenant pending approval leak closed (PR #43)
+- [Security] `GET /instances/alerts/rules` and `GET /instances/alerts/events` now scoped to the caller's organisation; cross-tenant alert data exposure closed (PR #44)
+- [Security] Warning logged when API key hashing degrades to plain SHA-256 due to missing `API_KEY_HASH_SECRET` and `JWT_SECRET` configuration (PR #45)
+- [Security] JWT algorithm for per-domain auth settings restricted to allowlist `{HS256, HS384, HS512}`; runtime guard in `_jwt_algorithm()` raises HTTP 500 if an unsafe algorithm is resolved (PR #46)

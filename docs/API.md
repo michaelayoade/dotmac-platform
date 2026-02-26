@@ -85,9 +85,23 @@ Retrieve a single audit event by ID.
 
 ### GET /audit/export
 
-Export all active audit log entries as a CSV file download.
+Export audit log entries as a CSV file download.
+
+**Query parameters**
+
+| Parameter      | Type     | Default   | Description                                      |
+|----------------|----------|-----------|--------------------------------------------------|
+| max_rows       | integer  | 100000    | Maximum rows to return (1–1,000,000)             |
+| started_after  | datetime | —         | Filter: only events with `occurred_at` after this ISO 8601 timestamp  |
+| started_before | datetime | —         | Filter: only events with `occurred_at` before this ISO 8601 timestamp |
 
 **Response 200** — `text/csv` with `Content-Disposition: attachment; filename="audit-log.csv"`
+
+**Response headers**
+
+| Header        | Description                       |
+|---------------|-----------------------------------|
+| `X-Row-Limit` | The `max_rows` limit that was applied |
 
 CSV columns: `timestamp`, `user`, `action`, `resource`, `detail`
 
@@ -144,6 +158,48 @@ Register a webhook for an instance. Credentials are passed in the JSON body to p
 **Response 200** — created webhook object.
 
 > **Security:** `secret` must be sent in the JSON body. Query-parameter delivery was removed in PR #30.
+
+---
+
+### PUT /instances/{instance_id}/version
+
+Update the git ref (branch or tag) used for an instance's deployment.
+
+**Path parameter:** `instance_id` — UUID of the instance.
+
+**Request body** (fields are optional; omit to leave unchanged)
+```json
+{
+  "git_branch": "main",
+  "git_tag": "v1.2.3"
+}
+```
+
+> **Validation:** `git_branch` and `git_tag` must match `^[a-zA-Z0-9._/\-]{1,200}$`. HTTP 422 is returned if either value contains invalid characters.
+
+---
+
+### GET /instances/approvals
+
+List pending deployment approval requests for the caller's organisation.
+
+> **Tenant isolation:** Results are scoped to the authenticated user's `org_id`. Users cannot see approvals from other organisations.
+
+---
+
+### GET /instances/alerts/rules
+
+List alert rules visible to the caller's organisation.
+
+> **Tenant isolation:** Results are scoped to the authenticated user's `org_id`.
+
+---
+
+### GET /instances/alerts/events
+
+List alert events. Accepts `instance_id` as a query parameter.
+
+> **Tenant isolation:** If `instance_id` is provided, the endpoint validates that the instance belongs to the caller's `org_id` before returning data. HTTP 403 is returned if the instance belongs to a different organisation.
 
 ---
 
@@ -249,7 +305,7 @@ Rate limits are enforced per IP using a Redis-backed sliding window. When Redis 
 | POST /auth/mfa/verify | 5 / 300 s      |
 | POST /auth/password-change | 10 / 60 s |
 
-Configure `TRUSTED_PROXY_IPS` (comma-separated) so that `X-Forwarded-For` headers are trusted only from known proxies.
+Configure `TRUSTED_PROXY_IPS` (comma-separated) so that `X-Forwarded-For` headers are trusted only from known proxies. If `TRUSTED_PROXY_IPS` is not set, a WARNING is logged at startup — all requests behind a proxy will be rate-limited under the proxy IP.
 
 ---
 
