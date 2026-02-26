@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import logging
 import shlex
@@ -33,7 +34,7 @@ class SSHKeyService:
         key_type_enum = SSHKeyType(key_type)
         key, private_pem = _generate_key(key_type_enum, bit_size)
         public_key = _public_key_line(key)
-        fingerprint = _fingerprint(key)
+        fingerprint = _fingerprint(public_key)
 
         ssh_key = SSHKey(
             label=label,
@@ -52,7 +53,7 @@ class SSHKeyService:
     def import_key(self, label: str, private_key_pem: str, created_by: str | None = None) -> SSHKey:
         key = _load_private_key(private_key_pem)
         public_key = _public_key_line(key)
-        fingerprint = _fingerprint(key)
+        fingerprint = _fingerprint(public_key)
         existing = self.db.scalar(select(SSHKey).where(SSHKey.fingerprint == fingerprint))
         if existing:
             raise ValueError("SSH key already exists")
@@ -76,6 +77,10 @@ class SSHKeyService:
     def get_public_key(self, key_id: UUID) -> str:
         key = self._get_key(key_id)
         return key.public_key
+
+    def get_public_key_response(self, key_id: UUID) -> dict[str, str]:
+        key = self._get_key(key_id)
+        return {"public_key": key.public_key, "fingerprint": key.fingerprint}
 
     def get_private_key_pem(self, key_id: UUID) -> str:
         key = self._get_key(key_id)
@@ -210,9 +215,8 @@ def _public_key_line(key: paramiko.PKey) -> str:
     return f"{key.get_name()} {key.get_base64()}"
 
 
-def _fingerprint(key: paramiko.PKey) -> str:
-    raw = key.get_fingerprint()
-    return "MD5:" + ":".join(f"{b:02x}" for b in raw)
+def _fingerprint(public_key: str) -> str:
+    return "SHA256:" + hashlib.sha256(public_key.encode("utf-8")).hexdigest()
 
 
 def _load_private_key(private_key_pem: str) -> paramiko.PKey:

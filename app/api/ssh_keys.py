@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role
+from app.schemas.ssh_keys import SSHPublicKeyResponse
 
 router = APIRouter(prefix="/ssh-keys", tags=["ssh-keys"])
 
@@ -81,7 +82,7 @@ def import_key(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{key_id}/public")
+@router.get("/{key_id}/public", response_model=SSHPublicKeyResponse)
 def get_public_key(
     key_id: UUID,
     db: Session = Depends(get_db),
@@ -90,7 +91,7 @@ def get_public_key(
     from app.services.ssh_key_service import SSHKeyService
 
     try:
-        return {"public_key": SSHKeyService(db).get_public_key(key_id)}
+        return SSHKeyService(db).get_public_key_response(key_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
