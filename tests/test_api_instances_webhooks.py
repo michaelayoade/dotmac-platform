@@ -85,7 +85,4 @@ class TestInstanceWebhookCreate:
         data = response.json()
         assert data["code"] == "validation_error"
         assert isinstance(data["details"], list)
-        assert any(
-            isinstance(detail, dict) and detail.get("loc", [None])[0] == "body"
-            for detail in data["details"]
-        )
+        assert any(isinstance(detail, dict) and detail.get("loc", [None])[0] == "body" for detail in data["details"])

@@ -26,10 +26,7 @@ _SENSITIVE_QUERY_PARAM_KEYS = {
 
 
 def _redact_sensitive_query_params(query_params: dict[str, str]) -> dict[str, str]:
-    return {
-        key: "***" if key.lower() in _SENSITIVE_QUERY_PARAM_KEYS else value
-        for key, value in query_params.items()
-    }
+    return {key: "***" if key.lower() in _SENSITIVE_QUERY_PARAM_KEYS else value for key, value in query_params.items()}
 
 
 class AuditEvents(ListResponseMixin):

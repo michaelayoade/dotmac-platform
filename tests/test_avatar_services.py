@@ -68,7 +68,7 @@ class TestAvatarMagicBytes:
     """Tests for magic-byte content type detection."""
 
     def test_detect_magic_jpeg(self):
-        content = b"\xFF\xD8\xFF\xe0" + b"x" * 8
+        content = b"\xff\xd8\xff\xe0" + b"x" * 8
         assert avatar_service._detect_content_type_from_magic(content) == "image/jpeg"
 
     def test_detect_magic_png(self):
@@ -94,7 +94,7 @@ class TestAvatarSizeLimits:
     @pytest.mark.asyncio
     async def test_save_avatar_within_size_limit(self, tmp_path):
         """Test saving avatar that's within size limit."""
-        content = b"\xFF\xD8\xFF\xe0" + (b"x" * 996)  # 1KB JPEG-like file
+        content = b"\xff\xd8\xff\xe0" + (b"x" * 996)  # 1KB JPEG-like file
         file = MagicMock(spec=UploadFile)
         file.content_type = "image/jpeg"
         file.read = AsyncMock(return_value=content)
@@ -110,7 +110,7 @@ class TestAvatarSizeLimits:
     @pytest.mark.asyncio
     async def test_save_avatar_exceeds_size_limit(self, tmp_path):
         """Test saving avatar that exceeds size limit."""
-        content = b"\xFF\xD8\xFF\xe0" + (b"x" * ((3 * 1024 * 1024) - 4))  # 3MB JPEG-like file
+        content = b"\xff\xd8\xff\xe0" + (b"x" * ((3 * 1024 * 1024) - 4))  # 3MB JPEG-like file
         file = MagicMock(spec=UploadFile)
         file.content_type = "image/jpeg"
         file.read = AsyncMock(return_value=content)

@@ -27,7 +27,7 @@ def validate_avatar(file: UploadFile) -> None:
 
 def _detect_content_type_from_magic(content: bytes) -> str | None:
     header = content[:12]
-    if header.startswith(b"\xFF\xD8\xFF"):
+    if header.startswith(b"\xff\xd8\xff"):
         return "image/jpeg"
     if header.startswith(b"\x89PNG\r\n\x1a\n"):
         return "image/png"

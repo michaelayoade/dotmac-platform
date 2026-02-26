@@ -77,7 +77,7 @@ async def lifespan(app: FastAPI):
     logger = logging.getLogger(__name__)
 
     # Log startup information
-    app_version = getattr(settings, 'VERSION', 'unknown')
+    app_version = getattr(settings, "VERSION", "unknown")
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
     logger.info("Starting up...")
@@ -120,14 +120,13 @@ async def lifespan(app: FastAPI):
         db.close()
     yield
 
+
 configure_logging()
 
 app = FastAPI(title="DotMac Platform API", lifespan=lifespan)
 
 cors_origins = [
-    origin.strip()
-    for origin in os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
-    if origin.strip()
+    origin.strip() for origin in os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",") if origin.strip()
 ]
 if not cors_origins:
     cors_origins = ["http://localhost:3000"]

@@ -106,8 +106,8 @@ class InstanceService:
         stmt = select(Instance).order_by(Instance.created_at.desc())
         if search:
             # Escape special LIKE characters (% and _) in the search term
-            escaped_search = re.sub(r'([%_])', r'\\\1', search)
-            stmt = stmt.where(Instance.name.ilike(f"%{escaped_search}%", escape='\\'))
+            escaped_search = re.sub(r"([%_])", r"\\\1", search)
+            stmt = stmt.where(Instance.name.ilike(f"%{escaped_search}%", escape="\\"))
         return list(self.db.scalars(stmt).all())
 
     def list_for_server(self, server_id: UUID) -> list[Instance]:

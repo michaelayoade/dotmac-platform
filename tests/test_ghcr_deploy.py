@@ -190,8 +190,8 @@ class TestGenerateEnv:
             existing_env={"ERPNEXT_API_KEY": 'key"\nINJECTED_API=1'},
         )
 
-        assert 'BOOTSTRAP_ADMIN_PASSWORD="safe\\\"\\nINJECTED_FLAG=1"' in content
-        assert 'ERPNEXT_API_KEY="key\\\"\\nINJECTED_API=1"' in content
+        assert 'BOOTSTRAP_ADMIN_PASSWORD="safe\\"\\nINJECTED_FLAG=1"' in content
+        assert 'ERPNEXT_API_KEY="key\\"\\nINJECTED_API=1"' in content
         assert "\nINJECTED_FLAG=1\n" not in content
         assert "\nINJECTED_API=1\n" not in content
 
