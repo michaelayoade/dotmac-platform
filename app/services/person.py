@@ -59,6 +59,7 @@ class People(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
+        query: str | None,
         email: str | None,
         status: str | None,
         is_active: bool | None,
@@ -76,6 +77,9 @@ class People(ListResponseMixin):
                 OrganizationMember.org_id == coerce_uuid(org_id),
                 OrganizationMember.is_active.is_(True),
             )
+        if query:
+            q_like = f"%{query}%"
+            stmt = stmt.where((Person.email.ilike(q_like)) | (Person.display_name.ilike(q_like)))
         if email:
             stmt = stmt.where(Person.email.ilike(f"%{email}%"))
         if status:

@@ -40,6 +40,7 @@ def get_person(person_id: str, request: Request, db: Session = Depends(get_db)):
 @router.get("", response_model=ListResponse[PersonRead])
 def list_people(
     request: Request,
+    query: str | None = Query(default=None),
     email: str | None = None,
     status: str | None = None,
     is_active: bool | None = None,
@@ -51,7 +52,7 @@ def list_people(
 ):
     org_id = getattr(request.state, "org_id", None)
     return person_service.people.list_response(
-        db, email, status, is_active, order_by, order_dir, limit, offset, org_id=org_id
+        db, query, email, status, is_active, order_by, order_dir, limit, offset, org_id=org_id
     )
 
 

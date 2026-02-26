@@ -95,6 +95,35 @@ class TestPersonsAPI:
         data = response.json()
         assert len(data["items"]) >= 1
 
+    def test_list_people_with_search_query(self, client, auth_headers, db_session):
+        """Test listing people with partial query match on email or display_name."""
+        from app.models.person import Person
+
+        email_match = Person(
+            first_name="Search",
+            last_name="Email",
+            email=f"lookup.{uuid.uuid4().hex[:8]}@example.com",
+            display_name="No Match Name",
+        )
+        display_name_match = Person(
+            first_name="Search",
+            last_name="Display",
+            email=f"other.{uuid.uuid4().hex[:8]}@example.com",
+            display_name="Alpha Tester",
+        )
+        db_session.add_all([email_match, display_name_match])
+        db_session.commit()
+
+        response_email = client.get("/api/v1/people?query=lookup", headers=auth_headers)
+        assert response_email.status_code == 200
+        email_items = response_email.json()["items"]
+        assert any(item["id"] == str(email_match.id) for item in email_items)
+
+        response_display_name = client.get("/api/v1/people?query=alpha", headers=auth_headers)
+        assert response_display_name.status_code == 200
+        display_name_items = response_display_name.json()["items"]
+        assert any(item["id"] == str(display_name_match.id) for item in display_name_items)
+
     def test_list_people_with_ordering(self, client, auth_headers):
         """Test listing people with custom ordering."""
         response = client.get("/api/v1/people?order_by=last_name&order_dir=asc", headers=auth_headers)
