@@ -183,6 +183,13 @@ async def audit_middleware(request: Request, call_next):
         db.close()
 
 
+@app.middleware("http")
+async def api_version_header_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-API-Version"] = str(getattr(settings, "VERSION", None) or "0.1.0")
+    return response
+
+
 def _load_audit_settings(db: Session):
     global _AUDIT_SETTINGS_CACHE, _AUDIT_SETTINGS_CACHE_AT
     now = monotonic()
