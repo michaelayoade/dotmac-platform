@@ -130,7 +130,13 @@ class NotificationChannelService:
             logger.warning("Failed to decrypt channel config for %s", channel.channel_id)
             return {}
 
-    def test_channel(self, channel_id: UUID, person_id: UUID | None) -> bool:
+    def test_channel(
+        self,
+        channel_id: UUID,
+        person_id: UUID | None,
+        title: str = "Test notification",
+        message: str = "This is a test message from DotMac Platform.",
+    ) -> bool:
         """Send a test message to a channel. Returns True on success."""
         channel = self._get_owned(channel_id, person_id)
         config = self.decrypt_config(channel)
@@ -138,7 +144,7 @@ class NotificationChannelService:
         from app.services.notification_dispatch_service import NotificationDispatchService
 
         dispatch_svc = NotificationDispatchService(self.db)
-        return dispatch_svc.send_test(channel.channel_type, config)
+        return dispatch_svc.send_test(channel.channel_type, config, title=title, message=message)
 
     def list_channels_enriched(self, person_id: UUID | None) -> list[dict]:
         """List channels with masked config and is_global flag for web display."""

@@ -66,7 +66,13 @@ class NotificationDispatchService:
         logger.warning("Unknown channel type %s", channel.channel_type)
         return False
 
-    def send_test(self, channel_type: ChannelType, config: dict[str, str]) -> bool:
+    def send_test(
+        self,
+        channel_type: ChannelType,
+        config: dict[str, str],
+        title: str = "Test notification",
+        message: str = "This is a test message from DotMac Platform.",
+    ) -> bool:
         """Send a test message to validate channel config."""
         from app.models.notification import NotificationCategory, NotificationSeverity
 
@@ -74,8 +80,8 @@ class NotificationDispatchService:
         test_notification = Notification(
             category=NotificationCategory.system,
             severity=NotificationSeverity.info,
-            title="Test notification",
-            message="This is a test message from DotMac Platform.",
+            title=title,
+            message=message,
             link=None,
         )
 

@@ -162,3 +162,21 @@ class TestSendTest:
         svc = NotificationDispatchService(db_session)
         ok = svc.send_test(ChannelType.email, {"email": "test@example.com"})
         assert ok is True
+
+    @patch("app.services.notification_dispatch_service._send_email", return_value=True)
+    def test_send_test_email_custom_message(self, mock_send, db_session):
+        from app.models.notification_channel import ChannelType
+        from app.services.notification_dispatch_service import NotificationDispatchService
+
+        svc = NotificationDispatchService(db_session)
+        ok = svc.send_test(
+            ChannelType.email,
+            {"email": "test@example.com"},
+            title="Seabone test notification",
+            message="Seabone test notification",
+        )
+        assert ok is True
+
+        notification = mock_send.call_args.args[0]
+        assert notification.title == "Seabone test notification"
+        assert notification.message == "Seabone test notification"
