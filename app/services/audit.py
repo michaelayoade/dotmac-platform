@@ -14,6 +14,23 @@ from app.schemas.audit import AuditEventCreate
 from app.services.common import apply_ordering, apply_pagination, coerce_uuid
 from app.services.response import ListResponseMixin
 
+_SENSITIVE_QUERY_PARAM_KEYS = {
+    "api_key",
+    "token",
+    "access_token",
+    "secret",
+    "password",
+    "key",
+    "authorization",
+}
+
+
+def _redact_sensitive_query_params(query_params: dict[str, str]) -> dict[str, str]:
+    return {
+        key: "***" if key.lower() in _SENSITIVE_QUERY_PARAM_KEYS else value
+        for key, value in query_params.items()
+    }
+
 
 class AuditEvents(ListResponseMixin):
     @staticmethod
@@ -146,7 +163,7 @@ class AuditEvents(ListResponseMixin):
         except ValueError:
             resolved_actor_type = AuditActorType.system
         try:
-            query_params = dict(request.query_params)
+            query_params = _redact_sensitive_query_params(dict(request.query_params))
         except KeyError:
             query_params = {}
         payload = AuditEventCreate(
