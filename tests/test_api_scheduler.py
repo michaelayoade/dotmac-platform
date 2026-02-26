@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 
 from app.models.scheduler import ScheduledTask, ScheduleType
 
@@ -223,6 +224,56 @@ class TestSchedulerAPIV1:
         """Test getting a scheduled task via v1 API."""
         response = client.get(f"/api/v1/scheduler/tasks/{scheduled_task.id}", headers=auth_headers)
         assert response.status_code == 200
+
+    def test_get_scheduler_status_v1(self, client, auth_headers, db_session):
+        """Test scheduler status counts via v1 API."""
+        before = client.get("/api/v1/scheduler/status", headers=auth_headers)
+        assert before.status_code == 200
+        baseline = before.json()
+
+        db_session.add(
+            ScheduledTask(
+                name=f"pending_task_{uuid.uuid4().hex[:8]}",
+                task_name="app.tasks.pending",
+                schedule_type=ScheduleType.interval,
+                interval_seconds=60,
+                enabled=True,
+                last_run_at=None,
+            )
+        )
+        db_session.add(
+            ScheduledTask(
+                name=f"running_task_{uuid.uuid4().hex[:8]}",
+                task_name="app.tasks.running",
+                schedule_type=ScheduleType.interval,
+                interval_seconds=60,
+                enabled=True,
+                last_run_at=datetime.now(UTC),
+            )
+        )
+        db_session.add(
+            ScheduledTask(
+                name=f"completed_task_{uuid.uuid4().hex[:8]}",
+                task_name="app.tasks.completed",
+                schedule_type=ScheduleType.interval,
+                interval_seconds=60,
+                enabled=False,
+                last_run_at=datetime.now(UTC),
+            )
+        )
+        db_session.commit()
+
+        response = client.get("/api/v1/scheduler/status", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["pending"] == baseline["pending"] + 1
+        assert data["running"] == baseline["running"] + 1
+        assert data["completed"] == baseline["completed"] + 1
+
+    def test_get_scheduler_status_v1_unauthorized(self, client):
+        """Test scheduler status requires authentication."""
+        response = client.get("/api/v1/scheduler/status")
+        assert response.status_code == 401
 
 
 class TestScheduledTaskValidation:

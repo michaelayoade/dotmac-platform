@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_role, require_user_auth
 from app.db import SessionLocal
+from app.models.scheduler import ScheduledTask
 from app.schemas.common import ListResponse
 from app.schemas.scheduler import (
     ScheduledTaskCreate,
@@ -36,6 +38,27 @@ def list_scheduled_tasks(
     db: Session = Depends(get_db),
 ):
     return scheduler_service.scheduled_tasks.list_response(db, enabled, order_by, order_dir, limit, offset)
+
+
+@router.get(
+    "/status",
+    dependencies=[Depends(require_user_auth)],
+)
+def get_scheduler_status(db: Session = Depends(get_db)):
+    counts = db.execute(
+        select(
+            func.count().filter(ScheduledTask.enabled.is_(True), ScheduledTask.last_run_at.is_(None)).label("pending"),
+            func.count()
+            .filter(ScheduledTask.enabled.is_(True), ScheduledTask.last_run_at.is_not(None))
+            .label("running"),
+            func.count().filter(ScheduledTask.enabled.is_(False)).label("completed"),
+        )
+    ).one()
+    return {
+        "pending": int(counts.pending or 0),
+        "running": int(counts.running or 0),
+        "completed": int(counts.completed or 0),
+    }
 
 
 @router.post(
