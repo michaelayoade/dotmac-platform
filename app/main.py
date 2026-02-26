@@ -21,6 +21,7 @@ from app.api.catalog import router as catalog_api_router
 from app.api.deps import require_instance_access_from_path, require_role, require_user_auth
 from app.api.dr import router as dr_api_router
 from app.api.git_repos import router as git_repos_api_router
+from app.api.health import router as health_api_router
 from app.api.observability import router as observability_api_router
 from app.api.organizations import router as organizations_api_router
 from app.api.persons import router as people_router
@@ -280,6 +281,7 @@ from app.api.notifications import router as notifications_api_router
 
 _include_api_router(notifications_api_router, dependencies=[Depends(require_user_auth)])
 app.include_router(observability_api_router, prefix="/api/v1", dependencies=[Depends(require_user_auth)])
+app.include_router(health_api_router, prefix="/api/v1")
 # ssh-keys web UI also uses "/ssh-keys"; keep API namespaced to avoid route shadowing.
 app.include_router(ssh_keys_api_router, prefix="/api/v1", dependencies=[Depends(require_user_auth)])
 # git-repos API only at /api/v1 — root /git-repos is the web UI
