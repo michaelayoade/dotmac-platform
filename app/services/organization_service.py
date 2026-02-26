@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.organization import Organization
@@ -25,6 +25,57 @@ class OrganizationService:
 
     def get_by_code(self, org_code: str) -> Organization | None:
         return self.db.scalar(select(Organization).where(Organization.org_code == org_code))
+
+    @staticmethod
+    def _member_counts_subquery():
+        return (
+            select(
+                OrganizationMember.org_id.label("org_id"),
+                func.count(OrganizationMember.person_id).label("member_count"),
+            )
+            .where(OrganizationMember.is_active.is_(True))
+            .group_by(OrganizationMember.org_id)
+            .subquery()
+        )
+
+    def get_by_id_with_member_count(self, org_id: UUID) -> tuple[Organization, int] | None:
+        member_counts_sq = self._member_counts_subquery()
+        stmt = (
+            select(
+                Organization,
+                func.coalesce(member_counts_sq.c.member_count, 0).label("member_count"),
+            )
+            .outerjoin(member_counts_sq, member_counts_sq.c.org_id == Organization.org_id)
+            .where(Organization.org_id == org_id)
+        )
+        row = self.db.execute(stmt).one_or_none()
+        if row is None:
+            return None
+        org, member_count = row
+        return org, int(member_count)
+
+    def list_with_member_counts(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        org_id: UUID | None = None,
+    ) -> list[tuple[Organization, int]]:
+        member_counts_sq = self._member_counts_subquery()
+        stmt = (
+            select(
+                Organization,
+                func.coalesce(member_counts_sq.c.member_count, 0).label("member_count"),
+            )
+            .outerjoin(member_counts_sq, member_counts_sq.c.org_id == Organization.org_id)
+            .order_by(Organization.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        if org_id is not None:
+            stmt = stmt.where(Organization.org_id == org_id)
+        rows = self.db.execute(stmt).all()
+        return [(org, int(member_count)) for org, member_count in rows]
 
     def get_or_create(self, org_code: str, org_name: str) -> Organization:
         org_code = org_code.strip().upper()
@@ -96,12 +147,13 @@ class OrganizationService:
         self.db.flush()
 
     @staticmethod
-    def serialize(org: Organization) -> dict:
+    def serialize(org: Organization, *, member_count: int | None = None) -> dict:
         return {
             "org_id": str(org.org_id),
             "org_code": org.org_code,
             "org_name": org.org_name,
             "is_active": org.is_active,
+            "member_count": member_count,
             "created_at": org.created_at.isoformat() if org.created_at else None,
             "updated_at": org.updated_at.isoformat() if org.updated_at else None,
         }

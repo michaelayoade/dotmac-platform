@@ -28,10 +28,17 @@ def list_orgs(
     if not org_id:
         raise HTTPException(status_code=401, detail="Organization context required")
     svc = OrganizationService(db)
-    org = svc.get_by_id(UUID(org_id))
-    if not org:
+    org_uuid = UUID(str(org_id))
+    org = svc.get_by_id(org_uuid)
+    if org is None:
         raise HTTPException(status_code=404, detail="Organization not found")
-    return {"items": [svc.serialize(org)], "count": 1, "limit": limit, "offset": offset}
+    org_rows = svc.list_with_member_counts(limit=limit, offset=offset, org_id=org_uuid)
+    return {
+        "items": [svc.serialize(row_org, member_count=member_count) for row_org, member_count in org_rows],
+        "count": 1,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/{org_id}", response_model=OrganizationRead)
@@ -40,8 +47,13 @@ def get_org(
     db: Session = Depends(get_db),
     auth=Depends(require_user_auth),
 ):
-    org = require_org_access(org_id, db=db, auth=auth)
-    return OrganizationService(db).serialize(org)
+    require_org_access(org_id, db=db, auth=auth)
+    svc = OrganizationService(db)
+    row = svc.get_by_id_with_member_count(org_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    org, member_count = row
+    return svc.serialize(org, member_count=member_count)
 
 
 @router.post(
@@ -54,7 +66,11 @@ def create_org(payload: OrganizationCreate, db: Session = Depends(get_db)):
     svc = OrganizationService(db)
     org = svc.create(payload.org_code, payload.org_name)
     db.commit()
-    return svc.serialize(org)
+    row = svc.get_by_id_with_member_count(org.org_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    org, member_count = row
+    return svc.serialize(org, member_count=member_count)
 
 
 @router.patch(
@@ -69,7 +85,11 @@ def update_org(
     svc = OrganizationService(db)
     org = svc.update(org_id, payload)
     db.commit()
-    return svc.serialize(org)
+    row = svc.get_by_id_with_member_count(org.org_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    org, member_count = row
+    return svc.serialize(org, member_count=member_count)
 
 
 @router.get("/{org_id}/members", response_model=ListResponse[OrganizationMemberRead])

@@ -21,6 +21,7 @@ class OrganizationUpdate(BaseModel):
 
 class OrganizationRead(OrganizationBase):
     org_id: UUID
+    member_count: int | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

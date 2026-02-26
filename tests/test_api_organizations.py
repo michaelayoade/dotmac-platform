@@ -7,6 +7,16 @@ def test_list_orgs_returns_current_org(client, admin_headers):
     data = resp.json()
     assert data["count"] >= 1
     assert len(data["items"]) >= 1
+    assert "member_count" in data["items"][0]
+    assert isinstance(data["items"][0]["member_count"], int)
+
+
+def test_get_org_includes_member_count(client, admin_headers, admin_org_id):
+    resp = client.get(f"/api/v1/orgs/{admin_org_id}", headers=admin_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "member_count" in data
+    assert isinstance(data["member_count"], int)
 
 
 def test_list_members_and_add_member(client, admin_headers, db_session, admin_org_id):
