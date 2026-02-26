@@ -71,7 +71,13 @@ def _api_key_hash_secret() -> str | None:
 def hash_api_key(value: str, *, legacy: bool = False) -> str:
     secret = _api_key_hash_secret()
     if legacy or not secret:
+        if not secret and not legacy:
+            logger.warning(
+                "API_KEY_HASH_SECRET and JWT_SECRET are not configured; "
+                "falling back to plain SHA-256 for API key hashing"
+            )
         return hashlib.sha256(value.encode("utf-8")).hexdigest()
+    # secret is guaranteed non‑None here
     return hmac.new(secret.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()
 
 

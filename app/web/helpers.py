@@ -81,7 +81,7 @@ def ctx(request, auth, title: str, active_page: str = "", **extra) -> dict:
 
 _csrf_env = os.getenv("CSRF_SECRET_KEY")
 if not _csrf_env:
-    logger.warning("CSRF_SECRET_KEY not set — using random key (tokens won't survive restarts)")
+    logger.info("CSRF_SECRET_KEY not set — using random key (tokens won't survive restarts)")
 _CSRF_SECRET_KEY = bytes.fromhex(_csrf_env) if _csrf_env else secrets.token_bytes(32)
 _CSRF_TOKEN_TTL = 3600 * 4  # 4 hours
 
