@@ -17,6 +17,9 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+# TODO: Security - Ensure _get_client_ip validates immediate remote IP against trusted proxies
+# before trusting X-Forwarded-For header to prevent spoofing.
+
 from app.models.auth import (
     ApiKey,
     AuthProvider,
@@ -116,13 +119,15 @@ def _get_redis_client() -> redis.Redis | None:
         return _REDIS_CLIENT
     url = os.getenv("REDIS_URL")
     if not url:
+        logger.warning("REDIS_URL environment variable is not set")
         return None
     try:
         client = redis.Redis.from_url(url, decode_responses=True)
         client.ping()
         _REDIS_CLIENT = client
         return client
-    except redis.RedisError:
+    except redis.RedisError as e:
+        logger.error(f"Failed to connect to Redis: {e}")
         return None
 
 
@@ -413,6 +418,8 @@ class ApiKeys(ListResponseMixin):
     def generate_with_rate_limit(
         db: Session, payload: ApiKeyGenerateRequest, request: Request | None, org_id: str | None = None
     ):
+        # SECURITY: client_ip is taken from request.client.host which is the immediate remote IP.
+        # If behind a trusted proxy, ensure _get_client_ip validates the proxy IP before trusting X-Forwarded-For.
         client_ip = "unknown"
         if request is not None and request.client:
             client_ip = request.client.host
@@ -433,6 +440,7 @@ class ApiKeys(ListResponseMixin):
             if count > max(max_per_window, 1):
                 raise HTTPException(status_code=429, detail="Rate limit exceeded")
         except redis.RedisError as exc:
+            logger.error(f"Redis error during rate limiting: {exc}")
             raise HTTPException(
                 status_code=503,
                 detail="Rate limiting unavailable (Redis error)",
