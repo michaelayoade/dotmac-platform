@@ -64,13 +64,37 @@ class TestAvatarValidation:
             assert exc.value.status_code == 400
 
 
+class TestAvatarMagicBytes:
+    """Tests for magic-byte content type detection."""
+
+    def test_detect_magic_jpeg(self):
+        content = b"\xFF\xD8\xFF\xe0" + b"x" * 8
+        assert avatar_service._detect_content_type_from_magic(content) == "image/jpeg"
+
+    def test_detect_magic_png(self):
+        content = b"\x89PNG\r\n\x1a\n" + b"x" * 4
+        assert avatar_service._detect_content_type_from_magic(content) == "image/png"
+
+    def test_detect_magic_gif(self):
+        content = b"GIF89a" + b"x" * 6
+        assert avatar_service._detect_content_type_from_magic(content) == "image/gif"
+
+    def test_detect_magic_webp(self):
+        content = b"RIFF" + b"1234" + b"WEBP" + b"x" * 4
+        assert avatar_service._detect_content_type_from_magic(content) == "image/webp"
+
+    def test_detect_magic_invalid(self):
+        content = b"not-an-image"
+        assert avatar_service._detect_content_type_from_magic(content) is None
+
+
 class TestAvatarSizeLimits:
     """Tests for avatar file size validation."""
 
     @pytest.mark.asyncio
     async def test_save_avatar_within_size_limit(self, tmp_path):
         """Test saving avatar that's within size limit."""
-        content = b"x" * 1000  # 1KB file
+        content = b"\xFF\xD8\xFF\xe0" + (b"x" * 996)  # 1KB JPEG-like file
         file = MagicMock(spec=UploadFile)
         file.content_type = "image/jpeg"
         file.read = AsyncMock(return_value=content)
@@ -86,7 +110,7 @@ class TestAvatarSizeLimits:
     @pytest.mark.asyncio
     async def test_save_avatar_exceeds_size_limit(self, tmp_path):
         """Test saving avatar that exceeds size limit."""
-        content = b"x" * (3 * 1024 * 1024)  # 3MB file
+        content = b"\xFF\xD8\xFF\xe0" + (b"x" * ((3 * 1024 * 1024) - 4))  # 3MB JPEG-like file
         file = MagicMock(spec=UploadFile)
         file.content_type = "image/jpeg"
         file.read = AsyncMock(return_value=content)
@@ -103,7 +127,7 @@ class TestAvatarSizeLimits:
     async def test_save_avatar_creates_directory(self, tmp_path):
         """Test that save_avatar creates upload directory if it doesn't exist."""
         upload_dir = tmp_path / "avatars" / "nested"
-        content = b"x" * 100
+        content = b"\x89PNG\r\n\x1a\n" + (b"x" * 92)
         file = MagicMock(spec=UploadFile)
         file.content_type = "image/png"
         file.read = AsyncMock(return_value=content)
@@ -114,6 +138,22 @@ class TestAvatarSizeLimits:
                     with patch.object(avatar_service.settings, "avatar_url_prefix", "/static/avatars"):
                         url = await avatar_service.save_avatar(file, "person-456")
                         assert upload_dir.exists()
+
+    @pytest.mark.asyncio
+    async def test_save_avatar_rejects_invalid_magic_bytes(self, tmp_path):
+        """Test saving avatar fails when file signature is not an allowed image type."""
+        content = b"not-an-image"
+        file = MagicMock(spec=UploadFile)
+        file.content_type = "image/jpeg"
+        file.read = AsyncMock(return_value=content)
+
+        with patch.object(avatar_service.settings, "avatar_allowed_types", "image/jpeg,image/png"):
+            with patch.object(avatar_service.settings, "avatar_max_size_bytes", 1024 * 1024):
+                with patch.object(avatar_service.settings, "avatar_upload_dir", str(tmp_path)):
+                    with pytest.raises(HTTPException) as exc:
+                        await avatar_service.save_avatar(file, "person-789")
+                    assert exc.value.status_code == 422
+                    assert "Invalid file signature" in exc.value.detail
 
 
 class TestAvatarFileCleanup:
