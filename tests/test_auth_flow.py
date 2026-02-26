@@ -113,3 +113,66 @@ def test_decode_access_token_uses_openbao_secret(monkeypatch):
 
     assert decoded["sub"] == "user-id"
     assert decoded["typ"] == "access"
+
+
+# ---------------------------------------------------------------------------
+# _jwt_algorithm allowlist guard tests
+# ---------------------------------------------------------------------------
+
+
+def test_jwt_algorithm_default_is_hs256(monkeypatch):
+    monkeypatch.delenv("JWT_ALGORITHM", raising=False)
+    from app.services.auth_flow import _jwt_algorithm
+
+    assert _jwt_algorithm(None) == "HS256"
+
+
+@pytest.mark.parametrize("algo", ["HS256", "HS384", "HS512"])
+def test_jwt_algorithm_allows_safe_algorithms(monkeypatch, algo):
+    monkeypatch.setenv("JWT_ALGORITHM", algo)
+    from app.services.auth_flow import _jwt_algorithm
+
+    assert _jwt_algorithm(None) == algo
+
+
+@pytest.mark.parametrize("algo", ["RS256", "RS512", "PS256", "ES256", "none", "HS999"])
+def test_jwt_algorithm_rejects_unsafe_algorithms(monkeypatch, algo):
+    monkeypatch.setenv("JWT_ALGORITHM", algo)
+    from app.services.auth_flow import _jwt_algorithm
+
+    with pytest.raises(HTTPException) as exc:
+        _jwt_algorithm(None)
+    assert exc.value.status_code == 500
+    assert "Unsafe JWT algorithm" in exc.value.detail
+
+
+def test_jwt_algorithm_normalises_lowercase_env_var(monkeypatch):
+    """Lowercase variants of safe algorithms are normalised to uppercase and accepted."""
+    monkeypatch.setenv("JWT_ALGORITHM", "hs384")
+    from app.services.auth_flow import _jwt_algorithm
+
+    assert _jwt_algorithm(None) == "HS384"
+
+
+def test_jwt_algorithm_rejects_unsafe_from_db_value(monkeypatch):
+    """Guard fires when the DB setting resolves to an unsafe algorithm."""
+    import app.services.auth_flow as auth_flow_module
+
+    monkeypatch.delenv("JWT_ALGORITHM", raising=False)
+    monkeypatch.setattr(
+        auth_flow_module,
+        "_setting_value",
+        lambda _db, key: "RS256" if key == "jwt_algorithm" else None,
+    )
+    from app.services.auth_flow import _jwt_algorithm
+
+    with pytest.raises(HTTPException) as exc:
+        _jwt_algorithm(None)
+    assert exc.value.status_code == 500
+    assert "Unsafe JWT algorithm" in exc.value.detail
+
+
+def test_jwt_algorithm_allowed_set_is_hmac_only():
+    from app.services.auth_flow import _ALLOWED_JWT_ALGORITHMS
+
+    assert _ALLOWED_JWT_ALGORITHMS == {"HS256", "HS384", "HS512"}
