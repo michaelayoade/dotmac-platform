@@ -1,8 +1,35 @@
 import csv
 import io
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from app.models.audit import AuditActorType, AuditEvent
+
+
+def _seed_export_events(
+    db_session,
+    *,
+    actor_id: str,
+    base_time: datetime,
+    count: int,
+    action_prefix: str,
+) -> None:
+    events: list[AuditEvent] = []
+    for i in range(count):
+        events.append(
+            AuditEvent(
+                actor_id=actor_id,
+                actor_type=AuditActorType.user,
+                action=f"{action_prefix}_{i}",
+                entity_type="test_entity",
+                entity_id=str(uuid.uuid4()),
+                is_success=True,
+                status_code=200,
+                occurred_at=base_time + timedelta(minutes=i),
+            )
+        )
+    db_session.add_all(events)
+    db_session.commit()
 
 
 class TestAuditEventsAPI:
@@ -131,6 +158,7 @@ class TestAuditEventsAPIV1:
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/csv")
         assert response.headers["content-disposition"] == 'attachment; filename="audit-log.csv"'
+        assert response.headers["x-row-limit"] == "100000"
 
         reader = csv.DictReader(io.StringIO(response.text))
         assert reader.fieldnames == ["timestamp", "user", "action", "resource", "detail"]
@@ -142,6 +170,58 @@ class TestAuditEventsAPIV1:
             and row["resource"] == f"{audit_event.entity_type}:{audit_event.entity_id}"
             for row in rows
         )
+
+    def test_export_audit_events_csv_v1_enforces_max_rows(self, client, admin_headers, db_session, person):
+        """Test CSV export applies row limit before fetching."""
+        base_time = datetime(2099, 1, 1, tzinfo=UTC)
+        _seed_export_events(
+            db_session,
+            actor_id=str(person.id),
+            base_time=base_time,
+            count=5,
+            action_prefix="export_limit",
+        )
+
+        response = client.get(
+            "/api/v1/audit/export",
+            params={
+                "max_rows": 3,
+                "started_after": (base_time - timedelta(minutes=1)).isoformat(),
+                "started_before": (base_time + timedelta(minutes=10)).isoformat(),
+            },
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        assert response.headers["x-row-limit"] == "3"
+
+        rows = list(csv.DictReader(io.StringIO(response.text)))
+        assert len(rows) == 3
+        assert [row["action"] for row in rows] == ["export_limit_4", "export_limit_3", "export_limit_2"]
+
+    def test_export_audit_events_csv_v1_filters_started_window(self, client, admin_headers, db_session, person):
+        """Test CSV export filters by started_after/started_before."""
+        base_time = datetime(2098, 1, 1, tzinfo=UTC)
+        _seed_export_events(
+            db_session,
+            actor_id=str(person.id),
+            base_time=base_time,
+            count=3,
+            action_prefix="export_window",
+        )
+
+        response = client.get(
+            "/api/v1/audit/export",
+            params={
+                "max_rows": 10,
+                "started_after": (base_time + timedelta(minutes=5)).isoformat(),
+                "started_before": (base_time + timedelta(minutes=15)).isoformat(),
+            },
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+
+        rows = list(csv.DictReader(io.StringIO(response.text)))
+        assert [row["action"] for row in rows] == ["export_window_1"]
 
     def test_export_audit_events_csv_v1_unauthorized(self, client):
         """Test exporting audit events requires auth."""

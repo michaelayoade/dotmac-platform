@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import select
@@ -73,8 +74,18 @@ def list_audit_events(
 
 
 @export_router.get("/export")
-def export_audit_events_csv(db: Session = Depends(get_db)) -> Response:
-    stmt = select(AuditEvent).where(AuditEvent.is_active.is_(True)).order_by(AuditEvent.occurred_at.desc())
+def export_audit_events_csv(
+    max_rows: int = Query(default=100000, ge=1, le=1000000),
+    started_after: datetime | None = Query(default=None),
+    started_before: datetime | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> Response:
+    stmt = select(AuditEvent).where(AuditEvent.is_active.is_(True))
+    if started_after is not None:
+        stmt = stmt.where(AuditEvent.occurred_at >= started_after)
+    if started_before is not None:
+        stmt = stmt.where(AuditEvent.occurred_at <= started_before)
+    stmt = stmt.order_by(AuditEvent.occurred_at.desc()).limit(max_rows)
     events = db.scalars(stmt).all()
 
     buf = io.StringIO()
@@ -96,5 +107,8 @@ def export_audit_events_csv(db: Session = Depends(get_db)) -> Response:
     return Response(
         content=buf.getvalue(),
         media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="audit-log.csv"'},
+        headers={
+            "Content-Disposition": 'attachment; filename="audit-log.csv"',
+            "X-Row-Limit": str(max_rows),
+        },
     )
