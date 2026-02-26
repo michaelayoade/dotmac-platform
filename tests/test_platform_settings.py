@@ -14,7 +14,10 @@ def test_platform_settings_rejects_unknown_key(db_session):
     with pytest.raises(ValueError, match="Unknown platform setting key"):
         svc.set("unexpected_key", "value")
 
-    rows = db_session.query(DomainSetting).filter(DomainSetting.domain == SettingDomain.platform).all()
+    rows = db_session.query(DomainSetting).filter(
+        DomainSetting.domain == SettingDomain.platform,
+        DomainSetting.key == "unexpected_key",
+    ).all()
     assert rows == []
 
 

@@ -315,23 +315,23 @@ class BackupService:
 
     def purge_old_backups(self, retention_days: int = DEFAULT_RETENTION_DAYS) -> int:
         """Delete backup records older than the specified number of days.
-        
+
         Args:
             retention_days: Number of days to retain backups (default: 30)
-            
+
         Returns:
             Number of backup records purged
         """
         cutoff_date = datetime.now(UTC) - timedelta(days=retention_days)
-        
+
         # Find all backups older than the cutoff date
         stmt = select(Backup).where(Backup.created_at < cutoff_date)
         old_backups = list(self.db.scalars(stmt).all())
-        
+
         if not old_backups:
             logger.info("No backups older than %d days found for purging", retention_days)
             return 0
-        
+
         # Delete each backup (this will also handle file deletion via delete_backup)
         purged_count = 0
         for backup in old_backups:
@@ -340,6 +340,6 @@ class BackupService:
                 purged_count += 1
             except Exception as e:
                 logger.warning("Failed to delete backup %s: %s", backup.backup_id, str(e))
-        
+
         logger.info("Purged %d backup records older than %d days", purged_count, retention_days)
         return purged_count
