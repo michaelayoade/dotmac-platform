@@ -9,6 +9,36 @@ def test_list_orgs_returns_current_org(client, admin_headers):
     assert len(data["items"]) >= 1
 
 
+def test_list_orgs_includes_instance_count(client, admin_headers, db_session, admin_org_id):
+    from app.models.instance import Instance
+    from app.models.server import Server
+
+    server = Server(name="org-test-server", hostname="org-test.example.com")
+    db_session.add(server)
+    db_session.commit()
+    db_session.refresh(server)
+
+    instance = Instance(
+        server_id=server.server_id,
+        org_id=admin_org_id,
+        org_code=f"ORGTEST_{uuid.uuid4().hex[:8].upper()}",
+        org_name="Admin Org",
+        app_port=18080,
+        db_port=15432,
+        redis_port=16379,
+    )
+    db_session.add(instance)
+    db_session.commit()
+
+    expected_count = db_session.query(Instance).filter(Instance.org_id == admin_org_id).count()
+
+    resp = client.get("/api/v1/orgs", headers=admin_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["count"] == 1
+    assert data["items"][0]["instance_count"] == expected_count
+
+
 def test_list_members_and_add_member(client, admin_headers, db_session, admin_org_id):
     from app.models.organization import Organization
     from app.models.person import Person
