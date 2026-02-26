@@ -1,6 +1,7 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_role
@@ -108,17 +109,16 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     remaining = login_limiter.get_remaining(request)
     reset_time = login_limiter.get_reset_time(request)
     
-    # Return response with headers
-    # Use JSONResponse to add headers while maintaining the correct response format
-    from fastapi.responses import JSONResponse
-    return JSONResponse(
-        content=response_content,
-        headers={
-            "X-RateLimit-Limit": str(login_limiter.max_requests),
-            "X-RateLimit-Remaining": str(remaining),
-            "X-RateLimit-Reset": str(reset_time),
-        }
-    )
+    rl_headers = {
+        "X-RateLimit-Limit": str(login_limiter.max_requests),
+        "X-RateLimit-Remaining": str(remaining),
+        "X-RateLimit-Reset": str(reset_time),
+    }
+    if isinstance(response_content, Response):
+        for k, v in rl_headers.items():
+            response_content.headers[k] = v
+        return response_content
+    return JSONResponse(content=response_content, headers=rl_headers)
 
 
 @router.post(
