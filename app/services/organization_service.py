@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.instance import Instance
 from app.models.organization import Organization
 from app.models.organization_member import OrganizationMember
 from app.models.person import Person
@@ -95,13 +96,16 @@ class OrganizationService:
         member.is_active = False
         self.db.flush()
 
-    @staticmethod
-    def serialize(org: Organization) -> dict:
+    def serialize(self, org: Organization) -> dict:
+        instance_count = self.db.scalar(
+            select(func.count()).select_from(Instance).where(Instance.org_id == org.org_id)
+        )
         return {
             "org_id": str(org.org_id),
             "org_code": org.org_code,
             "org_name": org.org_name,
             "is_active": org.is_active,
+            "instance_count": int(instance_count or 0),
             "created_at": org.created_at.isoformat() if org.created_at else None,
             "updated_at": org.updated_at.isoformat() if org.updated_at else None,
         }
