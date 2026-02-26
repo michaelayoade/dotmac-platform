@@ -8,6 +8,7 @@ from time import monotonic
 
 import redis as redis_lib
 from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy import select
@@ -120,6 +121,22 @@ async def lifespan(app: FastAPI):
 configure_logging()
 
 app = FastAPI(title="DotMac Platform API", lifespan=lifespan)
+
+cors_origins = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
+    if origin.strip()
+]
+if not cors_origins:
+    cors_origins = ["http://localhost:3000"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 _AUDIT_SETTINGS_CACHE: dict | None = None
 _AUDIT_SETTINGS_CACHE_AT: float | None = None
