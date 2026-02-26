@@ -960,8 +960,16 @@ def list_pending_approvals(
 ):
     from app.services.approval_service import ApprovalService
 
+    org_id = auth.get("org_id") if isinstance(auth, dict) else None
+    if not org_id:
+        raise HTTPException(status_code=401, detail="Organization context required")
+    try:
+        org_uuid = UUID(str(org_id))
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Organization context required")
+
     svc = ApprovalService(db)
-    approvals = svc.get_pending()
+    approvals = svc.get_pending(org_id=org_uuid)
     return [svc.serialize_approval(a) for a in paginate_list(approvals, limit, offset)]
 
 
