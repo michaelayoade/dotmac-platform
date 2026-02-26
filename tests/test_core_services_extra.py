@@ -65,6 +65,54 @@ def test_audit_log_request(db_session):
     assert len(events) == len(before) + 1
 
 
+def test_audit_log_request_redacts_sensitive_query_params(db_session):
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/test-redaction",
+        "query_string": b"password=topsecret&safe=value",
+        "headers": [],
+        "client": ("127.0.0.1", 12345),
+    }
+    request = Request(scope)
+    response = Response(status_code=200)
+    before = audit_service.audit_events.list(
+        db_session,
+        actor_id=None,
+        actor_type=None,
+        action="GET",
+        entity_type="/test-redaction",
+        request_id=None,
+        is_success=True,
+        status_code=200,
+        is_active=None,
+        order_by="occurred_at",
+        order_dir="desc",
+        limit=100,
+        offset=0,
+    )
+
+    audit_service.audit_events.log_request(db_session, request, response)
+    events = audit_service.audit_events.list(
+        db_session,
+        actor_id=None,
+        actor_type=None,
+        action="GET",
+        entity_type="/test-redaction",
+        request_id=None,
+        is_success=True,
+        status_code=200,
+        is_active=None,
+        order_by="occurred_at",
+        order_dir="desc",
+        limit=100,
+        offset=0,
+    )
+    assert len(events) == len(before) + 1
+    assert events[0].metadata_["query"]["password"] == "***"
+    assert events[0].metadata_["query"]["safe"] == "value"
+
+
 def test_scheduler_refresh_response():
     result = scheduler_service.refresh_schedule()
     assert "detail" in result
