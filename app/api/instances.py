@@ -1194,7 +1194,7 @@ def create_alert_rule(
         try:
             parsed_config = _json.loads(channel_config)
         except (ValueError, TypeError):
-            pass
+            raise HTTPException(status_code=422, detail="channel_config must be valid JSON")
 
     svc = AlertService(db)
     rule = svc.create_rule(
