@@ -33,6 +33,7 @@ def test_generate_key(db_session):
     assert key.public_key
     assert key.private_key_encrypted
     assert key.fingerprint
+    assert key.fingerprint.startswith("SHA256:")
 
 
 def test_import_key(db_session):
@@ -50,6 +51,7 @@ def test_import_key(db_session):
     assert imported.label == "imported"
     assert imported.public_key
     assert imported.fingerprint
+    assert imported.fingerprint.startswith("SHA256:")
 
 
 def test_deploy_to_server_sets_ssh_key_id(db_session):

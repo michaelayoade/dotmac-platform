@@ -74,6 +74,7 @@ def test_import_and_get_public(db_session):
     )
     pub = get_public_key(UUID(imported["key_id"]), db=db_session, auth={"person_id": "tester"})
     assert pub["public_key"].startswith("ssh-")
+    assert pub["fingerprint"] == imported["fingerprint"]
 
 
 def test_delete_key(db_session):
