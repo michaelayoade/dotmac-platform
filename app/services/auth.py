@@ -68,9 +68,25 @@ def _api_key_hash_secret() -> str | None:
     return os.getenv("API_KEY_HASH_SECRET") or os.getenv("JWT_SECRET")
 
 
+_API_KEY_HASH_SECRET_WARNING_LOGGED = False
+
+
+def _warn_if_missing_api_key_hash_secret() -> None:
+    global _API_KEY_HASH_SECRET_WARNING_LOGGED
+    if _API_KEY_HASH_SECRET_WARNING_LOGGED:
+        return
+    logger.warning(
+        "API key hashing is using plain SHA-256 because neither API_KEY_HASH_SECRET nor JWT_SECRET is configured."
+    )
+    _API_KEY_HASH_SECRET_WARNING_LOGGED = True
+
+
 def hash_api_key(value: str, *, legacy: bool = False) -> str:
     secret = _api_key_hash_secret()
-    if legacy or not secret:
+    if legacy:
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()
+    if not secret:
+        _warn_if_missing_api_key_hash_secret()
         return hashlib.sha256(value.encode("utf-8")).hexdigest()
     return hmac.new(secret.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()
 
@@ -78,6 +94,7 @@ def hash_api_key(value: str, *, legacy: bool = False) -> str:
 def hash_api_key_candidates(value: str) -> list[str]:
     secret = _api_key_hash_secret()
     if not secret:
+        _warn_if_missing_api_key_hash_secret()
         return [hash_api_key(value, legacy=True)]
     return [hash_api_key(value), hash_api_key(value, legacy=True)]
 
