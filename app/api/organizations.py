@@ -31,7 +31,14 @@ def list_orgs(
     org = svc.get_by_id(UUID(org_id))
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
-    return {"items": [svc.serialize(org)], "count": 1, "limit": limit, "offset": offset}
+    # Get member count
+    member_count = svc.get_member_count(org.org_id)
+    return {
+        "items": [svc.serialize(org, member_count)],
+        "count": 1,
+        "limit": limit,
+        "offset": offset
+    }
 
 
 @router.get("/{org_id}", response_model=OrganizationRead)
@@ -41,7 +48,9 @@ def get_org(
     auth=Depends(require_user_auth),
 ):
     org = require_org_access(org_id, db=db, auth=auth)
-    return OrganizationService(db).serialize(org)
+    svc = OrganizationService(db)
+    member_count = svc.get_member_count(org_id)
+    return svc.serialize(org, member_count)
 
 
 @router.post(
@@ -54,7 +63,8 @@ def create_org(payload: OrganizationCreate, db: Session = Depends(get_db)):
     svc = OrganizationService(db)
     org = svc.create(payload.org_code, payload.org_name)
     db.commit()
-    return svc.serialize(org)
+    member_count = svc.get_member_count(org.org_id)
+    return svc.serialize(org, member_count)
 
 
 @router.patch(
@@ -69,7 +79,8 @@ def update_org(
     svc = OrganizationService(db)
     org = svc.update(org_id, payload)
     db.commit()
-    return svc.serialize(org)
+    member_count = svc.get_member_count(org_id)
+    return svc.serialize(org, member_count)
 
 
 @router.get("/{org_id}/members", response_model=ListResponse[OrganizationMemberRead])

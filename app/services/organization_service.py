@@ -23,6 +23,15 @@ class OrganizationService:
     def get_by_id(self, org_id: UUID) -> Organization | None:
         return self.db.get(Organization, org_id)
 
+    def get_member_count(self, org_id: UUID) -> int:
+        from sqlalchemy import func, select
+        from app.models.organization_member import OrganizationMember
+        stmt = select(func.count(OrganizationMember.id)).where(
+            OrganizationMember.org_id == org_id,
+            OrganizationMember.is_active == True
+        )
+        return self.db.scalar(stmt) or 0
+
     def get_by_code(self, org_code: str) -> Organization | None:
         return self.db.scalar(select(Organization).where(Organization.org_code == org_code))
 
@@ -95,13 +104,15 @@ class OrganizationService:
         member.is_active = False
         self.db.flush()
 
-    @staticmethod
-    def serialize(org: Organization) -> dict:
+    def serialize(self, org: Organization, member_count: int | None = None) -> dict:
+        if member_count is None:
+            member_count = self.get_member_count(org.org_id)
         return {
             "org_id": str(org.org_id),
             "org_code": org.org_code,
             "org_name": org.org_name,
             "is_active": org.is_active,
+            "member_count": member_count,
             "created_at": org.created_at.isoformat() if org.created_at else None,
             "updated_at": org.updated_at.isoformat() if org.updated_at else None,
         }
