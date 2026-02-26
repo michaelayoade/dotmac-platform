@@ -19,7 +19,6 @@ from sqlalchemy.orm import Session
 
 # TODO: Security - Ensure _get_client_ip validates immediate remote IP against trusted proxies
 # before trusting X-Forwarded-For header to prevent spoofing.
-
 from app.models.auth import (
     ApiKey,
     AuthProvider,

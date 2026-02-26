@@ -94,7 +94,7 @@ def get_db():
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
     # Check rate limit first
     login_limiter.check(request)
-    
+
     # Get login response
     response_content = auth_flow_service.auth_flow.login_response(
         db,
@@ -104,11 +104,11 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
         payload.provider,
         payload.org_code,
     )
-    
+
     # Calculate rate limit headers using the limiter's methods
     remaining = login_limiter.get_remaining(request)
     reset_time = login_limiter.get_reset_time(request)
-    
+
     rl_headers = {
         "X-RateLimit-Limit": str(login_limiter.max_requests),
         "X-RateLimit-Remaining": str(remaining),

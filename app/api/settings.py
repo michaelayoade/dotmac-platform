@@ -9,8 +9,8 @@ from app.db import SessionLocal
 from app.models.domain_settings import DomainSetting, SettingDomain
 from app.schemas.common import ListResponse
 from app.schemas.settings import DomainSettingRead, DomainSettingUpdate
-from app.services.platform_settings import PLATFORM_DEFAULTS
 from app.services import settings_api as settings_service
+from app.services.platform_settings import PLATFORM_DEFAULTS
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 

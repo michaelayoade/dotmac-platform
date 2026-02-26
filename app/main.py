@@ -71,18 +71,19 @@ from app.web.ssh_keys_web import router as ssh_keys_web_router
 from app.web.usage_web import router as usage_web_router
 from app.web.webhooks_web import router as webhooks_web_router
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger = logging.getLogger(__name__)
-    
+
     # Log startup information
     app_version = getattr(settings, 'VERSION', 'unknown')
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    
+
     logger.info("Starting up...")
     logger.info(f"App version: {app_version}")
     logger.info(f"Python version: {python_version}")
-    
+
     db = SessionLocal()
     try:
         # Check database connectivity
@@ -91,7 +92,7 @@ async def lifespan(app: FastAPI):
             logger.info("Database connectivity: OK")
         except Exception as e:
             logger.error(f"Database connectivity: FAILED - {e}")
-        
+
         # Check Redis connectivity
         try:
             redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
@@ -100,7 +101,7 @@ async def lifespan(app: FastAPI):
             logger.info("Redis connectivity: OK")
         except Exception as e:
             logger.error(f"Redis connectivity: FAILED - {e}")
-        
+
         # Perform seeding operations
         seed_auth_settings(db)
         seed_audit_settings(db)
@@ -113,7 +114,7 @@ async def lifespan(app: FastAPI):
         ModuleService(db).seed_modules()
         PlanService(db).seed_plans()
         db.commit()
-        
+
         logger.info("Startup seeding completed successfully")
     finally:
         db.close()

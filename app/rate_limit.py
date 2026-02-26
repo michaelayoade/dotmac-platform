@@ -107,9 +107,9 @@ class RateLimiter:
     def _client_ip(self, request: Request) -> str:
         if request.client is None:
             return "unknown"
-        
+
         immediate_ip = request.client.host
-        
+
         # Check if immediate IP is a trusted proxy
         if immediate_ip in self._trusted_proxies:
             # Only then trust X-Forwarded-For
@@ -117,7 +117,7 @@ class RateLimiter:
             if forwarded:
                 # Take the first IP in the chain (client's original IP)
                 return forwarded.split(",")[0].strip()
-        
+
         return immediate_ip
 
     def _redis_key(self, ip: str) -> str:
