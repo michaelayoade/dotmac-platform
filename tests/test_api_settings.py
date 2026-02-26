@@ -210,6 +210,49 @@ class TestSettingsAPIV1:
         response = client.put(f"/api/v1/settings/auth/{key}", json=payload, headers=admin_headers)
         assert response.status_code == 200
 
+    def test_export_platform_settings_v1(self, client, admin_headers):
+        """Test exporting non-secret platform settings as a JSON download."""
+        response = client.get("/api/v1/settings/export", headers=admin_headers)
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/json")
+        assert response.headers["content-disposition"] == 'attachment; filename="platform-settings.json"'
+        data = response.json()
+        assert isinstance(data, dict)
+        assert "default_deploy_path" in data
+
+    def test_export_platform_settings_v1_forbidden_non_admin(self, client, auth_headers):
+        """Test exporting platform settings with non-admin auth returns 403."""
+        response = client.get("/api/v1/settings/export", headers=auth_headers)
+        assert response.status_code == 403
+
+    def test_export_platform_settings_v1_excludes_secret_settings(self, client, admin_headers, db_session):
+        """Test export excludes active secret platform settings."""
+        db_session.add(
+            DomainSetting(
+                domain=SettingDomain.platform,
+                key="export_non_secret_key",
+                value_text="/tmp/non-secret",
+                is_secret=False,
+                is_active=True,
+            )
+        )
+        db_session.add(
+            DomainSetting(
+                domain=SettingDomain.platform,
+                key="export_secret_key",
+                value_text="should-not-export",
+                is_secret=True,
+                is_active=True,
+            )
+        )
+        db_session.commit()
+
+        response = client.get("/api/v1/settings/export", headers=admin_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["export_non_secret_key"] == "/tmp/non-secret"
+        assert "export_secret_key" not in data
+
 
 class TestSettingsFilters:
     """Tests for settings filters and ordering."""

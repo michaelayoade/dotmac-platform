@@ -1,10 +1,14 @@
-from fastapi import APIRouter, Depends, Query, status
+import json
+
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_role, require_user_auth
 from app.db import SessionLocal
+from app.models.domain_settings import DomainSetting, SettingDomain
 from app.schemas.common import ListResponse
 from app.schemas.settings import DomainSettingRead, DomainSettingUpdate
+from app.services.platform_settings import PLATFORM_DEFAULTS
 from app.services import settings_api as settings_service
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -130,3 +134,35 @@ def upsert_scheduler_setting(key: str, payload: DomainSettingUpdate, db: Session
 )
 def get_scheduler_setting(key: str, db: Session = Depends(get_db)):
     return settings_service.get_scheduler_setting(db, key)
+
+
+@router.get(
+    "/export",
+    tags=["settings"],
+    dependencies=[Depends(require_role("admin"))],
+)
+def export_platform_settings(db: Session = Depends(get_db)) -> Response:
+    # Export defaults plus active non-secret DB overrides. Keys with active secret
+    # values are intentionally excluded from this export.
+    result = dict(PLATFORM_DEFAULTS)
+    active_rows = (
+        db.query(DomainSetting)
+        .filter(
+            DomainSetting.domain == SettingDomain.platform,
+            DomainSetting.is_active.is_(True),
+        )
+        .all()
+    )
+
+    for row in active_rows:
+        if row.is_secret:
+            result.pop(row.key, None)
+            continue
+        result[row.key] = row.value_json if row.value_json is not None else row.value_text
+
+    body = json.dumps(result, indent=2, sort_keys=True)
+    return Response(
+        content=body,
+        media_type="application/json",
+        headers={"Content-Disposition": 'attachment; filename="platform-settings.json"'},
+    )
