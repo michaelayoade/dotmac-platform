@@ -25,24 +25,44 @@ def validate_avatar(file: UploadFile) -> None:
         )
 
 
+def _detect_content_type_from_magic(content: bytes) -> str | None:
+    header = content[:12]
+    if header.startswith(b"\xFF\xD8\xFF"):
+        return "image/jpeg"
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if header.startswith(b"GIF8"):
+        return "image/gif"
+    if len(header) >= 12 and header.startswith(b"RIFF") and header[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
 async def save_avatar(file: UploadFile, person_id: str) -> str:
     validate_avatar(file)
 
     upload_dir = Path(settings.avatar_upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    content_type = file.content_type
-    assert content_type is not None
-    ext = _get_extension(content_type)
-    filename = f"{person_id}_{uuid.uuid4().hex[:8]}{ext}"
-    file_path = upload_dir / filename
-
     content = await file.read()
+    detected_content_type = _detect_content_type_from_magic(content)
+    allowed_types = get_allowed_types()
+    if detected_content_type not in allowed_types:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid file signature. Allowed: {', '.join(sorted(allowed_types))}",
+        )
+    assert detected_content_type is not None
+
     if len(content) > settings.avatar_max_size_bytes:
         raise HTTPException(
             status_code=400,
             detail=f"File too large. Maximum size: {settings.avatar_max_size_bytes // 1024 // 1024}MB",
         )
+
+    ext = _get_extension(detected_content_type)
+    filename = f"{person_id}_{uuid.uuid4().hex[:8]}{ext}"
+    file_path = upload_dir / filename
 
     with open(file_path, "wb") as f:
         f.write(content)
