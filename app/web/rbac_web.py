@@ -4,9 +4,11 @@ RBAC — Web routes for roles and permissions management.
 
 from __future__ import annotations
 
+import uuid
+from urllib.parse import urlencode
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -17,6 +19,18 @@ from app.web.helpers import ctx, require_admin, validate_csrf_token
 
 templates = Jinja2Templates(directory="templates")
 router = APIRouter(prefix="/rbac")
+
+
+def _build_rbac_redirect_url(role_id: str | None = None) -> str:
+    if not role_id:
+        return "/rbac"
+
+    try:
+        parsed_role_id = uuid.UUID(role_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid role_id") from exc
+
+    return f"/rbac?{urlencode({'role_id': str(parsed_role_id)})}"
 
 
 @router.get("", response_class=HTMLResponse)
@@ -134,14 +148,19 @@ def rbac_add_role_permission(
     validate_csrf_token(request, csrf_token)
     from app.services.rbac import role_permissions as rp_service
 
+    try:
+        parsed_role_id = uuid.UUID(role_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid role_id") from exc
+
     rp_service.create(
         db,
         RolePermissionCreate(
-            role_id=UUID(role_id),
+            role_id=parsed_role_id,
             permission_id=UUID(permission_id),
         ),
     )
-    return RedirectResponse(f"/rbac?role_id={role_id}", status_code=302)
+    return RedirectResponse(_build_rbac_redirect_url(str(parsed_role_id)), status_code=302)
 
 
 @router.post("/role-permissions/{link_id}/delete", response_class=HTMLResponse)
@@ -157,6 +176,6 @@ def rbac_remove_role_permission(
     validate_csrf_token(request, csrf_token)
     from app.services.rbac import role_permissions as rp_service
 
+    redirect_url = _build_rbac_redirect_url(role_id)
     rp_service.delete(db, str(link_id))
-    redirect_url = f"/rbac?role_id={role_id}" if role_id else "/rbac"
     return RedirectResponse(redirect_url, status_code=302)
