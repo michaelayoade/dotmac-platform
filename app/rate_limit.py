@@ -62,6 +62,41 @@ class RateLimiter:
             while len(self._requests) > self.max_ips:
                 self._requests.popitem(last=False)
 
+    def get_remaining(self, request: Request) -> int:
+        """Get remaining requests for the client in the current window."""
+        ip = self._client_ip(request)
+        now = time.time()
+        cutoff = now - self.window_seconds
+
+        with self._lock:
+            timestamps = self._requests.get(ip)
+            if not timestamps:
+                return self.max_requests
+            
+            # Remove expired entries
+            while timestamps and timestamps[0] <= cutoff:
+                timestamps.popleft()
+            
+            current_count = len(timestamps)
+            return max(0, self.max_requests - current_count)
+
+    def get_reset_time(self, request: Request) -> int:
+        """Get the Unix timestamp when the current window resets."""
+        ip = self._client_ip(request)
+        now = time.time()
+        
+        with self._lock:
+            timestamps = self._requests.get(ip)
+            if not timestamps:
+                # If no requests, window resets at the next window boundary
+                window_start = now - (now % self.window_seconds)
+                return int(window_start + self.window_seconds)
+            
+            # Find the oldest timestamp in the window
+            oldest = min(timestamps)
+            # Window resets at oldest + window_seconds
+            return int(oldest + self.window_seconds)
+
 
 # Pre-configured limiters for different endpoint types
 login_limiter = RateLimiter(max_requests=10, window_seconds=60)
