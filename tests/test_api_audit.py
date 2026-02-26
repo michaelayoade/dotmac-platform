@@ -213,8 +213,8 @@ class TestAuditEventsAPIV1:
             "/api/v1/audit/export",
             params={
                 "max_rows": 10,
-                "started_after": (base_time + timedelta(minutes=5)).isoformat(),
-                "started_before": (base_time + timedelta(minutes=15)).isoformat(),
+                "started_after": (base_time + timedelta(seconds=30)).isoformat(),
+                "started_before": (base_time + timedelta(seconds=90)).isoformat(),
             },
             headers=admin_headers,
         )

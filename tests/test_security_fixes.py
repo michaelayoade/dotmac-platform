@@ -385,3 +385,25 @@ class TestM5GitRefValidation:
         )
         assert tag_resp.status_code == 422
         assert tag_resp.json()["message"] == "Invalid git ref format"
+
+
+# ──────────────── C1: Alert rule channel_config JSON validation ────────────────
+
+
+class TestC1AlertRuleChannelConfigValidation:
+    def test_invalid_channel_config_json_returns_422(self, client, admin_headers):
+        resp = client.post(
+            "/instances/alerts/rules",
+            params={
+                "name": "cpu-alert",
+                "metric": "cpu_percent",
+                "operator": "gt",
+                "threshold": 80,
+                "channel_config": "{not valid json",
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 422
+        data = resp.json()
+        assert data["code"] == "http_422"
+        assert data["message"] == "channel_config must be valid JSON"
