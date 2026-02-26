@@ -1,9 +1,12 @@
+import logging
 import os
 import secrets
+import sys
 from contextlib import asynccontextmanager
 from threading import Lock
 from time import monotonic
 
+import redis as redis_lib
 from fastapi import Depends, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -65,11 +68,37 @@ from app.web.ssh_keys_web import router as ssh_keys_web_router
 from app.web.usage_web import router as usage_web_router
 from app.web.webhooks_web import router as webhooks_web_router
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger = logging.getLogger(__name__)
+    
+    # Log startup information
+    app_version = getattr(settings, 'VERSION', 'unknown')
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    
+    logger.info("Starting up...")
+    logger.info(f"App version: {app_version}")
+    logger.info(f"Python version: {python_version}")
+    
     db = SessionLocal()
     try:
+        # Check database connectivity
+        try:
+            db.execute(DomainSetting.__table__.select().limit(1))
+            logger.info("Database connectivity: OK")
+        except Exception as e:
+            logger.error(f"Database connectivity: FAILED - {e}")
+        
+        # Check Redis connectivity
+        try:
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            r = redis_lib.from_url(redis_url, socket_timeout=2)
+            r.ping()
+            logger.info("Redis connectivity: OK")
+        except Exception as e:
+            logger.error(f"Redis connectivity: FAILED - {e}")
+        
+        # Perform seeding operations
         seed_auth_settings(db)
         seed_audit_settings(db)
         seed_scheduler_settings(db)
@@ -81,10 +110,13 @@ async def lifespan(app: FastAPI):
         ModuleService(db).seed_modules()
         PlanService(db).seed_plans()
         db.commit()
+        
+        logger.info("Startup seeding completed successfully")
     finally:
         db.close()
     yield
 
+configure_logging()
 
 app = FastAPI(title="DotMac Platform API", lifespan=lifespan)
 
@@ -92,7 +124,7 @@ _AUDIT_SETTINGS_CACHE: dict | None = None
 _AUDIT_SETTINGS_CACHE_AT: float | None = None
 _AUDIT_SETTINGS_CACHE_TTL_SECONDS = 30.0
 _AUDIT_SETTINGS_LOCK = Lock()
-configure_logging()
+
 setup_otel(app)
 app.add_middleware(ObservabilityMiddleware)
 register_error_handlers(app)
@@ -327,8 +359,6 @@ def health_check():
 
     # Check Redis connectivity
     try:
-        import redis as redis_lib
-
         redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
         r = redis_lib.from_url(redis_url, socket_timeout=2)
         r.ping()
