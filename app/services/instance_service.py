@@ -13,7 +13,7 @@ import re
 import secrets
 import textwrap
 import uuid
-from datetime import UTC
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -230,6 +230,10 @@ class InstanceService:
         from app.services.upgrade_service import UpgradeService
 
         instance = self.get_or_404(instance_id)
+        created_at = instance.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        uptime_seconds = max(0, int((datetime.now(UTC) - created_at).total_seconds()))
 
         health_svc = HealthService(self.db)
         latest_health = health_svc.get_latest_check(instance_id)
@@ -278,6 +282,7 @@ class InstanceService:
             "catalog_map": catalog_map,
             "upgrades": upgrades,
             "pending_upgrade_ids": pending_upgrade_ids,
+            "uptime_seconds": uptime_seconds,
         }
 
     def resolve_catalog_repo(self, catalog_id: UUID) -> UUID:
