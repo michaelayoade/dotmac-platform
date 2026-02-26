@@ -11,7 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role, require_user_auth
-from app.schemas.instances import InstanceCreateRequest, InstanceCreateResponse
+from app.schemas.instances import (
+    InstanceCreateRequest,
+    InstanceCreateResponse,
+    InstanceWebhookCreateRequest,
+)
 from app.services.common import paginate_list
 
 router = APIRouter(prefix="/instances", tags=["instances"])
@@ -639,18 +643,20 @@ def list_webhooks(
 
 @router.post("/webhooks", status_code=status.HTTP_201_CREATED)
 def create_webhook(
-    url: str,
-    events: list[str] = Query(default=[]),
-    secret: str | None = None,
-    description: str | None = None,
-    instance_id: UUID | None = None,
+    payload: InstanceWebhookCreateRequest,
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
     from app.services.webhook_service import WebhookService
 
     svc = WebhookService(db)
-    ep = svc.create_endpoint(url, events, secret, description, instance_id)
+    ep = svc.create_endpoint(
+        payload.url,
+        payload.events,
+        payload.secret,
+        payload.description,
+        payload.instance_id,
+    )
     db.commit()
     return svc.serialize_endpoint(ep)
 
