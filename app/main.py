@@ -18,6 +18,7 @@ from app.api.catalog import router as catalog_api_router
 from app.api.deps import require_instance_access_from_path, require_role, require_user_auth
 from app.api.dr import router as dr_api_router
 from app.api.git_repos import router as git_repos_api_router
+from app.api.health import router as health_router
 from app.api.observability import router as observability_api_router
 from app.api.organizations import router as organizations_api_router
 from app.api.persons import router as people_router
@@ -267,6 +268,9 @@ _include_api_router(notification_channels_router, dependencies=[Depends(require_
 from app.api.otel import router as otel_api_router  # noqa: E402
 
 _include_api_router(otel_api_router, dependencies=[Depends(require_user_auth)])
+
+# Health endpoint - no authentication required
+app.include_router(health_router, prefix="/api/v1")
 
 app.include_router(auth_web_router)
 app.include_router(dashboard_router)
