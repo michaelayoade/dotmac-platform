@@ -114,3 +114,89 @@ def test_list_settings_response(db_session):
     response = settings_api.list_auth_settings_response(db_session, None, "key", "asc", 10, 0)
     assert response["count"] == len(response["items"])
     assert response["count"] >= 2
+
+
+# ---------------------------------------------------------------------------
+# jwt_algorithm SettingSpec allowlist tests
+# ---------------------------------------------------------------------------
+
+
+def test_jwt_algorithm_spec_has_allowlist():
+    from app.models.domain_settings import SettingDomain
+    from app.services.settings_spec import get_spec
+
+    spec = get_spec(SettingDomain.auth, "jwt_algorithm")
+    assert spec is not None
+    assert spec.allowed == {"HS256", "HS384", "HS512"}
+
+
+def test_jwt_algorithm_spec_default_is_in_allowlist():
+    from app.models.domain_settings import SettingDomain
+    from app.services.settings_spec import get_spec
+
+    spec = get_spec(SettingDomain.auth, "jwt_algorithm")
+    assert spec is not None
+    assert spec.default in spec.allowed
+
+
+def test_jwt_algorithm_upsert_rejects_unsafe_algorithm(db_session):
+    """The settings API rejects algorithms not in the allowed set."""
+    with pytest.raises(HTTPException) as exc:
+        settings_api.upsert_auth_setting(
+            db_session,
+            "jwt_algorithm",
+            DomainSettingUpdate(value_text="RS256"),
+        )
+    assert exc.value.status_code == 400
+
+
+def test_jwt_algorithm_resolve_value_falls_back_for_disallowed(db_session, monkeypatch):
+    """resolve_value returns the default when a disallowed algorithm is stored in the DB."""
+    from unittest.mock import MagicMock
+
+    import app.services.settings_spec as spec_module
+    from app.models.domain_settings import SettingDomain
+    from app.services.settings_spec import resolve_value
+
+    mock_setting = MagicMock()
+    mock_setting.value_text = "RS256"
+    mock_setting.value_json = None
+    mock_setting.is_secret = False
+
+    original_get_by_key = spec_module.DOMAIN_SETTINGS_SERVICE[SettingDomain.auth].get_by_key
+
+    def patched_get_by_key(db, key):
+        if key == "jwt_algorithm":
+            return mock_setting
+        return original_get_by_key(db, key)
+
+    monkeypatch.setattr(spec_module.DOMAIN_SETTINGS_SERVICE[SettingDomain.auth], "get_by_key", patched_get_by_key)
+
+    value = resolve_value(db_session, SettingDomain.auth, "jwt_algorithm")
+    assert value == "HS256"  # falls back to default
+
+
+def test_jwt_algorithm_resolve_value_returns_allowed_value(db_session, monkeypatch):
+    """resolve_value returns an algorithm that is in the allowed set."""
+    from unittest.mock import MagicMock
+
+    import app.services.settings_spec as spec_module
+    from app.models.domain_settings import SettingDomain
+    from app.services.settings_spec import resolve_value
+
+    mock_setting = MagicMock()
+    mock_setting.value_text = "HS384"
+    mock_setting.value_json = None
+    mock_setting.is_secret = False
+
+    original_get_by_key = spec_module.DOMAIN_SETTINGS_SERVICE[SettingDomain.auth].get_by_key
+
+    def patched_get_by_key(db, key):
+        if key == "jwt_algorithm":
+            return mock_setting
+        return original_get_by_key(db, key)
+
+    monkeypatch.setattr(spec_module.DOMAIN_SETTINGS_SERVICE[SettingDomain.auth], "get_by_key", patched_get_by_key)
+
+    value = resolve_value(db_session, SettingDomain.auth, "jwt_algorithm")
+    assert value == "HS384"

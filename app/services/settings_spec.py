@@ -43,6 +43,7 @@ SETTINGS_SPECS: list[SettingSpec] = [
         env_var="JWT_ALGORITHM",
         value_type=SettingValueType.string,
         default="HS256",
+        allowed={"HS256", "HS384", "HS512"},
     ),
     SettingSpec(
         domain=SettingDomain.auth,
