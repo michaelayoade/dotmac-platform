@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.backup import Backup, BackupStatus, BackupType
-from app.models.instance import Instance
+from app.models.instance import Instance, InstanceStatus
 from app.models.server import Server
 from app.services.ssh_service import get_ssh_for_server
 
@@ -208,6 +208,8 @@ class BackupService:
         result = ssh.exec_command(restore_cmd, timeout=300)
 
         if result.ok:
+            instance.status = InstanceStatus.running
+            self.db.flush()
             logger.info("Restore completed for %s from %s", instance.org_code, backup.file_path)
             return {"success": True, "message": "Restore completed"}
         return {"success": False, "error": result.stderr[:2000]}
