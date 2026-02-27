@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import shlex
+import tempfile
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -266,15 +267,33 @@ class BackupService:
         source_ssh = get_ssh_for_server(source_server)
         target_ssh = get_ssh_for_server(target_server)
 
-        local_tmp = f"/tmp/transfer_{backup.backup_id}.sql.gz"
-        target_path = f"/tmp/transfer_{backup.backup_id}.sql.gz"
+        # Create a secure temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.sql.gz') as tmp_file:
+            local_tmp = tmp_file.name
+        
+        # Use a unique target path to avoid collisions
+        target_path = f"/tmp/transfer_{backup.backup_id}_{os.urandom(4).hex()}.sql.gz"
 
-        source_ssh.sftp_get(backup.file_path, local_tmp)
-        target_ssh.sftp_put(local_tmp, target_path)
         try:
-            os.remove(local_tmp)
-        except OSError:
-            logger.debug("Failed to remove temp backup %s", local_tmp)
+            # Transfer the file
+            source_ssh.sftp_get(backup.file_path, local_tmp)
+            target_ssh.sftp_put(local_tmp, target_path)
+        except Exception as e:
+            logger.error("Transfer failed for backup %s: %s", backup.backup_id, e)
+            # Clean up local temp file if it exists
+            if os.path.exists(local_tmp):
+                try:
+                    os.remove(local_tmp)
+                except OSError:
+                    logger.debug("Failed to remove temp backup %s", local_tmp)
+            raise
+        finally:
+            # Ensure local temp file is cleaned up
+            if os.path.exists(local_tmp):
+                try:
+                    os.remove(local_tmp)
+                except OSError:
+                    logger.debug("Failed to remove temp backup %s", local_tmp)
         return target_path
 
     def delete_backup(self, instance_id: UUID, backup_id: UUID) -> None:
