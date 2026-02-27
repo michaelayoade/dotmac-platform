@@ -58,7 +58,7 @@ class OrganizationService:
         stmt = (
             select(OrganizationMember)
             .where(OrganizationMember.org_id == org_id)
-            .where(OrganizationMember.is_active == True)
+            .where(OrganizationMember.is_active.is_(True))
             .order_by(OrganizationMember.created_at.desc())
             .limit(limit)
             .offset(offset)
@@ -69,7 +69,7 @@ class OrganizationService:
         stmt = select(func.count(OrganizationMember.id)).where(
             and_(
                 OrganizationMember.org_id == org_id,
-                OrganizationMember.is_active == True
+                OrganizationMember.is_active.is_(True)
             )
         )
         return self.db.scalar(stmt) or 0
