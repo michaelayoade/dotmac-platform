@@ -8,11 +8,12 @@ from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role, require_user_auth
+from app.schemas.catalog import CatalogBundleRead, CatalogItemRead, CatalogReleaseRead
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
 
-@router.get("/releases")
+@router.get("/releases", response_model=list[CatalogReleaseRead])
 def list_releases(
     active_only: bool = True,
     db: Session = Depends(get_db),
@@ -63,7 +64,7 @@ def deactivate_release(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/bundles")
+@router.get("/bundles", response_model=list[CatalogBundleRead])
 def list_bundles(
     active_only: bool = True,
     db: Session = Depends(get_db),
@@ -113,7 +114,7 @@ def deactivate_bundle(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/items")
+@router.get("/items", response_model=list[CatalogItemRead])
 def list_catalog_items(
     active_only: bool = True,
     search: str | None = None,

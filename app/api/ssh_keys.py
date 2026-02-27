@@ -8,12 +8,12 @@ from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role
-from app.schemas.ssh_keys import SSHPublicKeyResponse
+from app.schemas.ssh_keys import SSHKeyCreateResponse, SSHKeyRead, SSHPublicKeyResponse
 
 router = APIRouter(prefix="/ssh-keys", tags=["ssh-keys"])
 
 
-@router.get("")
+@router.get("", response_model=list[SSHKeyRead])
 def list_keys(
     active_only: bool = True,
     db: Session = Depends(get_db),
@@ -38,7 +38,7 @@ def list_keys(
     ]
 
 
-@router.post("/generate", status_code=status.HTTP_201_CREATED)
+@router.post("/generate", response_model=SSHKeyCreateResponse, status_code=status.HTTP_201_CREATED)
 def generate_key(
     label: str = Body(...),
     key_type: str = Body("ed25519"),
@@ -61,7 +61,7 @@ def generate_key(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/import", status_code=status.HTTP_201_CREATED)
+@router.post("/import", response_model=SSHKeyCreateResponse, status_code=status.HTTP_201_CREATED)
 def import_key(
     label: str = Body(...),
     private_key_pem: str = Body(...),

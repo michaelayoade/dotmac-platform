@@ -8,11 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role
+from app.schemas.observability import LogStreamRead, LogsPayloadRead, MetricsSummaryRead
 
 router = APIRouter(prefix="/observability", tags=["observability"])
 
 
-@router.get("/instances/{instance_id}/metrics")
+@router.get("/instances/{instance_id}/metrics", response_model=MetricsSummaryRead)
 def metrics_summary(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -27,7 +28,7 @@ def metrics_summary(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/instances/{instance_id}/log-streams")
+@router.get("/instances/{instance_id}/log-streams", response_model=list[LogStreamRead])
 def list_log_streams(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -42,7 +43,7 @@ def list_log_streams(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/instances/{instance_id}/logs")
+@router.get("/instances/{instance_id}/logs", response_model=LogsPayloadRead)
 def get_logs(
     instance_id: UUID,
     stream: str = Query("app"),

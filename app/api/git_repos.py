@@ -8,11 +8,12 @@ from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role
+from app.schemas.git_repos import GitRepoRead
 
 router = APIRouter(prefix="/git-repos", tags=["git-repos"])
 
 
-@router.get("")
+@router.get("", response_model=list[GitRepoRead])
 def list_repos(
     active_only: bool = True,
     db: Session = Depends(get_db),
@@ -59,7 +60,7 @@ def create_repo(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.put("/{repo_id}")
+@router.put("/{repo_id}", response_model=GitRepoRead)
 def update_repo(
     repo_id: UUID,
     label: str | None = Body(None),
