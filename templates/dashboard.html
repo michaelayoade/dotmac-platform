@@ -1,4 +1,5 @@
 {% extends "platform_base.html" %}
+{% from "components/badges.html" import status_badge %}
 
 {% block content %}
 {% set testing = testing if testing is defined else false %}
@@ -149,27 +150,7 @@
                     <p class="text-[11px] text-surface-400 dark:text-surface-500">{{ inst.org_name }}</p>
                 </td>
                 <td class="px-5 py-4">
-                    {% if inst.status.value == 'running' %}
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
-                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Running
-                        </span>
-                    {% elif inst.status.value == 'deploying' %}
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
-                            <span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>Deploying
-                        </span>
-                    {% elif inst.status.value == 'error' %}
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">
-                            <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Error
-                        </span>
-                    {% elif inst.status.value == 'stopped' %}
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-surface-100 px-2.5 py-0.5 text-[11px] font-medium text-surface-500 dark:bg-surface-800 dark:text-surface-400">
-                            <span class="h-1.5 w-1.5 rounded-full bg-surface-400"></span>Stopped
-                        </span>
-                    {% else %}
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
-                            <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>Provisioned
-                        </span>
-                    {% endif %}
+                    {{ status_badge(inst.status.value) }}
                 </td>
                 <td class="px-5 py-4">
                     {% if health_state == 'healthy' %}

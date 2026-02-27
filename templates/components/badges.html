@@ -7,26 +7,26 @@
         {{ health_badge(latest_health, is_stale=false) }}
 #}
 
-{# ── Instance/server status badge with dot indicator ── #}
+{# ── Instance/server status badge with pill background ── #}
 {% macro status_badge(status) %}
 {% if status == 'running' %}
-    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-600 dark:text-emerald-400"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Running</span>
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Running</span>
 {% elif status == 'deploying' %}
-    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-blue-600 dark:text-blue-400"><span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>Deploying</span>
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"><span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>Deploying</span>
 {% elif status == 'error' %}
-    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Error</span>
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Error</span>
 {% elif status == 'stopped' %}
-    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-surface-500"><span class="h-1.5 w-1.5 rounded-full bg-surface-400"></span>Stopped</span>
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-surface-100 px-2.5 py-0.5 text-[11px] font-medium text-surface-500 dark:bg-surface-800 dark:text-surface-400"><span class="h-1.5 w-1.5 rounded-full bg-surface-400"></span>Stopped</span>
 {% elif status == 'suspended' %}
-    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Suspended</span>
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Suspended</span>
 {% elif status == 'archived' %}
-    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-surface-400"><span class="h-1.5 w-1.5 rounded-full bg-surface-300 dark:bg-surface-600"></span>Archived</span>
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-surface-100 px-2.5 py-0.5 text-[11px] font-medium text-surface-400 dark:bg-surface-800 dark:text-surface-500"><span class="h-1.5 w-1.5 rounded-full bg-surface-300 dark:bg-surface-600"></span>Archived</span>
 {% elif status == 'connected' %}
-    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-600 dark:text-emerald-400"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Connected</span>
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Connected</span>
 {% elif status == 'unreachable' %}
-    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Unreachable</span>
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Unreachable</span>
 {% else %}
-    <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>{{ status | title }}</span>
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>{{ status | title }}</span>
 {% endif %}
 {% endmacro %}
 

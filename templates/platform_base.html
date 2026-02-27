@@ -372,6 +372,7 @@
                 <button @click="sidebarOpen = !sidebarOpen"
                         class="rounded-md p-1.5 text-surface-400 hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-300 transition"
                         aria-controls="sidebar"
+                        aria-label="Toggle navigation"
                         :aria-expanded="sidebarOpen ? 'true' : 'false'">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
                 </button>
@@ -382,7 +383,10 @@
                 <!-- Notification Bell -->
                 <div x-data="{ notifOpen: false }" class="relative">
                     <button @click="notifOpen = !notifOpen; if(notifOpen) $refs.notifPanel.dispatchEvent(new Event('load-panel'))"
-                            class="relative rounded-md p-1.5 text-surface-400 hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-300 transition">
+                            class="relative rounded-md p-1.5 text-surface-400 hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-300 transition"
+                            aria-label="Open notifications"
+                            :aria-expanded="notifOpen ? 'true' : 'false'"
+                            aria-haspopup="true">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>
                         <span hx-get="/notifications/badge" hx-trigger="load, every 30s" hx-swap="innerHTML"></span>
                     </button>
@@ -415,6 +419,9 @@
 <div id="toast-container"
      x-data="toastStore()"
      x-on:show-toast.window="addToast($event.detail)"
+     role="status"
+     aria-live="polite"
+     aria-atomic="true"
      class="fixed bottom-5 right-5 z-50 flex flex-col gap-2.5 pointer-events-none">
     <template x-for="toast in toasts" :key="toast.id">
         <div x-show="toast.visible"
@@ -432,7 +439,7 @@
              }"
              class="px-4 py-3 rounded-lg shadow-xl text-white text-[13px] font-medium pointer-events-auto flex items-center gap-3 max-w-sm backdrop-blur">
             <span x-text="toast.message"></span>
-            <button x-on:click="removeToast(toast.id)" class="ml-auto opacity-60 hover:opacity-100 transition-opacity">&times;</button>
+            <button x-on:click="removeToast(toast.id)" aria-label="Dismiss notification" class="ml-auto opacity-60 hover:opacity-100 transition-opacity">&times;</button>
         </div>
     </template>
 </div>
