@@ -30,7 +30,7 @@ python-jose = {version = "3.3.0", extras = ["cryptography"]}
 passlib = {version = "1.7.4", extras = ["bcrypt"]}
 bcrypt = "4.0.1"
 pyotp = "2.9.0"
-cryptography = "42.0.8"
+cryptography = ">=44.0.2,<47"
 paramiko = "^3.4.0"
 python-multipart = "^0.0.22"
 
