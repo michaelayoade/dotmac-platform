@@ -263,18 +263,45 @@ class BackupService:
         """Transfer a backup file between servers and return target file path."""
         if not backup.file_path:
             raise ValueError("Backup file missing")
+        
+        # Validate backup file path is safe
+        backup_path = backup.file_path
+        if not isinstance(backup_path, str) or '..' in backup_path or backup_path.startswith('/') is False:
+            raise ValueError(f"Invalid backup file path: {backup_path}")
+        
         source_ssh = get_ssh_for_server(source_server)
         target_ssh = get_ssh_for_server(target_server)
 
-        local_tmp = f"/tmp/transfer_{backup.backup_id}.sql.gz"
-        target_path = f"/tmp/transfer_{backup.backup_id}.sql.gz"
+        # Use a fixed pattern for temp files to avoid path traversal
+        backup_id_str = str(backup.backup_id)
+        if not re.match(r'^[a-f0-9-]+$', backup_id_str):
+            raise ValueError(f"Invalid backup ID format: {backup_id_str}")
+        
+        local_tmp = f"/tmp/transfer_{backup_id_str}.sql.gz"
+        target_path = f"/tmp/transfer_{backup_id_str}.sql.gz"
+        
+        # Ensure target path is within /tmp/ and doesn't contain path traversal
+        if not target_path.startswith('/tmp/') or '..' in target_path:
+            raise ValueError(f"Invalid target path: {target_path}")
 
-        source_ssh.sftp_get(backup.file_path, local_tmp)
-        target_ssh.sftp_put(local_tmp, target_path)
         try:
-            os.remove(local_tmp)
-        except OSError:
-            logger.debug("Failed to remove temp backup %s", local_tmp)
+            source_ssh.sftp_get(backup_path, local_tmp)
+            target_ssh.sftp_put(local_tmp, target_path)
+        except Exception as e:
+            # Clean up local temp file on error
+            try:
+                os.remove(local_tmp)
+            except OSError:
+                logger.debug("Failed to remove local temp file %s after error", local_tmp)
+            # Re-raise the original exception
+            raise
+        else:
+            # Clean up local temp file on success
+            try:
+                os.remove(local_tmp)
+            except OSError as e:
+                logger.debug("Failed to remove local temp backup %s: %s", local_tmp, e)
+        
         return target_path
 
     def delete_backup(self, instance_id: UUID, backup_id: UUID) -> None:
