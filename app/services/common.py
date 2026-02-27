@@ -45,3 +45,10 @@ def validate_git_ref(value: str, label: str) -> str:
     if not _GIT_REF_RE.match(value) or ".." in value or value.startswith("-"):
         raise HTTPException(status_code=400, detail=f"Invalid {label}")
     return value
+
+
+def _safe_slug(value: str) -> str:
+    """Validate and return a safe slug for use in shell commands."""
+    if not re.match(r"^[a-zA-Z0-9_-]+$", value):
+        raise ValueError(f"Invalid slug: {value!r}")
+    return value

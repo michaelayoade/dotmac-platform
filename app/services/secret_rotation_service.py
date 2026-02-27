@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.models.instance import Instance
 from app.models.secret_rotation import RotationStatus, SecretRotationLog
 from app.models.server import Server
+from app.services.common import _safe_slug
 from app.services.instance_service import parse_env_file
 from app.services.ssh_service import get_ssh_for_server
 
@@ -295,12 +296,6 @@ class SecretRotationService:
                 raise ValueError(f"Health check failed: {check.status.value}")
         except Exception as e:
             raise ValueError(str(e))
-
-
-def _safe_slug(value: str) -> str:
-    if not re.match(r"^[a-zA-Z0-9_-]+$", value):
-        raise ValueError(f"Invalid org_code slug: {value!r}")
-    return value
 
 
 def _generate_totp_key() -> str:

@@ -15,18 +15,13 @@ from sqlalchemy.orm import Session
 from app.models.clone_operation import CloneOperation, CloneStatus
 from app.models.instance import Instance, InstanceStatus
 from app.models.server import Server
+from app.services.common import _safe_slug
 from app.services.settings_crypto import decrypt_value, encrypt_value
 from app.services.ssh_service import get_ssh_for_server
 
 logger = logging.getLogger(__name__)
 
 _ORG_CODE_RE = re.compile(r"^[A-Z0-9_-]+$")
-
-
-def _safe_slug(value: str) -> str:
-    if not re.match(r"^[a-zA-Z0-9_-]+$", value):
-        raise ValueError(f"Invalid slug: {value!r}")
-    return value
 
 
 class CloneService:

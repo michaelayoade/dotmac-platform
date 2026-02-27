@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import shlex
 import tempfile
 from datetime import UTC, datetime, timedelta
@@ -20,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.models.backup import Backup, BackupStatus, BackupType
 from app.models.instance import Instance
 from app.models.server import Server
+from app.services.common import _safe_slug
 from app.services.ssh_service import get_ssh_for_server
 
 logger = logging.getLogger(__name__)
@@ -27,13 +27,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_BACKUP_DIR = "/opt/dotmac/backups"
 DEFAULT_RETENTION_COUNT = 5
 DEFAULT_RETENTION_DAYS = 30
-
-
-def _safe_slug(value: str) -> str:
-    """Validate and return a safe slug for use in shell commands."""
-    if not re.match(r"^[a-zA-Z0-9_-]+$", value):
-        raise ValueError(f"Invalid slug: {value!r}")
-    return value
 
 
 class BackupService:
