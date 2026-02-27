@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import secrets
+import shlex
 import textwrap
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -793,9 +794,10 @@ class InstanceService:
             if flag_vars:
                 env_content += "\n# Feature Flags\n"
                 for fk, fv in sorted(flag_vars.items()):
-                    env_content += f"{fk}={quote(fv)}\n"
+                    env_content += f"{fk}={shlex.quote(fv)}\n"
         except Exception:
-            pass  # Feature flags are optional
+            logger.warning("Failed to inject feature flags for instance %s", instance.instance_id, exc_info=True)
+            # Feature flags are optional
 
         # --- Inject plan limits ---
         if instance.plan_id:
@@ -812,7 +814,7 @@ class InstanceService:
                     if plan.max_storage_gb:
                         env_content += f"MAX_STORAGE_GB={plan.max_storage_gb}\n"
             except Exception:
-                pass
+                logger.warning("Failed to inject plan limits for instance %s", instance.instance_id, exc_info=True)
 
         # --- Preserve any custom variables not in the template ---
         template_keys = set(parse_env_file(env_content).keys())
