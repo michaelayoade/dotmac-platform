@@ -235,8 +235,9 @@ class CloneService:
 
             q_db_name = shlex.quote(db_name)
             q_file = shlex.quote(target_backup_path)
+            q_container = shlex.quote(db_container)
             drop_sql = f'DROP DATABASE IF EXISTS "{db_name}" WITH (FORCE); CREATE DATABASE "{db_name}";'
-            drop_cmd = f"docker exec {shlex.quote(db_container)} psql -U postgres -d postgres -c {shlex.quote(drop_sql)}"
+            drop_cmd = f"docker exec {q_container} psql -U postgres -d postgres -c {shlex.quote(drop_sql)}"
             drop_result = target_ssh.exec_command(drop_cmd, timeout=60)
             if not drop_result.ok:
                 raise ValueError((drop_result.stderr or drop_result.stdout or "Drop failed")[:2000])

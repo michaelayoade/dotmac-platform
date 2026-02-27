@@ -263,7 +263,7 @@ class BackupService:
         # Create a secure temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.sql.gz') as tmp_file:
             local_tmp = tmp_file.name
-        
+
         # Use a unique target path to avoid collisions
         target_path = f"/tmp/transfer_{backup.backup_id}_{os.urandom(4).hex()}.sql.gz"
 

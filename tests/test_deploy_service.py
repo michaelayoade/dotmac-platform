@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Callable
 from unittest.mock import MagicMock, patch
 
-from app.models.deployment_log import DeployStepStatus, DeploymentLog
+from app.models.deployment_log import DeploymentLog, DeployStepStatus
 from app.models.instance import Instance, InstanceStatus
 from app.models.server import Server
 from app.services.deploy_service import DEPLOY_STEPS, DeployError, DeployService
