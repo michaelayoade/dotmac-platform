@@ -93,7 +93,7 @@ def get_auth_setting(key: str, db: Session = Depends(get_db)):
     "/audit",
     response_model=ListResponse[DomainSettingRead],
     tags=["settings-audit"],
-    dependencies=[Depends(require_user_auth)],
+    dependencies=[Depends(require_role("admin"))],
 )
 def list_audit_settings(
     is_active: bool | None = None,
@@ -121,7 +121,7 @@ def upsert_audit_setting(key: str, payload: DomainSettingUpdate, db: Session = D
     "/audit/{key}",
     response_model=DomainSettingRead,
     tags=["settings-audit"],
-    dependencies=[Depends(require_user_auth)],
+    dependencies=[Depends(require_role("admin"))],
 )
 def get_audit_setting(key: str, db: Session = Depends(get_db)):
     return settings_service.get_audit_setting(db, key)
