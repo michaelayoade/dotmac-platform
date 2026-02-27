@@ -10,6 +10,7 @@ from app.schemas.scheduler import (
     ScheduledTaskCreate,
     ScheduledTaskRead,
     ScheduledTaskUpdate,
+    SchedulerStatusResponse,
 )
 from app.services import scheduler as scheduler_service
 
@@ -42,6 +43,7 @@ def list_scheduled_tasks(
 
 @router.get(
     "/status",
+    response_model=SchedulerStatusResponse,
     dependencies=[Depends(require_user_auth)],
 )
 def get_scheduler_status(db: Session = Depends(get_db)):
