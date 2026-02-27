@@ -12,7 +12,7 @@ uvicorn = {version = "0.30.1", extras = ["standard"]}
 sqlalchemy = "2.0.41"
 psycopg = {version = "3.1.19", extras = ["binary"]}
 alembic = "1.14.0"
-pydantic = {version = "2.7.4", extras = ["email"]}
+pydantic = {version = ">=2.11.0,<3", extras = ["email"]}
 python-dotenv = "1.2.0"
 jinja2 = ">=3.1.6,<4"
 redis = "5.2.0"
@@ -20,12 +20,12 @@ celery = {version = "5.5.0", extras = ["redis"]}
 prometheus-client = "0.20.0"
 httpx = "0.28.0"
 anyio = "4.9.0"
-opentelemetry-api = "1.26.0"
-opentelemetry-sdk = "1.26.0"
-opentelemetry-exporter-otlp = "1.26.0"
-opentelemetry-instrumentation-fastapi = "0.47b0"
-opentelemetry-instrumentation-sqlalchemy = "0.47b0"
-opentelemetry-instrumentation-celery = "0.47b0"
+opentelemetry-api = ">=1.32.0,<2"
+opentelemetry-sdk = ">=1.32.0,<2"
+opentelemetry-exporter-otlp = ">=1.32.0,<2"
+opentelemetry-instrumentation-fastapi = "0.53b0"
+opentelemetry-instrumentation-sqlalchemy = "0.53b0"
+opentelemetry-instrumentation-celery = "0.53b0"
 python-jose = {version = "3.3.0", extras = ["cryptography"]}
 passlib = {version = "1.7.4", extras = ["bcrypt"]}
 bcrypt = "4.0.1"
