@@ -335,30 +335,29 @@ class HealthService:
 
     def get_dashboard_stats(self) -> dict:
         """Get aggregated health stats for the dashboard."""
-        all_instances = list(self.db.scalars(select(Instance)).all())
+        status_rows = self.db.execute(select(Instance.status, func.count()).group_by(Instance.status)).all()
+        status_counts: dict[str, int] = {}
+        total_instances = 0
+        for row_status, row_count in status_rows:
+            status_key = row_status.value if hasattr(row_status, "value") else str(row_status)
+            count = int(row_count)
+            status_counts[status_key] = count
+            total_instances += count
 
         stats: dict[str, Any] = {
-            "total_instances": len(all_instances),
-            "running": 0,
-            "stopped": 0,
-            "deploying": 0,
-            "error": 0,
+            "total_instances": total_instances,
+            "running": status_counts.get(InstanceStatus.running.value, 0),
+            "stopped": status_counts.get(InstanceStatus.stopped.value, 0),
+            "deploying": status_counts.get(InstanceStatus.deploying.value, 0),
+            "error": status_counts.get(InstanceStatus.error.value, 0),
             "healthy": 0,
             "unhealthy": 0,
             "unknown": 0,
         }
 
-        running_ids = []
-        for inst in all_instances:
-            if inst.status == InstanceStatus.running:
-                stats["running"] += 1
-                running_ids.append(inst.instance_id)
-            elif inst.status == InstanceStatus.stopped:
-                stats["stopped"] += 1
-            elif inst.status == InstanceStatus.deploying:
-                stats["deploying"] += 1
-            elif inst.status == InstanceStatus.error:
-                stats["error"] += 1
+        running_ids = list(
+            self.db.scalars(select(Instance.instance_id).where(Instance.status == InstanceStatus.running)).all()
+        )
 
         # Batch fetch latest health checks for running instances
         if running_ids:
@@ -377,24 +376,33 @@ class HealthService:
         stats["total_servers"] = self.db.scalar(select(func.count(Server.server_id))) or 0
 
         # Version matrix: group by deployed_git_ref
+        version_rows = self.db.execute(
+            select(Instance.deployed_git_ref, func.count()).group_by(Instance.deployed_git_ref)
+        ).all()
         version_matrix: dict[str, int] = {}
-        for inst in all_instances:
-            ref = inst.deployed_git_ref or "unset"
-            version_matrix[ref] = version_matrix.get(ref, 0) + 1
+        for row_ref, row_count in version_rows:
+            ref = row_ref or "unset"
+            version_matrix[ref] = version_matrix.get(ref, 0) + int(row_count)
         stats["version_matrix"] = version_matrix
 
         # Server breakdown: count instances per server
-        server_map: dict[UUID, int] = {}
-        for inst in all_instances:
-            server_map[inst.server_id] = server_map.get(inst.server_id, 0) + 1
+        server_rows = self.db.execute(
+            select(
+                Instance.server_id,
+                Server.name,
+                Server.hostname,
+                func.count(Instance.instance_id),
+            )
+            .outerjoin(Server, Server.server_id == Instance.server_id)
+            .group_by(Instance.server_id, Server.name, Server.hostname)
+        ).all()
         server_breakdown: list[dict] = []
-        for sid, count in server_map.items():
-            server = self.db.get(Server, sid)
+        for sid, name, hostname, count in server_rows:
             server_breakdown.append(
                 {
                     "server_id": str(sid),
-                    "name": server.name if server else "Unknown",
-                    "hostname": server.hostname if server else "",
+                    "name": name if name is not None else "Unknown",
+                    "hostname": hostname if hostname is not None else "",
                     "instance_count": count,
                 }
             )
