@@ -33,6 +33,9 @@ class Settings(BaseModel):
     brand_tagline: str = os.getenv("BRAND_TAGLINE", "Deployment Control Plane")
     brand_logo_url: str | None = os.getenv("BRAND_LOGO_URL") or None
 
+    # Security
+    session_token_hash_secret: str | None = os.getenv("SESSION_TOKEN_HASH_SECRET")
+
     # Runtime flags
     testing: bool = _env_bool("TESTING")
     use_cdn_assets: bool = _env_bool("USE_CDN_ASSETS", "true")

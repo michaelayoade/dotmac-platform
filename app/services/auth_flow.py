@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
 import os
 import secrets
@@ -186,6 +187,9 @@ def _fernet(db: Session | None) -> Fernet:
 
 
 def _hash_token(token: str) -> str:
+    key_str = os.getenv("SESSION_TOKEN_HASH_SECRET")
+    if key_str:
+        return hmac.new(key_str.encode("utf-8"), token.encode("utf-8"), digestmod=hashlib.sha256).hexdigest()
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
