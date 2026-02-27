@@ -12,6 +12,7 @@ import logging
 import re
 import shlex
 import textwrap
+from shlex import quote
 
 logger = logging.getLogger(__name__)
 
@@ -73,12 +74,12 @@ class CaddyService:
         test_result = ssh.exec_command("caddy validate --config /etc/caddy/Caddyfile")  # type: ignore[attr-defined]
         if test_result.ok:
             ssh.exec_command(  # type: ignore[attr-defined]
-                f"mv {shlex.quote(tmp_path)} {shlex.quote(site_path)}"
+                f"mv {quote(tmp_path)} {quote(site_path)}"
             )
             ssh.exec_command("systemctl reload caddy")  # type: ignore[attr-defined]
             logger.info("Caddy reloaded for %s", domain)
         else:
-            ssh.exec_command(f"rm -f {shlex.quote(tmp_path)}")  # type: ignore[attr-defined]
+            ssh.exec_command(f"rm -f {quote(tmp_path)}")  # type: ignore[attr-defined]
             logger.warning(
                 "Caddy config validation failed for %s: %s",
                 domain,
@@ -90,6 +91,6 @@ class CaddyService:
         """Remove a Caddyfile snippet and reload Caddy."""
         domain = _validate_domain(domain)
         site_path = f"/etc/caddy/sites-enabled/{domain}"
-        ssh.exec_command(f"rm -f {shlex.quote(site_path)}")  # type: ignore[attr-defined]
+        ssh.exec_command(f"rm -f {quote(site_path)}")  # type: ignore[attr-defined]
         ssh.exec_command("systemctl reload caddy")  # type: ignore[attr-defined]
         logger.info("Removed Caddy config and reloaded for %s", domain)
