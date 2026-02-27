@@ -579,7 +579,6 @@ class InstanceService:
     def migrate_instance(self, instance_id: UUID) -> Instance:
         """Run alembic migrations inside an instance's app container."""
         import shlex
-
         instance = self.get_or_404(instance_id)
         slug = instance.org_code.lower()
         if not re.match(r"^[a-zA-Z0-9_-]+$", slug):
@@ -588,9 +587,10 @@ class InstanceService:
         if not server:
             raise ValueError("Server not found for instance")
         ssh = get_ssh_for_server(server)
-        container = f"dotmac_{shlex.quote(slug)}_app"
+        container = f"dotmac_{slug}_app"
+        quoted_container = shlex.quote(container)
         result = ssh.exec_command(
-            f"docker exec {container} alembic upgrade heads",
+            f"docker exec {quoted_container} alembic upgrade heads",
             timeout=120,
         )
         if not result.ok:
