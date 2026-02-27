@@ -4,10 +4,11 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role
-from app.schemas.otel import OtelConfigCreate, OtelConfigRead
+from app.schemas.otel import OtelConfigCreate, OtelConfigRead, OtelTestResult
 from app.services.otel_export_service import OtelExportService
 
 logger = logging.getLogger(__name__)
@@ -58,15 +59,19 @@ def delete_otel_config(
     return Response(status_code=204)
 
 
-@router.post("/test", dependencies=[Depends(require_role("admin"))])
+@router.post("/test", response_model=OtelTestResult, dependencies=[Depends(require_role("admin"))])
 def test_otel_export(
     instance_id: UUID,
     db: Session = Depends(get_db),
-) -> dict:
+) -> OtelTestResult:
     svc = OtelExportService(db)
     try:
         result = svc.export_metrics(instance_id)
-        db.commit()
-        return result
+        return OtelTestResult(**result)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Invalid response format from export_metrics: {exc}"
+        )
