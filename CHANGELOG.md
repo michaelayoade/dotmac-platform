@@ -9,6 +9,7 @@ and this project uses semantic versioning.
 
 ### Added
 
+- [Added] `app/schemas/dr.py` with `DRPlanRead` (mirrors `serialize_plan()` output) and `DRTaskResponse` (task_id + status) schemas; all 9 route handlers in `app/api/dr.py` now have `response_model=` declarations and the DELETE endpoint returns HTTP 204 — the Disaster Recovery API is now fully visible in OpenAPI (PR #86)
 - [Added] Unit tests for `DeployService.run_deployment()` in `tests/test_deploy_service.py` covering successful full deploy, mid-pipeline `DeployError` with rollback, and instance-not-found early-return (PR #54)
 - [Added] `max_rows` (default 100,000, max 1,000,000), `started_after`, and `started_before` query parameters on `GET /audit/export` to cap result size and filter by time window; `X-Row-Limit` response header reports the applied limit (PR #35)
 - [Added] GET /api/v1/health/ready readiness endpoint returning status and UTC timestamp (PR #13)
@@ -31,6 +32,10 @@ and this project uses semantic versioning.
 
 - [Changed] `python-jose` 3.3.0 replaced with `PyJWT` >=2.8.0 — drops the abandoned library and its CVE-2024-33663/CVE-2024-33664 JWT algorithm confusion vulnerabilities; `jwt.encode()`/`jwt.decode()` API is identical (PR #72)
 - [Changed] `get_dashboard_stats()` in `HealthService` now uses SQL aggregations (`GROUP BY status`, `GROUP BY server_id/version`) instead of loading all Instance rows into memory — eliminates full in-memory table scan (PR #78)
+- [Changed] `response_model=` added to all 5 route handlers in `notification_channels.py` using existing `NotificationChannelRead` schema; DELETE `/{channel_id}` now returns HTTP 204; config masking (`mask_config()`) preserved in all response paths (PR #83)
+- [Changed] `POST /{instance_id}/domains` (`add_domain`) now accepts a JSON request body (`AddDomainRequest`: `domain: str`, `is_primary: bool = False`) instead of query string parameters — aligns with REST conventions for POST endpoints (PR #82)
+- [Changed] `GET /scheduler/status` now has `response_model=SchedulerStatusResponse` declared in `app/schemas/scheduler.py` — endpoint response is now validated and visible in OpenAPI (PR #85)
+- [Changed] `POST /otel-export/test` now has `response_model=OtelTestResult` declared in `app/schemas/otel.py` (`success: bool`, `message: str`, `latency_ms: float | None`) — endpoint response is now validated and visible in OpenAPI (PR #84)
 - [Changed] `response_model=` added to 12 API route handlers that were missing it: `catalog.py` (list_releases, list_bundles, list_catalog_items), `observability.py` (metrics_summary, list_log_streams, get_logs), `git_repos.py` (list_repos, update_repo), `ssh_keys.py` (list, generate, import), `notifications.py` (list, unread_count) — responses are now validated and serialized via Pydantic schemas (PR #80)
 - [Changed] `list_for_web()` in `InstanceService` now pushes text search (ILIKE on name/org_code), status filter, and LIMIT/OFFSET pagination into the SQLAlchemy query — eliminates full in-memory table scan (PR #56)
 - [Changed] `_safe_slug()` helper consolidated from 5 duplicate definitions into `app/services/common.py`; backup, clone, deploy, metrics_export, and secret_rotation services now import the shared version (PR #63)
@@ -45,6 +50,8 @@ and this project uses semantic versioning.
 
 ### Fixed
 
+- [Fixed] Seven `DELETE` endpoints in `instances.py` (`delete_flag`, `delete_backup`, `remove_domain`, `delete_webhook`, `delete_maintenance_window`, `delete_tag`, `delete_alert_rule`) now return HTTP 204 No Content — previously returned HTTP 200 with an empty dict body (PR #87)
+- [Fixed] `GET /orgs/{org_id}/members` now returns `count` equal to the total number of active members in the organisation — previously returned `count=len(page_slice)` which equalled the current page size rather than the real total (PR #81)
 - [Fixed] `UpgradeService.run_upgrade()` early-return guard now includes `UpgradeStatus.running` — previously two concurrent Celery workers could both pass the guard and double-execute the same upgrade (PR #74)
 - [Fixed] Catalog `DELETE` endpoints (`delete_release`, `delete_bundle`, `delete_catalog_item`) now return HTTP 204 No Content with `status_code=status.HTTP_204_NO_CONTENT` — previously returned 200 with an empty body (PR #75)
 - [Fixed] Bare `except Exception: pass` blocks in `generate_env()` around `FeatureFlagService` and `PlanService` calls replaced with `logger.warning()` — errors are now surfaced in logs instead of being silently swallowed (PR #76)

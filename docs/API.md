@@ -161,6 +161,31 @@ Register a webhook for an instance. Credentials are passed in the JSON body to p
 
 ---
 
+### POST /instances/{instance_id}/domains
+
+Add a custom domain to an instance.
+
+**Path parameter:** `instance_id` — UUID of the instance.
+
+**Request body**
+```json
+{
+  "domain": "erp.example.com",
+  "is_primary": false
+}
+```
+
+| Field       | Type    | Default | Description                              |
+|-------------|---------|---------|------------------------------------------|
+| domain      | string  | —       | Fully-qualified domain name to attach    |
+| is_primary  | boolean | false   | Whether this domain is the primary domain|
+
+**Response 200** — updated instance domain list.
+
+> **Note:** `domain` and `is_primary` are accepted as a JSON body (not query parameters). Changed in PR #82.
+
+---
+
 ### PUT /instances/{instance_id}/version
 
 Update the git ref (branch or tag) used for an instance's deployment.
@@ -205,6 +230,24 @@ List alert events. Accepts `instance_id` as a query parameter.
 
 ## Notification Channels
 
+All notification channel endpoints now return `NotificationChannelRead` responses with Pydantic validation. The `config` field is always masked in responses via `mask_config()` — credentials are never returned in plaintext.
+
+### GET /notification-channels
+
+List all notification channels. **Response 200** — `list[NotificationChannelRead]`.
+
+### POST /notification-channels
+
+Create a notification channel. **Response 200** — `NotificationChannelRead`.
+
+### PUT /notification-channels/{channel_id}
+
+Update a notification channel. **Response 200** — `NotificationChannelRead`.
+
+### DELETE /notification-channels/{channel_id}
+
+Delete a notification channel. **Response 204** — no content.
+
 ### POST /notification-channels/{channel_id}/test
 
 Send a test notification to the specified channel.
@@ -228,7 +271,7 @@ Send a test notification to the specified channel.
 
 Returns counts of scheduled jobs by state. Requires admin role.
 
-**Response 200**
+**Response 200** — `SchedulerStatusResponse`
 ```json
 {
   "pending": 3,
@@ -236,6 +279,70 @@ Returns counts of scheduled jobs by state. Requires admin role.
   "completed": 47
 }
 ```
+
+---
+
+## OpenTelemetry
+
+### POST /otel-export/test
+
+Test the configured OpenTelemetry export pipeline by sending a synthetic span and measuring round-trip latency.
+
+**Response 200** — `OtelTestResult`
+```json
+{
+  "success": true,
+  "message": "Span exported successfully",
+  "latency_ms": 12.4
+}
+```
+
+| Field       | Type           | Description                                  |
+|-------------|----------------|----------------------------------------------|
+| success     | boolean        | Whether the export succeeded                 |
+| message     | string         | Human-readable result or error message       |
+| latency_ms  | float \| null  | Round-trip export latency in milliseconds    |
+
+---
+
+## Disaster Recovery
+
+All DR endpoints are declared in `app/api/dr.py` and backed by `DRPlanRead` and `DRTaskResponse` schemas in `app/schemas/dr.py`.
+
+### POST /dr/plans
+
+Create a DR plan. **Response 200** — `DRPlanRead`.
+
+### GET /dr/plans
+
+List all DR plans. **Response 200** — `list[DRPlanRead]`.
+
+### GET /dr/plans/{plan_id}
+
+Get a single DR plan. **Response 200** — `DRPlanRead`.
+
+### PUT /dr/plans/{plan_id}
+
+Update a DR plan. **Response 200** — `DRPlanRead`.
+
+### DELETE /dr/plans/{plan_id}
+
+Delete a DR plan. **Response 204** — no content.
+
+### POST /dr/plans/{plan_id}/backup
+
+Trigger an offsite backup for a DR plan. **Response 200** — `DRTaskResponse`
+```json
+{ "task_id": "celery-task-uuid", "status": "queued" }
+```
+
+### POST /dr/plans/{plan_id}/test
+
+Trigger a DR test (non-destructive restore to a staging target). **Response 200** — `DRTaskResponse`.
+
+### POST /dr/plans/{plan_id}/restore
+
+Trigger a full DR restore. **Response 200** — `DRTaskResponse`.
 
 ---
 
@@ -253,7 +360,7 @@ Response body is an array of setting objects (secrets are excluded).
 
 ## Organizations
 
-Organizations now include a computed `instance_count` field in all read responses.
+Organizations include a computed `instance_count` field in all read responses.
 
 **Example**
 ```json
@@ -264,6 +371,22 @@ Organizations now include a computed `instance_count` field in all read response
   "instance_count": 4
 }
 ```
+
+### GET /orgs/{org_id}/members
+
+List members of an organisation with pagination.
+
+**Query parameters:** `offset` (default: 0), `limit` (default: 25, max: 100).
+
+**Response 200**
+```json
+{
+  "items": [...],
+  "count": 142
+}
+```
+
+> **Note:** `count` is the total number of active members in the organisation, not the current page size. Fixed in PR #81.
 
 ---
 
