@@ -30,6 +30,8 @@ and this project uses semantic versioning.
 ### Changed
 
 - [Changed] `python-jose` 3.3.0 replaced with `PyJWT` >=2.8.0 — drops the abandoned library and its CVE-2024-33663/CVE-2024-33664 JWT algorithm confusion vulnerabilities; `jwt.encode()`/`jwt.decode()` API is identical (PR #72)
+- [Changed] `get_dashboard_stats()` in `HealthService` now uses SQL aggregations (`GROUP BY status`, `GROUP BY server_id/version`) instead of loading all Instance rows into memory — eliminates full in-memory table scan (PR #78)
+- [Changed] `response_model=` added to 12 API route handlers that were missing it: `catalog.py` (list_releases, list_bundles, list_catalog_items), `observability.py` (metrics_summary, list_log_streams, get_logs), `git_repos.py` (list_repos, update_repo), `ssh_keys.py` (list, generate, import), `notifications.py` (list, unread_count) — responses are now validated and serialized via Pydantic schemas (PR #80)
 - [Changed] `list_for_web()` in `InstanceService` now pushes text search (ILIKE on name/org_code), status filter, and LIMIT/OFFSET pagination into the SQLAlchemy query — eliminates full in-memory table scan (PR #56)
 - [Changed] `_safe_slug()` helper consolidated from 5 duplicate definitions into `app/services/common.py`; backup, clone, deploy, metrics_export, and secret_rotation services now import the shared version (PR #63)
 - [Changed] Repeated `MetricsExportService.record_deployment()` try/except block in `DeployService.run_deployment()` extracted into private `_record_deploy_metric()` helper — 4 duplicate call sites replaced (PR #64)
@@ -43,6 +45,9 @@ and this project uses semantic versioning.
 
 ### Fixed
 
+- [Fixed] `UpgradeService.run_upgrade()` early-return guard now includes `UpgradeStatus.running` — previously two concurrent Celery workers could both pass the guard and double-execute the same upgrade (PR #74)
+- [Fixed] Catalog `DELETE` endpoints (`delete_release`, `delete_bundle`, `delete_catalog_item`) now return HTTP 204 No Content with `status_code=status.HTTP_204_NO_CONTENT` — previously returned 200 with an empty body (PR #75)
+- [Fixed] Bare `except Exception: pass` blocks in `generate_env()` around `FeatureFlagService` and `PlanService` calls replaced with `logger.warning()` — errors are now surfaced in logs instead of being silently swallowed (PR #76)
 - [Fixed] `BackupService.transfer_backup_file()` temp file now always cleaned up in try/finally — previously leaked to disk when `sftp_put()` raised (PR #51)
 - [Fixed] `CloneService._restore_backup_to_instance()` temp file now always cleaned up in try/finally — previously leaked to disk when any restore command raised (PR #62)
 - [Fixed] `channel_config` on notification channel endpoints now raises HTTP 422 on invalid JSON instead of silently coercing to `None` (PR #47)
@@ -85,3 +90,4 @@ and this project uses semantic versioning.
 - [Fixed] Ruff format applied to `app/services/backup_service.py`, `app/services/instance_service.py`, and `tests/test_deploy_service.py` to restore CI format check after passlib migration (2abd1f4)
 - [Fixed] `tests/test_api_settings.py` audit settings tests updated to use `admin_headers` — CI broke after audit GET endpoints were restricted to admin role in PR #70 (d677892)
 - [Added] Tests covering security-cycle-3 fixes: `test_api_settings.py` verifies broker_url/result_backend masking in `GET /settings/scheduler`; `test_instance_service.py` verifies backslash escaping in `_quote_env_value`; `test_api_audit.py` + `test_api_settings.py` verify regular users get 403 on `GET /settings/audit` and `GET /settings/audit/{key}` (PR #73)
+- [Added] `tests/test_upgrade_service.py` with 3 unit tests for `UpgradeService.run_upgrade()`: successful upgrade, failed upgrade (RuntimeError → status=failed + error_message), and concurrent early-return guard (PR #79)
