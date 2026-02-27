@@ -73,6 +73,26 @@ return {current, reset_ms}
 """
 
 
+def _trusted_proxy_ips() -> set[str]:
+    return {ip.strip() for ip in os.getenv("TRUSTED_PROXY_IPS", "").split(",") if ip.strip()}
+
+
+def _get_client_ip(request: Request, trusted_proxies: set[str] | None = None) -> str:
+    if request.client is None:
+        return "unknown"
+
+    immediate_ip = request.client.host
+    proxies = _trusted_proxy_ips() if trusted_proxies is None else trusted_proxies
+
+    # Only trust X-Forwarded-For when the immediate client is a trusted proxy.
+    if immediate_ip in proxies:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+
+    return immediate_ip
+
+
 class RateLimiter:
     """Per-IP sliding window rate limiter."""
 
@@ -90,7 +110,7 @@ class RateLimiter:
         self.name = name or f"limiter-{id(self)}"
         self._requests: OrderedDict[str, deque[float]] = OrderedDict()
         self._lock = threading.Lock()
-        self._trusted_proxies = {ip.strip() for ip in os.getenv("TRUSTED_PROXY_IPS", "").split(",") if ip.strip()}
+        self._trusted_proxies = _trusted_proxy_ips()
         # Log warning if TRUSTED_PROXY_IPS is empty/unset
         if not self._trusted_proxies:
             logger.warning(
@@ -105,20 +125,7 @@ class RateLimiter:
         self._redis_retry_after = 0.0
 
     def _client_ip(self, request: Request) -> str:
-        if request.client is None:
-            return "unknown"
-
-        immediate_ip = request.client.host
-
-        # Check if immediate IP is a trusted proxy
-        if immediate_ip in self._trusted_proxies:
-            # Only then trust X-Forwarded-For
-            forwarded = request.headers.get("x-forwarded-for")
-            if forwarded:
-                # Take the first IP in the chain (client's original IP)
-                return forwarded.split(",")[0].strip()
-
-        return immediate_ip
+        return _get_client_ip(request, self._trusted_proxies)
 
     def _redis_key(self, ip: str) -> str:
         return f"{_RATE_LIMIT_KEY_PREFIX}:{self.name}:{ip}"
