@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_role
@@ -68,6 +68,7 @@ def update_role(role_id: str, payload: RoleUpdate, db: Session = Depends(get_db)
 )
 def delete_role(role_id: str, db: Session = Depends(get_db)):
     rbac_service.roles.delete(db, role_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
@@ -111,6 +112,7 @@ def update_permission(permission_id: str, payload: PermissionUpdate, db: Session
 )
 def delete_permission(permission_id: str, db: Session = Depends(get_db)):
     rbac_service.permissions.delete(db, permission_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
@@ -153,6 +155,7 @@ def update_role_permission(link_id: str, payload: RolePermissionUpdate, db: Sess
 )
 def delete_role_permission(link_id: str, db: Session = Depends(get_db)):
     rbac_service.role_permissions.delete(db, link_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
@@ -193,3 +196,4 @@ def update_person_role(link_id: str, payload: PersonRoleUpdate, db: Session = De
 )
 def delete_person_role(link_id: str, db: Session = Depends(get_db)):
     rbac_service.person_roles.delete(db, link_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_role
@@ -88,6 +88,7 @@ def update_user_credential(credential_id: str, payload: UserCredentialUpdate, db
 )
 def delete_user_credential(credential_id: str, db: Session = Depends(get_db)):
     auth_service.user_credentials.delete(db, credential_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
@@ -156,6 +157,7 @@ def update_mfa_method(method_id: str, payload: MFAMethodUpdate, db: Session = De
 )
 def delete_mfa_method(method_id: str, db: Session = Depends(get_db)):
     auth_service.mfa_methods.delete(db, method_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
@@ -210,6 +212,7 @@ def update_session(session_id: str, payload: SessionUpdate, db: Session = Depend
 )
 def delete_session(session_id: str, db: Session = Depends(get_db)):
     auth_service.sessions.delete(db, session_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
@@ -294,3 +297,4 @@ def update_api_key(key_id: str, payload: ApiKeyUpdate, request: Request, db: Ses
 def delete_api_key(key_id: str, request: Request, db: Session = Depends(get_db)):
     org_id = getattr(request.state, "org_id", None)
     auth_service.api_keys.delete(db, key_id, org_id=org_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
