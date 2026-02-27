@@ -71,7 +71,4 @@ def test_otel_export(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except ValidationError as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Invalid response format from export_metrics: {exc}"
-        )
+        raise HTTPException(status_code=500, detail=f"Invalid response format from export_metrics: {exc}")
