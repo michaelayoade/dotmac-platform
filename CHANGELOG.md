@@ -73,6 +73,7 @@ and this project uses semantic versioning.
 - [Security] `_quote_env_value` in `instance_service.py` now escapes backslashes as the first transformation step — a trailing backslash in a password previously produced a malformed `.env` entry (e.g. `p4ss\` → unclosed `p4ss\"`) (PR #69)
 - [Security] `GET /settings/audit` and `GET /settings/audit/{key}` now require admin role — previously any authenticated user could read audit `skip_paths` and sentinel headers, providing a roadmap for evading the audit trail (PR #70)
 - [Security] `ApiKeys.generate_with_rate_limit` now uses `_get_client_ip()` helper that respects `TRUSTED_PROXY_IPS` — previously all requests appeared to originate from the proxy IP when behind a load balancer, effectively disabling per-client rate limiting for API key generation (PR #71)
+- [Security] Refresh token stored in DB now hashed with HMAC-SHA256 keyed on `SESSION_TOKEN_HASH_SECRET` when set, instead of plain SHA-256 — prevents brute-force token recovery if the database is read-compromised; falls back to plain SHA-256 when the env var is absent (5540a3d)
 
 ### CI / Housekeeping
 
@@ -83,3 +84,4 @@ and this project uses semantic versioning.
 - [Fixed] Ruff auto-format applied to 8 files (`app/main.py`, `app/services/audit.py`, `app/services/avatar.py`, `app/services/instance_service.py`, `tests/test_api_instances_webhooks.py`, `tests/test_avatar_services.py`, `tests/test_ghcr_deploy.py`, `tests/test_platform_settings.py`) to restore CI format check (ef4bd69)
 - [Fixed] Ruff format applied to `app/services/backup_service.py`, `app/services/instance_service.py`, and `tests/test_deploy_service.py` to restore CI format check after passlib migration (2abd1f4)
 - [Fixed] `tests/test_api_settings.py` audit settings tests updated to use `admin_headers` — CI broke after audit GET endpoints were restricted to admin role in PR #70 (d677892)
+- [Added] Tests covering security-cycle-3 fixes: `test_api_settings.py` verifies broker_url/result_backend masking in `GET /settings/scheduler`; `test_instance_service.py` verifies backslash escaping in `_quote_env_value`; `test_api_audit.py` + `test_api_settings.py` verify regular users get 403 on `GET /settings/audit` and `GET /settings/audit/{key}` (PR #73)
