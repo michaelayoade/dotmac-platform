@@ -631,6 +631,7 @@ class InstanceService:
     def migrate_instance(self, instance_id: UUID) -> Instance:
         """Run alembic migrations inside an instance's app container."""
         import shlex
+
         instance = self.get_or_404(instance_id)
         slug = instance.org_code.lower()
         if not re.match(r"^[a-zA-Z0-9_-]+$", slug):
@@ -1183,6 +1184,7 @@ class InstanceService:
         """Record a deployment metric (best‑effort)."""
         try:
             from app.services.metrics_export import MetricsExportService
+
             MetricsExportService(self.db).record_deployment(instance_id, success)
         except Exception:
             logger.debug(

@@ -261,7 +261,7 @@ class BackupService:
         target_ssh = get_ssh_for_server(target_server)
 
         # Create a secure temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.sql.gz') as tmp_file:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".sql.gz") as tmp_file:
             local_tmp = tmp_file.name
 
         # Use a unique target path to avoid collisions

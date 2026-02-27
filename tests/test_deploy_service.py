@@ -55,9 +55,7 @@ def _create_pending_deployment(svc: DeployService, instance: Instance) -> str:
     return deployment_id
 
 
-def _success_step(
-    svc: DeployService, step: str
-) -> Callable[[Instance, str, object, object, object, object], bool]:
+def _success_step(svc: DeployService, step: str) -> Callable[[Instance, str, object, object, object, object], bool]:
     def _side_effect(instance: Instance, deployment_id: str, *args, **kwargs) -> bool:
         svc._update_step(instance.instance_id, deployment_id, step, DeployStepStatus.success, f"{step} ok")
         return True
