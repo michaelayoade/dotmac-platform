@@ -388,8 +388,19 @@ class HealthService:
         for inst in all_instances:
             server_map[inst.server_id] = server_map.get(inst.server_id, 0) + 1
         server_breakdown: list[dict] = []
+        # Batch fetch servers to avoid N+1 queries
+        if server_map:
+            server_ids = list(server_map.keys())
+            servers = {
+                s.server_id: s
+                for s in self.db.scalars(
+                    select(Server).where(Server.server_id.in_(server_ids))
+                )
+            }
+        else:
+            servers = {}
         for sid, count in server_map.items():
-            server = self.db.get(Server, sid)
+            server = servers.get(sid)
             server_breakdown.append(
                 {
                     "server_id": str(sid),

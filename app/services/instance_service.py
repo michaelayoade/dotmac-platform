@@ -330,8 +330,14 @@ class InstanceService:
 
         pending_upgrade_ids = {a.upgrade_id for a in ApprovalService(self.db).get_pending(instance_id) if a.upgrade_id}
 
+        # Get server info safely
+        server = None
+        if instance.server_id:
+            server = self.db.get(Server, instance.server_id)
+
         return {
             "instance": instance,
+            "server": server,
             "latest_health": latest_health,
             "recent_checks": recent_checks,
             "deploy_logs": deploy_logs,
@@ -581,8 +587,10 @@ class InstanceService:
 
     def _exec_compose(self, instance: Instance, command: str) -> None:
         server = self.db.get(Server, instance.server_id)
-        if not server or not instance.deploy_path:
-            raise ValueError("Instance server or deploy path not configured")
+        if not server:
+            raise ValueError(f"Server {instance.server_id} not found for instance")
+        if not instance.deploy_path:
+            raise ValueError("Instance deploy path not configured")
         ssh = get_ssh_for_server(server)
         result = ssh.exec_command(command, cwd=instance.deploy_path)
         if not result.ok:
@@ -1210,7 +1218,7 @@ class InstanceService:
         """
         server = self.db.get(Server, instance.server_id)
         if not server:
-            raise ValueError("Server not found")
+            raise ValueError(f"Server {instance.server_id} not found")
 
         ssh = get_ssh_for_server(server)
         deploy_path = instance.deploy_path
