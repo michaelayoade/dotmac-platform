@@ -29,6 +29,7 @@ and this project uses semantic versioning.
 
 ### Changed
 
+- [Changed] `python-jose` 3.3.0 replaced with `PyJWT` >=2.8.0 — drops the abandoned library and its CVE-2024-33663/CVE-2024-33664 JWT algorithm confusion vulnerabilities; `jwt.encode()`/`jwt.decode()` API is identical (PR #72)
 - [Changed] `list_for_web()` in `InstanceService` now pushes text search (ILIKE on name/org_code), status filter, and LIMIT/OFFSET pagination into the SQLAlchemy query — eliminates full in-memory table scan (PR #56)
 - [Changed] `_safe_slug()` helper consolidated from 5 duplicate definitions into `app/services/common.py`; backup, clone, deploy, metrics_export, and secret_rotation services now import the shared version (PR #63)
 - [Changed] Repeated `MetricsExportService.record_deployment()` try/except block in `DeployService.run_deployment()` extracted into private `_record_deploy_metric()` helper — 4 duplicate call sites replaced (PR #64)
@@ -67,6 +68,11 @@ and this project uses semantic versioning.
 - [Security] `GET /instances/alerts/rules` and `GET /instances/alerts/events` now scoped to the caller's organisation; cross-tenant alert data exposure closed (PR #44)
 - [Security] Warning logged when API key hashing degrades to plain SHA-256 due to missing `API_KEY_HASH_SECRET` and `JWT_SECRET` configuration (PR #45)
 - [Security] JWT algorithm for per-domain auth settings restricted to allowlist `{HS256, HS384, HS512}`; runtime guard in `_jwt_algorithm()` raises HTTP 500 if an unsafe algorithm is resolved (PR #46)
+- [Security] `python-jose` migrated to `PyJWT` — fixes CVE-2024-33663 (algorithm confusion allowing auth bypass) and CVE-2024-33664 (unsafe signature handling); library was abandoned with no upstream security patches (PR #72)
+- [Security] Scheduler settings `broker_url` and `result_backend` marked `is_secret=True` — previously any authenticated user could read Celery/Redis connection strings containing passwords via `GET /settings/scheduler` (PR #68)
+- [Security] `_quote_env_value` in `instance_service.py` now escapes backslashes as the first transformation step — a trailing backslash in a password previously produced a malformed `.env` entry (e.g. `p4ss\` → unclosed `p4ss\"`) (PR #69)
+- [Security] `GET /settings/audit` and `GET /settings/audit/{key}` now require admin role — previously any authenticated user could read audit `skip_paths` and sentinel headers, providing a roadmap for evading the audit trail (PR #70)
+- [Security] `ApiKeys.generate_with_rate_limit` now uses `_get_client_ip()` helper that respects `TRUSTED_PROXY_IPS` — previously all requests appeared to originate from the proxy IP when behind a load balancer, effectively disabling per-client rate limiting for API key generation (PR #71)
 
 ### CI / Housekeeping
 
@@ -76,3 +82,4 @@ and this project uses semantic versioning.
 - [Fixed] Whitespace (W293), line-length (E501), and import-ordering (I001) ruff errors in `backup_service.py`, `clone_service.py`, and `tests/test_deploy_service.py` (12a07d0)
 - [Fixed] Ruff auto-format applied to 8 files (`app/main.py`, `app/services/audit.py`, `app/services/avatar.py`, `app/services/instance_service.py`, `tests/test_api_instances_webhooks.py`, `tests/test_avatar_services.py`, `tests/test_ghcr_deploy.py`, `tests/test_platform_settings.py`) to restore CI format check (ef4bd69)
 - [Fixed] Ruff format applied to `app/services/backup_service.py`, `app/services/instance_service.py`, and `tests/test_deploy_service.py` to restore CI format check after passlib migration (2abd1f4)
+- [Fixed] `tests/test_api_settings.py` audit settings tests updated to use `admin_headers` — CI broke after audit GET endpoints were restricted to admin role in PR #70 (d677892)
