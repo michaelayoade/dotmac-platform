@@ -102,6 +102,32 @@ class InstanceService:
     def __init__(self, db: Session):
         self.db = db
 
+    def _record_deploy_metric(self, instance_id: UUID, success: bool, org_code: str | None = None) -> None:
+        """Record a deployment metric, swallowing any exceptions."""
+        try:
+            from app.services.metrics_export import MetricsExportService
+            MetricsExportService(self.db).record_deployment(instance_id, success)
+        except Exception:
+            logger.debug(
+                "Failed to record deployment metric for %s (org: %s)",
+                instance_id,
+                org_code if org_code else "unknown",
+                exc_info=True,
+            )
+
+    def _record_deploy_metric(self, instance_id: UUID, success: bool, org_code: str | None = None) -> None:
+        """Record a deployment metric, swallowing any exceptions."""
+        try:
+            from app.services.metrics_export import MetricsExportService
+            MetricsExportService(self.db).record_deployment(instance_id, success)
+        except Exception:
+            logger.debug(
+                "Failed to record deployment metric for %s (org: %s)",
+                instance_id,
+                org_code if org_code else "unknown",
+                exc_info=True,
+            )
+
     def list_all(self, search: str | None = None) -> list[Instance]:
         stmt = select(Instance).order_by(Instance.created_at.desc())
         if search:

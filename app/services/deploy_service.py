@@ -343,6 +343,19 @@ class DeployService:
 
         self.db.commit()
 
+    def _record_deploy_metric(self, instance_id: UUID, success: bool) -> None:
+        """Record a deployment metric, swallowing any exceptions."""
+        try:
+            from app.services.metrics_export import MetricsExportService
+
+            MetricsExportService(self.db).record_deployment(instance_id, success)
+        except Exception:
+            logger.debug(
+                "Failed to record deployment metric for %s",
+                instance_id,
+                exc_info=True,
+            )
+
     def run_deployment(
         self,
         instance_id: UUID,
@@ -392,12 +405,7 @@ class DeployService:
                     results,
                     steps,
                 )
-                try:
-                    from app.services.metrics_export import MetricsExportService
-
-                    MetricsExportService(self.db).record_deployment(instance_id, result.get("success", False))
-                except Exception:
-                    logger.debug("Failed to record deployment metric for %s", instance.org_code, exc_info=True)
+                self._record_deploy_metric(instance_id, result.get("success", False))
                 return result
 
             # Full deployment pipeline
@@ -453,12 +461,7 @@ class DeployService:
             if not results["verify"]:
                 instance.status = InstanceStatus.error
                 self.db.commit()
-                try:
-                    from app.services.metrics_export import MetricsExportService
-
-                    MetricsExportService(self.db).record_deployment(instance_id, False)
-                except Exception:
-                    logger.debug("Failed to record deployment metric for %s", instance.org_code, exc_info=True)
+                self._record_deploy_metric(instance_id, False)
                 return {"success": False, "error": "Health check failed", "results": results}
 
             # Record deployed git ref
@@ -477,12 +480,7 @@ class DeployService:
             self.db.commit()
             self.clear_deploy_secret(instance_id, deployment_id)
             self._dispatch_webhook("deploy_success", instance, deployment_id)
-            try:
-                from app.services.metrics_export import MetricsExportService
-
-                MetricsExportService(self.db).record_deployment(instance_id, True)
-            except Exception:
-                logger.debug("Failed to record deployment metric for %s", instance.org_code, exc_info=True)
+            self._record_deploy_metric(instance_id, True)
             return {"success": True, "results": results}
 
         except DeployError as e:
@@ -498,12 +496,7 @@ class DeployService:
             instance.status = InstanceStatus.error
             self.db.commit()
             self._dispatch_webhook("deploy_failed", instance, deployment_id, error=str(e))
-            try:
-                from app.services.metrics_export import MetricsExportService
-
-                MetricsExportService(self.db).record_deployment(instance_id, False)
-            except Exception:
-                logger.debug("Failed to record deployment metric for %s", instance.org_code, exc_info=True)
+            self._record_deploy_metric(instance_id, False)
             return {"success": False, "error": str(e), "step": e.step}
 
         except Exception as e:
@@ -515,12 +508,7 @@ class DeployService:
             instance.status = InstanceStatus.error
             self.db.commit()
             self._dispatch_webhook("deploy_failed", instance, deployment_id, error=str(e))
-            try:
-                from app.services.metrics_export import MetricsExportService
-
-                MetricsExportService(self.db).record_deployment(instance_id, False)
-            except Exception:
-                logger.debug("Failed to record deployment metric for %s", instance.org_code, exc_info=True)
+            self._record_deploy_metric(instance_id, False)
             return {"success": False, "error": str(e)}
 
     def _run_reconfigure(
