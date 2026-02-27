@@ -112,29 +112,39 @@ class TestAuthSettingsAPI:
 class TestAuditSettingsAPI:
     """Tests for the /settings/audit endpoints."""
 
-    def test_list_audit_settings(self, client, auth_headers):
-        """Test listing audit settings."""
-        response = client.get("/settings/audit", headers=auth_headers)
+    def test_list_audit_settings(self, client, admin_headers):
+        """Test listing audit settings (admin only)."""
+        response = client.get("/settings/audit", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert "items" in data
         assert "count" in data
 
-    def test_list_audit_settings_with_pagination(self, client, auth_headers):
-        """Test listing audit settings with pagination."""
-        response = client.get("/settings/audit?limit=10&offset=0", headers=auth_headers)
+    def test_list_audit_settings_forbidden_non_admin(self, client, auth_headers):
+        """Test listing audit settings with non-admin auth returns 403."""
+        response = client.get("/settings/audit", headers=auth_headers)
+        assert response.status_code == 403
+
+    def test_list_audit_settings_with_pagination(self, client, admin_headers):
+        """Test listing audit settings with pagination (admin only)."""
+        response = client.get("/settings/audit?limit=10&offset=0", headers=admin_headers)
         assert response.status_code == 200
 
-    def test_get_audit_setting(self, client, auth_headers, db_session):
-        """Test getting a specific audit setting."""
-        response = client.get("/settings/audit/enabled", headers=auth_headers)
+    def test_get_audit_setting(self, client, admin_headers, db_session):
+        """Test getting a specific audit setting (admin only)."""
+        response = client.get("/settings/audit/enabled", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == "enabled"
 
-    def test_get_audit_setting_not_found(self, client, auth_headers):
-        """Test getting a non-existent audit setting."""
-        response = client.get("/settings/audit/nonexistent_key", headers=auth_headers)
+    def test_get_audit_setting_forbidden_non_admin(self, client, auth_headers):
+        """Test getting an audit setting with non-admin auth returns 403."""
+        response = client.get("/settings/audit/enabled", headers=auth_headers)
+        assert response.status_code == 403
+
+    def test_get_audit_setting_not_found(self, client, admin_headers):
+        """Test getting a non-existent audit setting (admin only)."""
+        response = client.get("/settings/audit/nonexistent_key", headers=admin_headers)
         assert response.status_code == 400
 
     def test_upsert_audit_setting(self, client, admin_headers):
@@ -162,6 +172,35 @@ class TestSchedulerSettingsAPI:
         """Test listing scheduler settings with pagination."""
         response = client.get("/settings/scheduler?limit=10&offset=0", headers=auth_headers)
         assert response.status_code == 200
+
+    def test_list_scheduler_settings_masks_secret_values(self, client, auth_headers, db_session):
+        """Test that broker_url and result_backend are masked in scheduler list responses."""
+        expected_raw = {
+            "broker_url": "redis://:secret-broker@redis:6379/0",
+            "result_backend": "redis://:secret-backend@redis:6379/1",
+        }
+        for key, value in expected_raw.items():
+            setting = (
+                db_session.query(DomainSetting)
+                .filter(
+                    DomainSetting.domain == SettingDomain.scheduler,
+                    DomainSetting.key == key,
+                )
+                .first()
+            )
+            assert setting is not None
+            setting.value_text = value
+            setting.is_secret = True
+        db_session.commit()
+
+        response = client.get("/settings/scheduler", headers=auth_headers)
+        assert response.status_code == 200
+        items_by_key = {item["key"]: item for item in response.json()["items"]}
+
+        for key, raw_value in expected_raw.items():
+            assert items_by_key[key]["is_secret"] is True
+            assert items_by_key[key]["value_text"] == "********"
+            assert items_by_key[key]["value_text"] != raw_value
 
     def test_get_scheduler_setting(self, client, auth_headers, db_session):
         """Test getting a specific scheduler setting."""
@@ -193,9 +232,9 @@ class TestSettingsAPIV1:
         response = client.get("/api/v1/settings/auth", headers=admin_headers)
         assert response.status_code == 200
 
-    def test_list_audit_settings_v1(self, client, auth_headers):
-        """Test listing audit settings via v1 API."""
-        response = client.get("/api/v1/settings/audit", headers=auth_headers)
+    def test_list_audit_settings_v1(self, client, admin_headers):
+        """Test listing audit settings via v1 API (admin only)."""
+        response = client.get("/api/v1/settings/audit", headers=admin_headers)
         assert response.status_code == 200
 
     def test_list_scheduler_settings_v1(self, client, auth_headers):
@@ -215,24 +254,33 @@ class TestPlatformSettingsExportAPI:
     """Tests for platform settings export endpoint."""
 
     def test_export_platform_settings_downloads_non_secret_values(self, client, admin_headers, db_session):
-        db_session.add(
-            DomainSetting(
-                domain=SettingDomain.platform,
-                key="custom_export_key",
-                value_text="custom-value",
-                is_secret=False,
-                is_active=True,
+        fixtures = [
+            ("custom_export_key", "custom-value", False),
+            ("hidden_export_key", "super-secret", True),
+        ]
+        for key, value_text, is_secret in fixtures:
+            setting = (
+                db_session.query(DomainSetting)
+                .filter(
+                    DomainSetting.domain == SettingDomain.platform,
+                    DomainSetting.key == key,
+                )
+                .first()
             )
-        )
-        db_session.add(
-            DomainSetting(
-                domain=SettingDomain.platform,
-                key="hidden_export_key",
-                value_text="super-secret",
-                is_secret=True,
-                is_active=True,
-            )
-        )
+            if not setting:
+                db_session.add(
+                    DomainSetting(
+                        domain=SettingDomain.platform,
+                        key=key,
+                        value_text=value_text,
+                        is_secret=is_secret,
+                        is_active=True,
+                    )
+                )
+                continue
+            setting.value_text = value_text
+            setting.is_secret = is_secret
+            setting.is_active = True
         db_session.commit()
 
         response = client.get("/api/v1/settings/export", headers=admin_headers)
