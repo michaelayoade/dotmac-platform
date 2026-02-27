@@ -8,11 +8,12 @@ import re
 from datetime import UTC
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role, require_user_auth
 from app.schemas.instances import (
+    AddDomainRequest,
     InstanceCreateRequest,
     InstanceCreateResponse,
     InstanceWebhookCreateRequest,
@@ -368,8 +369,7 @@ def list_domains(
 @router.post("/{instance_id}/domains", status_code=status.HTTP_201_CREATED)
 def add_domain(
     instance_id: UUID,
-    domain: str,
-    is_primary: bool = False,
+    payload: AddDomainRequest = Body(...),
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
@@ -377,7 +377,7 @@ def add_domain(
 
     svc = DomainService(db)
     try:
-        d = svc.add_domain(instance_id, domain, is_primary)
+        d = svc.add_domain(instance_id, payload.domain, payload.is_primary)
         db.commit()
         return svc.serialize_domain(d, include_token=True)
     except ValueError as e:

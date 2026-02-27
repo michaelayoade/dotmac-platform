@@ -34,6 +34,11 @@ class InstanceCreateResponse(BaseModel):
     catalog_item_id: UUID | None = None
 
 
+class AddDomainRequest(BaseModel):
+    domain: str
+    is_primary: bool = False
+
+
 class InstanceWebhookCreateRequest(BaseModel):
     url: str = Field(min_length=1, max_length=1024)
     events: list[str] = Field(default_factory=list)
