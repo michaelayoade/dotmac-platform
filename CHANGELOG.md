@@ -34,6 +34,7 @@ and this project uses semantic versioning.
 - [Changed] Repeated `MetricsExportService.record_deployment()` try/except block in `DeployService.run_deployment()` extracted into private `_record_deploy_metric()` helper — 4 duplicate call sites replaced (PR #64)
 - [Changed] Redundant `shlex.quote()` removed from container name f-string in `InstanceService.run_migrations()` — slug is already validated against `^[a-zA-Z0-9_-]+$` (PR #55)
 - [Changed] `httpx` bumped 0.27 → ^0.28 (stale connection pool fix) and `anyio` bumped 4.2 → ^4.9 (task group cancellation fix) (PR #58)
+- [Changed] `pydantic` bumped to >=2.11.0,<3 and `opentelemetry-sdk`/`opentelemetry-exporter-otlp` bumped to >=1.32.0/0.53b0; `poetry.lock` regenerated to resolve post-merge version conflicts (81a8434)
 - [Changed] `celery[redis]` bumped to ^5.5, `sqlalchemy` to 2.0.41, `alembic` to ^1.14, `redis` to ^5.2, `python-dotenv` to ^1.2 (b7fbfef)
 - [Changed] POST /api/v1/instances/webhooks now accepts JSON body (`url`, `events`, `secret`, `description`, `instance_id`) instead of query parameters (PR #30)
 - [Changed] Rate limiting upgraded from in-memory to Redis-backed sliding window implementation, enforced globally across all worker processes; falls back to in-memory when Redis is unavailable (PR #31)
@@ -48,6 +49,7 @@ and this project uses semantic versioning.
 
 ### Security
 
+- [Security] `cryptography` bumped from 42.0.8 to >=44.0.2 — fixes CVE-2024-12797 (RSA-PSS padding oracle attack) and all CVEs in the 43.x/44.x range (PR #65)
 - [Security] Jinja2 bumped from 3.1.4 to >=3.1.6 — fixes CVE-2024-56201 (sandbox escape via code generation) and CVE-2024-56326 (sandbox breakout via `__init_subclass__` override) (PR #57)
 - [Security] Webhook secret no longer exposed in server access logs or audit log metadata — moved from query params to JSON body (PR #30)
 - [Security] Rate limits now shared across all worker processes via Redis sorted-set sliding window (PR #31)
@@ -70,4 +72,5 @@ and this project uses semantic versioning.
 - [Fixed] Rate-limit wrapper now correctly handles `Response` objects returned by `login_response`; previously caused a 500 on login when the wrapper unwrapped the response early (PR #48)
 - [Fixed] Platform-settings unknown-key test narrowed to query a specific key so it no longer matches unrelated settings rows added by other tests (PR #49)
 - [Fixed] Trailing whitespace on blank lines (W293) and import ordering (I001) corrected across `auth_flow.py`, `settings.py`, `main.py`, `rate_limit.py`, `auth.py` to restore CI lint pass (434e9aa)
+- [Fixed] Whitespace (W293), line-length (E501), and import-ordering (I001) ruff errors in `backup_service.py`, `clone_service.py`, and `tests/test_deploy_service.py` (12a07d0)
 - [Fixed] Ruff auto-format applied to 8 files (`app/main.py`, `app/services/audit.py`, `app/services/avatar.py`, `app/services/instance_service.py`, `tests/test_api_instances_webhooks.py`, `tests/test_avatar_services.py`, `tests/test_ghcr_deploy.py`, `tests/test_platform_settings.py`) to restore CI format check (ef4bd69)
