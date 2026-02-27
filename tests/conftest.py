@@ -11,11 +11,11 @@ from types import ModuleType
 import fastapi.dependencies.utils as fastapi_deps_utils
 import fastapi.routing as fastapi_routing
 import httpx
+import jwt
 import pytest
 import starlette.concurrency as starlette_concurrency
 import starlette.routing as starlette_routing
 from fastapi.routing import APIRoute
-from jose import jwt
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from starlette.routing import request_response

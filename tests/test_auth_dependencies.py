@@ -65,7 +65,7 @@ class TestHelperFunctions:
 
     def test_is_jwt_valid_jwt(self):
         """Test _is_jwt identifies valid JWT format."""
-        from jose import jwt as jose_jwt
+        import jwt as jose_jwt
 
         token = jose_jwt.encode({"sub": "123"}, "secret", algorithm="HS256")
         assert _is_jwt(token) is True
