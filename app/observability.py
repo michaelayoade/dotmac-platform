@@ -3,7 +3,8 @@ import os
 import time
 import uuid
 
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import PyJWTError as JWTError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
