@@ -92,7 +92,7 @@ def update_channel(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/{channel_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{channel_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_channel(
     channel_id: UUID,
     db: Session = Depends(get_db),
