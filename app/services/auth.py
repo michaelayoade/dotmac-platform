@@ -17,8 +17,6 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-# TODO: Security - Ensure _get_client_ip validates immediate remote IP against trusted proxies
-# before trusting X-Forwarded-For header to prevent spoofing.
 from app.models.auth import (
     ApiKey,
     AuthProvider,
@@ -32,6 +30,7 @@ from app.models.auth import (
 )
 from app.models.domain_settings import DomainSetting, SettingDomain
 from app.models.person import Person
+from app.rate_limit import _get_client_ip
 from app.schemas.auth import (
     ApiKeyCreate,
     ApiKeyGenerateRequest,
@@ -434,11 +433,7 @@ class ApiKeys(ListResponseMixin):
     def generate_with_rate_limit(
         db: Session, payload: ApiKeyGenerateRequest, request: Request | None, org_id: str | None = None
     ):
-        # SECURITY: client_ip is taken from request.client.host which is the immediate remote IP.
-        # If behind a trusted proxy, ensure _get_client_ip validates the proxy IP before trusting X-Forwarded-For.
-        client_ip = "unknown"
-        if request is not None and request.client:
-            client_ip = request.client.host
+        client_ip = _get_client_ip(request) if request is not None else "unknown"
         window_seconds = _auth_int_setting(db, "api_key_rate_window_seconds", _API_KEY_WINDOW_SECONDS)
         max_per_window = _auth_int_setting(db, "api_key_rate_max", _API_KEY_MAX_PER_WINDOW)
         redis_client = _get_redis_client()

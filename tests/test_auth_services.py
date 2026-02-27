@@ -1,4 +1,5 @@
 import uuid
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -124,3 +125,31 @@ def test_api_key_rate_limit_requires_redis(monkeypatch, db_session):
     with pytest.raises(HTTPException) as exc:
         auth_service.api_keys.generate_with_rate_limit(db_session, ApiKeyGenerateRequest(label="test"), None)
     assert exc.value.status_code == 503
+
+
+def test_api_key_rate_limit_uses_forwarded_for_for_trusted_proxy(monkeypatch, db_session):
+    monkeypatch.setenv("TRUSTED_PROXY_IPS", "10.0.0.1")
+    fake = _FakeRedis()
+    monkeypatch.setattr(auth_service, "_get_redis_client", lambda: fake)
+
+    request = MagicMock()
+    request.client.host = "10.0.0.1"
+    request.headers = {"x-forwarded-for": "192.168.1.100, 10.0.0.1"}
+
+    auth_service.api_keys.generate_with_rate_limit(db_session, ApiKeyGenerateRequest(label="test"), request)
+
+    assert any(key.startswith("api_key_rl:192.168.1.100:") for key in fake.store)
+
+
+def test_api_key_rate_limit_ignores_forwarded_for_for_untrusted_peer(monkeypatch, db_session):
+    monkeypatch.setenv("TRUSTED_PROXY_IPS", "10.0.0.1")
+    fake = _FakeRedis()
+    monkeypatch.setattr(auth_service, "_get_redis_client", lambda: fake)
+
+    request = MagicMock()
+    request.client.host = "203.0.113.10"
+    request.headers = {"x-forwarded-for": "192.168.1.100"}
+
+    auth_service.api_keys.generate_with_rate_limit(db_session, ApiKeyGenerateRequest(label="test"), request)
+
+    assert any(key.startswith("api_key_rl:203.0.113.10:") for key in fake.store)
