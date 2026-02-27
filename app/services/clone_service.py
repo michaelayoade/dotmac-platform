@@ -227,40 +227,41 @@ class CloneService:
         target_backup_path = backup_path
         local_tmp = None
 
-        if source_server.server_id != target_server.server_id:
-            local_tmp = f"/tmp/clone_{backup.backup_id}.sql.gz"
-            source_ssh.sftp_get(backup_path, local_tmp)
-            target_backup_path = f"/tmp/clone_{backup.backup_id}.sql.gz"
-            target_ssh.sftp_put(local_tmp, target_backup_path)
+        try:
+            if source_server.server_id != target_server.server_id:
+                local_tmp = f"/tmp/clone_{backup.backup_id}.sql.gz"
+                source_ssh.sftp_get(backup_path, local_tmp)
+                target_backup_path = f"/tmp/clone_{backup.backup_id}.sql.gz"
+                target_ssh.sftp_put(local_tmp, target_backup_path)
 
-        slug = _safe_slug(target_instance.org_code.lower())
-        db_container = f"dotmac_{slug}_db"
-        db_name = f"dotmac_{slug}"
+            slug = _safe_slug(target_instance.org_code.lower())
+            db_container = f"dotmac_{slug}_db"
+            db_name = f"dotmac_{slug}"
 
-        q_db_name = shlex.quote(db_name)
-        q_file = shlex.quote(target_backup_path)
-        drop_sql = f'DROP DATABASE IF EXISTS "{db_name}" WITH (FORCE); CREATE DATABASE "{db_name}";'
-        drop_cmd = f"docker exec {shlex.quote(db_container)} psql -U postgres -d postgres -c {shlex.quote(drop_sql)}"
-        drop_result = target_ssh.exec_command(drop_cmd, timeout=60)
-        if not drop_result.ok:
-            raise ValueError((drop_result.stderr or drop_result.stdout or "Drop failed")[:2000])
+            q_db_name = shlex.quote(db_name)
+            q_file = shlex.quote(target_backup_path)
+            drop_sql = f'DROP DATABASE IF EXISTS "{db_name}" WITH (FORCE); CREATE DATABASE "{db_name}";'
+            drop_cmd = f"docker exec {shlex.quote(db_container)} psql -U postgres -d postgres -c {shlex.quote(drop_sql)}"
+            drop_result = target_ssh.exec_command(drop_cmd, timeout=60)
+            if not drop_result.ok:
+                raise ValueError((drop_result.stderr or drop_result.stdout or "Drop failed")[:2000])
 
-        restore_inner = (
-            f"set -o pipefail; "
-            f"gunzip -c {q_file} | "
-            f"docker exec -i {shlex.quote(db_container)} "
-            f"psql -U postgres -d {q_db_name}"
-        )
-        restore_cmd = f"bash -lc {shlex.quote(restore_inner)}"
-        result = target_ssh.exec_command(restore_cmd, timeout=600)
-        if not result.ok:
-            raise ValueError((result.stderr or result.stdout or "Restore failed")[:2000])
-
-        if local_tmp:
-            try:
-                os.remove(local_tmp)
-            except OSError:
-                logger.debug("Failed to remove temp clone backup %s", local_tmp)
+            restore_inner = (
+                f"set -o pipefail; "
+                f"gunzip -c {q_file} | "
+                f"docker exec -i {shlex.quote(db_container)} "
+                f"psql -U postgres -d {q_db_name}"
+            )
+            restore_cmd = f"bash -lc {shlex.quote(restore_inner)}"
+            result = target_ssh.exec_command(restore_cmd, timeout=600)
+            if not result.ok:
+                raise ValueError((result.stderr or result.stdout or "Restore failed")[:2000])
+        finally:
+            if local_tmp and os.path.exists(local_tmp):
+                try:
+                    os.remove(local_tmp)
+                except OSError:
+                    logger.debug("Failed to remove temp clone backup %s", local_tmp)
 
     def _copy_modules(self, source_id: UUID, target_id: UUID) -> None:
         from app.models.module import InstanceModule
