@@ -1179,6 +1179,18 @@ class InstanceService:
                 main()
         ''')
 
+    def _record_deploy_metric(self, instance_id: UUID, success: bool) -> None:
+        """Record a deployment metric (best‑effort)."""
+        try:
+            from app.services.metrics_export import MetricsExportService
+            MetricsExportService(self.db).record_deployment(instance_id, success)
+        except Exception:
+            logger.debug(
+                "Failed to record deployment metric for %s",
+                instance_id,
+                exc_info=True,
+            )
+
     def provision_files(self, instance: Instance, admin_password: str, git_ref: str | None = None) -> dict:
         """Generate all instance files and write them to the deploy path.
 
