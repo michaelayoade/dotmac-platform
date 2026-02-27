@@ -6,6 +6,7 @@ import os
 import secrets
 from datetime import UTC, datetime, timedelta
 
+import bcrypt
 import pyotp
 
 logger = logging.getLogger(__name__)
@@ -14,7 +15,6 @@ from typing import cast
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException, Request, Response, status
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -41,13 +41,6 @@ from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
 from app.services.secrets import resolve_secret
 from app.services.settings_crypto import resolve_setting_value
-
-PASSWORD_CONTEXT = CryptContext(
-    schemes=["pbkdf2_sha256", "bcrypt"],
-    default="bcrypt",
-    deprecated="auto",
-)
-
 
 def _env_value(name: str) -> str | None:
     value = os.getenv(name)
@@ -373,13 +366,13 @@ def _decrypt_secret(db: Session | None, secret: str) -> str:
 
 
 def hash_password(password: str) -> str:
-    return cast(str, PASSWORD_CONTEXT.hash(password))
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str | None) -> bool:
     if not password_hash:
         return False
-    return cast(bool, PASSWORD_CONTEXT.verify(password, password_hash))
+    return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
 
 
 def revoke_sessions_for_person(
