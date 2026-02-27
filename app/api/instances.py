@@ -13,9 +13,53 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role, require_user_auth
 from app.schemas.instances import (
+    AlertEventRead,
+    AlertRuleCreateRead,
+    AlertRuleRead,
+    ApprovalStatusRead,
+    BackupRead,
+    BackupRestoreRead,
+    BatchDeployCreateRead,
+    BatchDeployRead,
+    CloneDispatchRead,
+    CloneOperationRead,
+    DeployApprovalRead,
+    DomainRead,
+    DomainSSLProvisionRead,
+    DomainVerificationRead,
+    DriftReportRead,
+    DRStatusRead,
+    FeatureFlagRead,
+    FeatureFlagValueRead,
+    HealthCheckRead,
+    InstanceAutoDeployRead,
     InstanceCreateRequest,
     InstanceCreateResponse,
+    InstanceModuleRead,
+    InstancePlanAssignmentRead,
+    InstanceVersionRead,
     InstanceWebhookCreateRequest,
+    LifecycleStatusRead,
+    MaintenanceWindowRead,
+    MaintenanceWindowUpsertRead,
+    ModuleRead,
+    ModuleToggleRead,
+    PlanRead,
+    PlanViolationRead,
+    ReconfigureRead,
+    ResourceConsumerRead,
+    SecretRotationLogRead,
+    SecretRotationTaskRead,
+    TagRead,
+    TenantAuditLogRead,
+    TrialLifecycleRead,
+    UpgradeCancelRead,
+    UpgradeDispatchRead,
+    UpgradeRead,
+    UsageRecordRead,
+    UsageSummaryRead,
+    WebhookDeliveryRead,
+    WebhookEndpointRead,
 )
 from app.services.common import paginate_list
 
@@ -73,7 +117,7 @@ def create_instance(
 # ──────────────────────────── Auto-Deploy ─────────────────────────
 
 
-@router.post("/{instance_id}/auto-deploy")
+@router.post("/{instance_id}/auto-deploy", response_model=InstanceAutoDeployRead)
 def toggle_auto_deploy(
     instance_id: UUID,
     enabled: bool = True,
@@ -93,7 +137,7 @@ def toggle_auto_deploy(
 # ──────────────────────────── Modules ────────────────────────────
 
 
-@router.get("/{instance_id}/modules")
+@router.get("/{instance_id}/modules", response_model=list[InstanceModuleRead])
 def list_instance_modules(
     instance_id: UUID,
     limit: int = Query(default=50, ge=1, le=200),
@@ -108,7 +152,7 @@ def list_instance_modules(
     return [svc.serialize_instance_module(m) for m in paginate_list(modules, limit, offset)]
 
 
-@router.put("/{instance_id}/modules/{module_id}")
+@router.put("/{instance_id}/modules/{module_id}", response_model=ModuleToggleRead)
 def set_module_enabled(
     instance_id: UUID,
     module_id: UUID,
@@ -127,7 +171,7 @@ def set_module_enabled(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/modules")
+@router.get("/modules", response_model=list[ModuleRead])
 def list_all_modules(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -144,7 +188,7 @@ def list_all_modules(
 # ──────────────────────────── Feature Flags ──────────────────────
 
 
-@router.get("/{instance_id}/flags")
+@router.get("/{instance_id}/flags", response_model=list[FeatureFlagRead])
 def list_instance_flags(
     instance_id: UUID,
     limit: int = Query(default=50, ge=1, le=200),
@@ -159,7 +203,7 @@ def list_instance_flags(
     return [svc.serialize_flag_entry(f) for f in paginate_list(flags, limit, offset)]
 
 
-@router.put("/{instance_id}/flags/{flag_key}")
+@router.put("/{instance_id}/flags/{flag_key}", response_model=FeatureFlagValueRead)
 def set_flag(
     instance_id: UUID,
     flag_key: str,
@@ -193,7 +237,7 @@ def delete_flag(
 # ──────────────────────────── Plans ──────────────────────────────
 
 
-@router.get("/plans")
+@router.get("/plans", response_model=list[PlanRead])
 def list_plans(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -207,7 +251,7 @@ def list_plans(
     return [svc.serialize_plan(p) for p in paginate_list(plans, limit, offset)]
 
 
-@router.put("/{instance_id}/plan")
+@router.put("/{instance_id}/plan", response_model=InstancePlanAssignmentRead)
 def assign_plan(
     instance_id: UUID,
     plan_id: UUID,
@@ -227,7 +271,11 @@ def assign_plan(
 # ──────────────────────────── Secret Rotation ────────────────────
 
 
-@router.post("/{instance_id}/secrets/rotate", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/{instance_id}/secrets/rotate",
+    response_model=SecretRotationTaskRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def rotate_secret(
     instance_id: UUID,
     secret_name: str,
@@ -246,7 +294,11 @@ def rotate_secret(
     return {"task_id": task.id, "instance_id": str(instance_id), "secret_name": secret_name}
 
 
-@router.post("/{instance_id}/secrets/rotate-all", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/{instance_id}/secrets/rotate-all",
+    response_model=SecretRotationTaskRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def rotate_all_secrets(
     instance_id: UUID,
     confirm_destructive: bool = False,
@@ -263,7 +315,7 @@ def rotate_all_secrets(
     return {"task_id": task.id, "instance_id": str(instance_id)}
 
 
-@router.get("/{instance_id}/secrets/history")
+@router.get("/{instance_id}/secrets/history", response_model=list[SecretRotationLogRead])
 def secret_rotation_history(
     instance_id: UUID,
     limit: int = Query(25, ge=1, le=200),
@@ -280,7 +332,7 @@ def secret_rotation_history(
 # ──────────────────────────── Backups ────────────────────────────
 
 
-@router.get("/{instance_id}/backups")
+@router.get("/{instance_id}/backups", response_model=list[BackupRead])
 def list_backups(
     instance_id: UUID,
     limit: int = Query(default=50, ge=1, le=200),
@@ -295,7 +347,7 @@ def list_backups(
     return [svc.serialize_backup(b) for b in paginate_list(backups, limit, offset)]
 
 
-@router.post("/{instance_id}/backups", status_code=status.HTTP_201_CREATED)
+@router.post("/{instance_id}/backups", response_model=BackupRead, status_code=status.HTTP_201_CREATED)
 def create_backup(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -312,7 +364,11 @@ def create_backup(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{instance_id}/backups/{backup_id}/restore", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/{instance_id}/backups/{backup_id}/restore",
+    response_model=BackupRestoreRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def restore_backup(
     instance_id: UUID,
     backup_id: UUID,
@@ -350,7 +406,7 @@ def delete_backup(
 # ──────────────────────────── Domains ────────────────────────────
 
 
-@router.get("/{instance_id}/domains")
+@router.get("/{instance_id}/domains", response_model=list[DomainRead])
 def list_domains(
     instance_id: UUID,
     limit: int = Query(default=50, ge=1, le=200),
@@ -365,7 +421,7 @@ def list_domains(
     return [svc.serialize_domain(d) for d in paginate_list(domains, limit, offset)]
 
 
-@router.post("/{instance_id}/domains", status_code=status.HTTP_201_CREATED)
+@router.post("/{instance_id}/domains", response_model=DomainRead, status_code=status.HTTP_201_CREATED)
 def add_domain(
     instance_id: UUID,
     domain: str,
@@ -384,7 +440,7 @@ def add_domain(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{instance_id}/domains/{domain_id}/verify")
+@router.post("/{instance_id}/domains/{domain_id}/verify", response_model=DomainVerificationRead)
 def verify_domain(
     instance_id: UUID,
     domain_id: UUID,
@@ -402,7 +458,7 @@ def verify_domain(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{instance_id}/domains/{domain_id}/ssl")
+@router.post("/{instance_id}/domains/{domain_id}/ssl", response_model=DomainSSLProvisionRead)
 def provision_ssl(
     instance_id: UUID,
     domain_id: UUID,
@@ -441,7 +497,7 @@ def remove_domain(
 # ──────────────────────────── Lifecycle ──────────────────────────
 
 
-@router.post("/{instance_id}/trial", status_code=status.HTTP_200_OK)
+@router.post("/{instance_id}/trial", response_model=TrialLifecycleRead, status_code=status.HTTP_200_OK)
 def start_trial(
     instance_id: UUID,
     days: int = Query(default=14, ge=1, le=365),
@@ -463,7 +519,7 @@ def start_trial(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{instance_id}/suspend", status_code=status.HTTP_200_OK)
+@router.post("/{instance_id}/suspend", response_model=LifecycleStatusRead, status_code=status.HTTP_200_OK)
 def suspend_instance(
     instance_id: UUID,
     reason: str | None = None,
@@ -481,7 +537,7 @@ def suspend_instance(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{instance_id}/reactivate", status_code=status.HTTP_200_OK)
+@router.post("/{instance_id}/reactivate", response_model=LifecycleStatusRead, status_code=status.HTTP_200_OK)
 def reactivate_instance(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -498,7 +554,7 @@ def reactivate_instance(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{instance_id}/archive", status_code=status.HTTP_200_OK)
+@router.post("/{instance_id}/archive", response_model=LifecycleStatusRead, status_code=status.HTTP_200_OK)
 def archive_instance(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -518,7 +574,7 @@ def archive_instance(
 # ──────────────────────────── Reconfigure ────────────────────────
 
 
-@router.post("/{instance_id}/reconfigure", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/{instance_id}/reconfigure", response_model=ReconfigureRead, status_code=status.HTTP_202_ACCEPTED)
 def reconfigure_instance(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -541,7 +597,7 @@ def reconfigure_instance(
 # ──────────────────────────── Version Pinning ────────────────────
 
 
-@router.put("/{instance_id}/version")
+@router.put("/{instance_id}/version", response_model=InstanceVersionRead)
 def set_version(
     instance_id: UUID,
     git_branch: str | None = None,
@@ -575,7 +631,7 @@ def set_version(
 # ──────────────────────────── Batch Deploy ───────────────────────
 
 
-@router.post("/batch-deploy", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/batch-deploy", response_model=BatchDeployCreateRead, status_code=status.HTTP_202_ACCEPTED)
 def create_batch_deploy(
     instance_ids: list[str],
     strategy: str = "rolling",
@@ -599,7 +655,7 @@ def create_batch_deploy(
     }
 
 
-@router.get("/batch-deploys")
+@router.get("/batch-deploys", response_model=list[BatchDeployRead])
 def list_batch_deploys(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -616,7 +672,7 @@ def list_batch_deploys(
 # ──────────────────────────── Resource Stats ─────────────────────
 
 
-@router.get("/resource-stats")
+@router.get("/resource-stats", response_model=list[ResourceConsumerRead])
 def get_resource_stats(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -634,7 +690,7 @@ def get_resource_stats(
 # ──────────────────────────── Webhooks ───────────────────────────
 
 
-@router.get("/webhooks")
+@router.get("/webhooks", response_model=list[WebhookEndpointRead])
 def list_webhooks(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -648,7 +704,7 @@ def list_webhooks(
     return [svc.serialize_endpoint(e) for e in paginate_list(endpoints, limit, offset)]
 
 
-@router.post("/webhooks", status_code=status.HTTP_201_CREATED)
+@router.post("/webhooks", response_model=WebhookEndpointRead, status_code=status.HTTP_201_CREATED)
 def create_webhook(
     payload: InstanceWebhookCreateRequest,
     db: Session = Depends(get_db),
@@ -682,7 +738,7 @@ def delete_webhook(
     return {"deleted": str(endpoint_id)}
 
 
-@router.get("/webhooks/{endpoint_id}/deliveries")
+@router.get("/webhooks/{endpoint_id}/deliveries", response_model=list[WebhookDeliveryRead])
 def list_webhook_deliveries(
     endpoint_id: UUID,
     limit: int = Query(default=50, ge=1, le=200),
@@ -700,7 +756,7 @@ def list_webhook_deliveries(
 # ──────────────────────────── Tenant Audit ───────────────────────
 
 
-@router.get("/{instance_id}/audit-log")
+@router.get("/{instance_id}/audit-log", response_model=list[TenantAuditLogRead])
 def get_tenant_audit_log(
     instance_id: UUID,
     action: str | None = None,
@@ -719,7 +775,7 @@ def get_tenant_audit_log(
 # ──────────────────────────── Instance Cloning ───────────────────
 
 
-@router.post("/{instance_id}/clone", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/{instance_id}/clone", response_model=CloneDispatchRead, status_code=status.HTTP_202_ACCEPTED)
 def clone_instance(
     instance_id: UUID,
     new_org_code: str,
@@ -754,7 +810,7 @@ def clone_instance(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{instance_id}/clones/{clone_id}")
+@router.get("/{instance_id}/clones/{clone_id}", response_model=CloneOperationRead)
 def get_clone_status(
     instance_id: UUID,
     clone_id: UUID,
@@ -772,7 +828,7 @@ def get_clone_status(
 # ──────────────────────────── Maintenance Windows ────────────────
 
 
-@router.get("/{instance_id}/maintenance-windows")
+@router.get("/{instance_id}/maintenance-windows", response_model=list[MaintenanceWindowRead])
 def list_maintenance_windows(
     instance_id: UUID,
     limit: int = Query(default=50, ge=1, le=200),
@@ -787,7 +843,11 @@ def list_maintenance_windows(
     return [svc.serialize_window(w) for w in paginate_list(windows, limit, offset)]
 
 
-@router.post("/{instance_id}/maintenance-windows", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{instance_id}/maintenance-windows",
+    response_model=MaintenanceWindowUpsertRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def set_maintenance_window(
     instance_id: UUID,
     day_of_week: int = Query(..., ge=0, le=6),
@@ -836,7 +896,7 @@ def delete_maintenance_window(
 # ──────────────────────────── Usage Metering ─────────────────────
 
 
-@router.get("/{instance_id}/usage")
+@router.get("/{instance_id}/usage", response_model=list[UsageRecordRead])
 def get_instance_usage(
     instance_id: UUID,
     metric: str | None = None,
@@ -857,7 +917,7 @@ def get_instance_usage(
     return [svc.serialize_record(r) for r in paginate_list(records, limit, offset)]
 
 
-@router.get("/{instance_id}/billing-summary")
+@router.get("/{instance_id}/billing-summary", response_model=dict[str, float])
 def get_billing_summary(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -876,7 +936,7 @@ def get_billing_summary(
 # ──────────────────────────── Compliance ─────────────────────────
 
 
-@router.get("/{instance_id}/compliance")
+@router.get("/{instance_id}/compliance", response_model=list[PlanViolationRead])
 def get_plan_compliance(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -889,7 +949,7 @@ def get_plan_compliance(
     return [svc.serialize_violation(v) for v in violations]
 
 
-@router.get("/{instance_id}/usage-summary")
+@router.get("/{instance_id}/usage-summary", response_model=UsageSummaryRead)
 def get_usage_summary(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -906,7 +966,7 @@ def get_usage_summary(
 # ──────────────────────────── Tags ───────────────────────────────
 
 
-@router.get("/{instance_id}/tags")
+@router.get("/{instance_id}/tags", response_model=list[TagRead])
 def list_tags(
     instance_id: UUID,
     limit: int = Query(default=50, ge=1, le=200),
@@ -921,7 +981,7 @@ def list_tags(
     return [svc.serialize_tag(t) for t in paginate_list(tags, limit, offset)]
 
 
-@router.put("/{instance_id}/tags/{key}")
+@router.put("/{instance_id}/tags/{key}", response_model=TagRead)
 def set_tag(
     instance_id: UUID,
     key: str,
@@ -958,7 +1018,7 @@ def delete_tag(
 # ──────────────────────────── Deploy Approvals ───────────────────
 
 
-@router.get("/approvals")
+@router.get("/approvals", response_model=list[DeployApprovalRead])
 def list_pending_approvals(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -980,7 +1040,7 @@ def list_pending_approvals(
     return [svc.serialize_approval(a) for a in paginate_list(approvals, limit, offset)]
 
 
-@router.post("/{instance_id}/approvals", status_code=status.HTTP_201_CREATED)
+@router.post("/{instance_id}/approvals", response_model=ApprovalStatusRead, status_code=status.HTTP_201_CREATED)
 def request_deploy_approval(
     instance_id: UUID,
     deployment_type: str = "full",
@@ -1008,7 +1068,11 @@ def request_deploy_approval(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/approvals/{approval_id}/approve", status_code=status.HTTP_200_OK)
+@router.post(
+    "/approvals/{approval_id}/approve",
+    response_model=ApprovalStatusRead,
+    status_code=status.HTTP_200_OK,
+)
 def approve_deploy(
     approval_id: UUID,
     db: Session = Depends(get_db),
@@ -1029,7 +1093,11 @@ def approve_deploy(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/approvals/{approval_id}/reject", status_code=status.HTTP_200_OK)
+@router.post(
+    "/approvals/{approval_id}/reject",
+    response_model=ApprovalStatusRead,
+    status_code=status.HTTP_200_OK,
+)
 def reject_deploy(
     approval_id: UUID,
     reason: str | None = None,
@@ -1054,7 +1122,7 @@ def reject_deploy(
 # ──────────────────────────── Config Drift ───────────────────────
 
 
-@router.get("/{instance_id}/drift")
+@router.get("/{instance_id}/drift", response_model=DriftReportRead)
 def get_drift_report(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -1069,7 +1137,7 @@ def get_drift_report(
     return svc.serialize_report(report)
 
 
-@router.post("/{instance_id}/drift/detect", status_code=status.HTTP_200_OK)
+@router.post("/{instance_id}/drift/detect", response_model=DriftReportRead, status_code=status.HTTP_200_OK)
 def detect_drift(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -1089,7 +1157,7 @@ def detect_drift(
 # ──────────────────────────── DR Status ─────────────────────────
 
 
-@router.get("/{instance_id}/dr-status")
+@router.get("/{instance_id}/dr-status", response_model=DRStatusRead)
 def get_dr_status(
     instance_id: UUID,
     db: Session = Depends(get_db),
@@ -1103,7 +1171,7 @@ def get_dr_status(
 # ──────────────────────────── Upgrades ───────────────────────────
 
 
-@router.get("/{instance_id}/upgrades")
+@router.get("/{instance_id}/upgrades", response_model=list[UpgradeRead])
 def list_upgrades(
     instance_id: UUID,
     limit: int = Query(default=50, ge=1, le=200),
@@ -1118,7 +1186,7 @@ def list_upgrades(
     return [svc.serialize_upgrade(u) for u in upgrades]
 
 
-@router.post("/{instance_id}/upgrades", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/{instance_id}/upgrades", response_model=UpgradeDispatchRead, status_code=status.HTTP_202_ACCEPTED)
 def create_upgrade(
     instance_id: UUID,
     catalog_item_id: UUID,
@@ -1144,7 +1212,11 @@ def create_upgrade(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{instance_id}/upgrades/{upgrade_id}/cancel", status_code=status.HTTP_200_OK)
+@router.post(
+    "/{instance_id}/upgrades/{upgrade_id}/cancel",
+    response_model=UpgradeCancelRead,
+    status_code=status.HTTP_200_OK,
+)
 def cancel_upgrade(
     instance_id: UUID,
     upgrade_id: UUID,
@@ -1172,7 +1244,7 @@ def cancel_upgrade(
 # ──────────────────────────── Alerts ─────────────────────────────
 
 
-@router.get("/alerts/rules")
+@router.get("/alerts/rules", response_model=list[AlertRuleRead])
 def list_alert_rules(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -1187,7 +1259,7 @@ def list_alert_rules(
     return [svc.serialize_rule(r) for r in paginate_list(rules, limit, offset)]
 
 
-@router.post("/alerts/rules", status_code=status.HTTP_201_CREATED)
+@router.post("/alerts/rules", response_model=AlertRuleCreateRead, status_code=status.HTTP_201_CREATED)
 def create_alert_rule(
     name: str,
     metric: str,
@@ -1241,7 +1313,7 @@ def delete_alert_rule(
     return {"deleted": str(rule_id)}
 
 
-@router.get("/alerts/events")
+@router.get("/alerts/events", response_model=list[AlertEventRead])
 def list_alert_events(
     instance_id: UUID | None = None,
     limit: int = Query(50, ge=1, le=200),
@@ -1260,7 +1332,7 @@ def list_alert_events(
 # ──────────────────────────── Tenant Self-Service ────────────────
 
 
-@router.get("/{instance_id}/self-service/health")
+@router.get("/{instance_id}/self-service/health", response_model=list[HealthCheckRead])
 def tenant_health(
     instance_id: UUID,
     limit: int = Query(default=10, ge=1, le=200),
@@ -1275,7 +1347,7 @@ def tenant_health(
     return [svc.serialize_check(c) for c in checks]
 
 
-@router.get("/{instance_id}/self-service/flags")
+@router.get("/{instance_id}/self-service/flags", response_model=list[FeatureFlagRead])
 def tenant_flags(
     instance_id: UUID,
     limit: int = Query(default=50, ge=1, le=200),
@@ -1291,7 +1363,7 @@ def tenant_flags(
     return [svc.serialize_flag_entry(f) for f in paginate_list(flags, limit, offset)]
 
 
-@router.get("/{instance_id}/self-service/backups")
+@router.get("/{instance_id}/self-service/backups", response_model=list[BackupRead])
 def tenant_backups(
     instance_id: UUID,
     limit: int = Query(default=50, ge=1, le=200),
