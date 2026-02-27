@@ -25,6 +25,7 @@ from app.models.instance import Instance, InstanceStatus
 from app.models.server import Server
 from app.services.auth_flow import _decrypt_secret as _decrypt_auth_secret
 from app.services.auth_flow import _encrypt_secret as _encrypt_auth_secret
+from app.services.common import _safe_slug
 from app.services.ssh_service import SSHService, get_ssh_for_server
 
 logger = logging.getLogger(__name__)
@@ -73,13 +74,6 @@ STEP_LABELS = {
     "verify": "Verify instance health",
     "restart": "Restart application containers",
 }
-
-
-def _safe_slug(value: str) -> str:
-    """Validate and return a safe alphanumeric slug for use in shell commands."""
-    if not re.match(r"^[a-zA-Z0-9_-]+$", value):
-        raise ValueError(f"Invalid slug: {value!r} — must be alphanumeric, hyphens, or underscores")
-    return value
 
 
 def _safe_schema_name(value: str) -> str:

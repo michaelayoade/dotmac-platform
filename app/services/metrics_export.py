@@ -5,7 +5,6 @@ Metrics Export Service — Prometheus gauges and instance log access.
 from __future__ import annotations
 
 import logging
-import re
 import shlex
 from datetime import UTC, datetime
 from uuid import UUID
@@ -26,18 +25,13 @@ from app.models.backup import Backup, BackupStatus
 from app.models.health_check import HealthCheck
 from app.models.instance import Instance
 from app.models.server import Server
+from app.services.common import _safe_slug
 from app.services.ssh_service import get_ssh_for_server
 
 logger = logging.getLogger(__name__)
 
 _STREAMS_ORDER = ["app", "worker", "beat", "db", "redis"]
 _ALLOWED_STREAMS = set(_STREAMS_ORDER)
-
-
-def _safe_slug(value: str) -> str:
-    if not re.match(r"^[a-zA-Z0-9_-]+$", value):
-        raise ValueError(f"Invalid slug: {value!r}")
-    return value
 
 
 class MetricsExportService:
