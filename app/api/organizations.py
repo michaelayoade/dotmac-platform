@@ -83,9 +83,10 @@ def list_members(
     require_org_access(org_id, db=db, auth=auth)
     svc = OrganizationService(db)
     members = svc.list_members(org_id, limit=limit, offset=offset)
+    total = svc.count_members(org_id)
     return {
         "items": [svc.serialize_member(m) for m in members],
-        "count": len(members),
+        "count": total,
         "limit": limit,
         "offset": offset,
     }

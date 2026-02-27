@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session, object_session
 
 from app.models.instance import Instance
@@ -58,11 +58,21 @@ class OrganizationService:
         stmt = (
             select(OrganizationMember)
             .where(OrganizationMember.org_id == org_id)
+            .where(OrganizationMember.is_active == True)
             .order_by(OrganizationMember.created_at.desc())
             .limit(limit)
             .offset(offset)
         )
         return list(self.db.scalars(stmt).all())
+
+    def count_members(self, org_id: UUID) -> int:
+        stmt = select(func.count(OrganizationMember.id)).where(
+            and_(
+                OrganizationMember.org_id == org_id,
+                OrganizationMember.is_active == True
+            )
+        )
+        return self.db.scalar(stmt) or 0
 
     def add_member(self, org_id: UUID, person_id: UUID) -> OrganizationMember:
         org = self.get_by_id(org_id)
