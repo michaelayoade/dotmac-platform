@@ -12,6 +12,7 @@ from app.api.deps import get_db, require_user_auth
 from app.models.notification_channel import ChannelType
 from app.schemas.notification_channels import (
     NotificationChannelCreate,
+    NotificationChannelRead,
     NotificationChannelUpdate,
 )
 from app.services.common import coerce_uuid
@@ -30,7 +31,7 @@ def _person_id(auth: dict[str, object]) -> UUID:
     return pid
 
 
-@router.get("")
+@router.get("", response_model=list[NotificationChannelRead])
 def list_channels(
     db: Session = Depends(get_db),
     auth: dict[str, object] = Depends(require_user_auth),
@@ -43,7 +44,7 @@ def list_channels(
     return [svc.serialize_channel(ch, config_masked=svc.mask_config(ch)) for ch in channels]
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=NotificationChannelRead)
 def create_channel(
     payload: NotificationChannelCreate,
     db: Session = Depends(get_db),
@@ -67,7 +68,7 @@ def create_channel(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.put("/{channel_id}")
+@router.put("/{channel_id}", response_model=NotificationChannelRead)
 def update_channel(
     channel_id: UUID,
     payload: NotificationChannelUpdate,
@@ -87,15 +88,16 @@ def update_channel(
         db.commit()
         return svc.serialize_channel(channel, config_masked=svc.mask_config(channel))
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/{channel_id}")
+@router.delete("/{channel_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_channel(
     channel_id: UUID,
     db: Session = Depends(get_db),
     auth: dict[str, object] = Depends(require_user_auth),
-) -> dict[str, str]:
+) -> None:
     from app.services.notification_channel_service import NotificationChannelService
 
     pid = _person_id(auth)
@@ -103,8 +105,8 @@ def delete_channel(
     try:
         svc.delete_channel(channel_id, pid)
         db.commit()
-        return {"deleted": str(channel_id)}
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 
