@@ -1,6 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
+# Pydantic imports
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.scheduler import ScheduleType
@@ -37,3 +38,9 @@ class ScheduledTaskRead(ScheduledTaskBase):
     last_run_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class SchedulerStatusResponse(BaseModel):
+    pending: int = Field(ge=0)
+    running: int = Field(ge=0)
+    completed: int = Field(ge=0)
