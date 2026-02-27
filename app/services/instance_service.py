@@ -87,6 +87,8 @@ def parse_env_file(content: str) -> dict[str, str]:
 def _quote_env_value(value: str | None) -> str:
     """Quote/escape a value for safe inclusion in a .env assignment."""
     text = "" if value is None else str(value)
+    # Escape backslashes first, otherwise a trailing backslash would escape the closing quote
+    text = text.replace("\\", "\\\\")
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = text.replace('"', r"\"").replace("\n", r"\n")
     return f'"{text}"'
