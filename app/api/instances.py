@@ -176,7 +176,7 @@ def set_flag(
     return {"key": flag.flag_key, "value": flag.flag_value}
 
 
-@router.delete("/{instance_id}/flags/{flag_key}")
+@router.delete("/{instance_id}/flags/{flag_key}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_flag(
     instance_id: UUID,
     flag_key: str,
@@ -188,7 +188,7 @@ def delete_flag(
     svc = FeatureFlagService(db)
     svc.delete_flag(instance_id, flag_key)
     db.commit()
-    return {"deleted": flag_key}
+    return None
 
 
 # ──────────────────────────── Plans ──────────────────────────────
@@ -330,7 +330,7 @@ def restore_backup(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/{instance_id}/backups/{backup_id}")
+@router.delete("/{instance_id}/backups/{backup_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_backup(
     instance_id: UUID,
     backup_id: UUID,
@@ -343,7 +343,7 @@ def delete_backup(
     try:
         svc.delete_backup(instance_id, backup_id)
         db.commit()
-        return {"deleted": str(backup_id)}
+        return None
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -420,7 +420,7 @@ def provision_ssl(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/{instance_id}/domains/{domain_id}")
+@router.delete("/{instance_id}/domains/{domain_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_domain(
     instance_id: UUID,
     domain_id: UUID,
@@ -433,7 +433,7 @@ def remove_domain(
     try:
         svc.remove_domain(instance_id, domain_id)
         db.commit()
-        return {"deleted": str(domain_id)}
+        return None
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -668,7 +668,7 @@ def create_webhook(
     return svc.serialize_endpoint(ep)
 
 
-@router.delete("/webhooks/{endpoint_id}")
+@router.delete("/webhooks/{endpoint_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_webhook(
     endpoint_id: UUID,
     db: Session = Depends(get_db),
@@ -679,7 +679,7 @@ def delete_webhook(
     svc = WebhookService(db)
     svc.delete_endpoint(endpoint_id)
     db.commit()
-    return {"deleted": str(endpoint_id)}
+    return None
 
 
 @router.get("/webhooks/{endpoint_id}/deliveries")
@@ -818,7 +818,7 @@ def set_maintenance_window(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/{instance_id}/maintenance-windows/{window_id}")
+@router.delete("/{instance_id}/maintenance-windows/{window_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_maintenance_window(
     instance_id: UUID,
     window_id: UUID,
@@ -830,7 +830,7 @@ def delete_maintenance_window(
     svc = MaintenanceService(db)
     svc.delete_window(instance_id, window_id)
     db.commit()
-    return {"deleted": str(window_id)}
+    return None
 
 
 # ──────────────────────────── Usage Metering ─────────────────────
@@ -940,7 +940,7 @@ def set_tag(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/{instance_id}/tags/{key}")
+@router.delete("/{instance_id}/tags/{key}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_tag(
     instance_id: UUID,
     key: str,
@@ -952,7 +952,7 @@ def delete_tag(
     svc = TagService(db)
     svc.delete_tag(instance_id, key)
     db.commit()
-    return {"deleted": key}
+    return None
 
 
 # ──────────────────────────── Deploy Approvals ───────────────────
@@ -1227,7 +1227,7 @@ def create_alert_rule(
     return {"rule_id": str(rule.rule_id), "name": rule.name}
 
 
-@router.delete("/alerts/rules/{rule_id}")
+@router.delete("/alerts/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_alert_rule(
     rule_id: UUID,
     db: Session = Depends(get_db),
@@ -1238,7 +1238,7 @@ def delete_alert_rule(
     svc = AlertService(db)
     svc.delete_rule(rule_id)
     db.commit()
-    return {"deleted": str(rule_id)}
+    return None
 
 
 @router.get("/alerts/events")
