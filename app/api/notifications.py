@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_user_auth
+from app.schemas.notifications import NotificationListResponse, NotificationUnreadCountResponse
 from app.services.common import coerce_uuid
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -20,7 +21,7 @@ def _person_id(auth: dict) -> UUID:
     return pid
 
 
-@router.get("")
+@router.get("", response_model=NotificationListResponse)
 def list_notifications(
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -34,7 +35,7 @@ def list_notifications(
     return svc.get_api_payload(pid, limit=limit, offset=offset)
 
 
-@router.get("/unread-count")
+@router.get("/unread-count", response_model=NotificationUnreadCountResponse)
 def unread_count(
     db: Session = Depends(get_db),
     auth: dict = Depends(require_user_auth),
