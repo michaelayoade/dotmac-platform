@@ -6,12 +6,14 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_user_auth
 from app.models.notification_channel import ChannelType
 from app.schemas.notification_channels import (
     NotificationChannelCreate,
+    NotificationChannelRead,
     NotificationChannelUpdate,
 )
 from app.services.common import coerce_uuid
@@ -22,6 +24,14 @@ router = APIRouter(prefix="/notification-channels", tags=["notification-channels
 TEST_NOTIFICATION_MESSAGE = "Seabone test notification"
 
 
+class DeleteResponse(BaseModel):
+    deleted: str
+
+
+class TestResponse(BaseModel):
+    success: bool
+
+
 def _person_id(auth: dict[str, object]) -> UUID:
     raw = auth.get("person_id")
     pid = coerce_uuid(str(raw) if raw else None)
@@ -30,25 +40,30 @@ def _person_id(auth: dict[str, object]) -> UUID:
     return pid
 
 
-@router.get("")
+@router.get("", response_model=list[NotificationChannelRead])
 def list_channels(
     db: Session = Depends(get_db),
     auth: dict[str, object] = Depends(require_user_auth),
-) -> list[dict[str, object]]:
+) -> list[NotificationChannelRead]:
     from app.services.notification_channel_service import NotificationChannelService
 
     pid = _person_id(auth)
     svc = NotificationChannelService(db)
     channels = svc.list_channels(pid)
-    return [svc.serialize_channel(ch, config_masked=svc.mask_config(ch)) for ch in channels]
+    return [
+        NotificationChannelRead.model_validate(
+            svc.serialize_channel(ch, config_masked=svc.mask_config(ch))
+        )
+        for ch in channels
+    ]
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=NotificationChannelRead)
 def create_channel(
     payload: NotificationChannelCreate,
     db: Session = Depends(get_db),
     auth: dict[str, object] = Depends(require_user_auth),
-) -> dict[str, object]:
+) -> NotificationChannelRead:
     from app.services.notification_channel_service import NotificationChannelService
 
     pid = _person_id(auth)
@@ -62,18 +77,20 @@ def create_channel(
             events=payload.events,
         )
         db.commit()
-        return svc.serialize_channel(channel, config_masked=svc.mask_config(channel))
+        return NotificationChannelRead.model_validate(
+            svc.serialize_channel(channel, config_masked=svc.mask_config(channel))
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.put("/{channel_id}")
+@router.put("/{channel_id}", response_model=NotificationChannelRead)
 def update_channel(
     channel_id: UUID,
     payload: NotificationChannelUpdate,
     db: Session = Depends(get_db),
     auth: dict[str, object] = Depends(require_user_auth),
-) -> dict[str, object]:
+) -> NotificationChannelRead:
     from app.services.notification_channel_service import NotificationChannelService
 
     pid = _person_id(auth)
@@ -85,17 +102,19 @@ def update_channel(
             **payload.model_dump(exclude_unset=True),
         )
         db.commit()
-        return svc.serialize_channel(channel, config_masked=svc.mask_config(channel))
+        return NotificationChannelRead.model_validate(
+            svc.serialize_channel(channel, config_masked=svc.mask_config(channel))
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/{channel_id}")
+@router.delete("/{channel_id}", response_model=DeleteResponse)
 def delete_channel(
     channel_id: UUID,
     db: Session = Depends(get_db),
     auth: dict[str, object] = Depends(require_user_auth),
-) -> dict[str, str]:
+) -> DeleteResponse:
     from app.services.notification_channel_service import NotificationChannelService
 
     pid = _person_id(auth)
@@ -103,17 +122,17 @@ def delete_channel(
     try:
         svc.delete_channel(channel_id, pid)
         db.commit()
-        return {"deleted": str(channel_id)}
+        return DeleteResponse(deleted=str(channel_id))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{channel_id}/test")
+@router.post("/{channel_id}/test", response_model=TestResponse)
 def test_channel(
     channel_id: UUID,
     db: Session = Depends(get_db),
     auth: dict[str, object] = Depends(require_user_auth),
-) -> dict[str, bool]:
+) -> TestResponse:
     from app.services.notification_channel_service import NotificationChannelService
 
     pid = _person_id(auth)
@@ -130,6 +149,6 @@ def test_channel(
             title=TEST_NOTIFICATION_MESSAGE,
             message=TEST_NOTIFICATION_MESSAGE,
         )
-        return {"success": ok}
+        return TestResponse(success=ok)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
