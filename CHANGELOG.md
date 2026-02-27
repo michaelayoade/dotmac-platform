@@ -33,6 +33,7 @@ and this project uses semantic versioning.
 - [Changed] `_safe_slug()` helper consolidated from 5 duplicate definitions into `app/services/common.py`; backup, clone, deploy, metrics_export, and secret_rotation services now import the shared version (PR #63)
 - [Changed] Repeated `MetricsExportService.record_deployment()` try/except block in `DeployService.run_deployment()` extracted into private `_record_deploy_metric()` helper — 4 duplicate call sites replaced (PR #64)
 - [Changed] Redundant `shlex.quote()` removed from container name f-string in `InstanceService.run_migrations()` — slug is already validated against `^[a-zA-Z0-9_-]+$` (PR #55)
+- [Changed] `passlib` dependency removed; password hashing in `auth_flow.py` migrated to `bcrypt` directly (`bcrypt.hashpw`/`checkpw`), resolving incompatibility with bcrypt ≥ 4.1 (2abd1f4)
 - [Changed] `httpx` bumped 0.27 → ^0.28 (stale connection pool fix) and `anyio` bumped 4.2 → ^4.9 (task group cancellation fix) (PR #58)
 - [Changed] `pydantic` bumped to >=2.11.0,<3 and `opentelemetry-sdk`/`opentelemetry-exporter-otlp` bumped to >=1.32.0/0.53b0; `poetry.lock` regenerated to resolve post-merge version conflicts (81a8434)
 - [Changed] `celery[redis]` bumped to ^5.5, `sqlalchemy` to 2.0.41, `alembic` to ^1.14, `redis` to ^5.2, `python-dotenv` to ^1.2 (b7fbfef)
@@ -74,3 +75,4 @@ and this project uses semantic versioning.
 - [Fixed] Trailing whitespace on blank lines (W293) and import ordering (I001) corrected across `auth_flow.py`, `settings.py`, `main.py`, `rate_limit.py`, `auth.py` to restore CI lint pass (434e9aa)
 - [Fixed] Whitespace (W293), line-length (E501), and import-ordering (I001) ruff errors in `backup_service.py`, `clone_service.py`, and `tests/test_deploy_service.py` (12a07d0)
 - [Fixed] Ruff auto-format applied to 8 files (`app/main.py`, `app/services/audit.py`, `app/services/avatar.py`, `app/services/instance_service.py`, `tests/test_api_instances_webhooks.py`, `tests/test_avatar_services.py`, `tests/test_ghcr_deploy.py`, `tests/test_platform_settings.py`) to restore CI format check (ef4bd69)
+- [Fixed] Ruff format applied to `app/services/backup_service.py`, `app/services/instance_service.py`, and `tests/test_deploy_service.py` to restore CI format check after passlib migration (2abd1f4)

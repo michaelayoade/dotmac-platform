@@ -48,7 +48,7 @@ A production-ready platform management control plane built on FastAPI. It includ
 | Migrations | Alembic |
 | Cache/Broker | Redis 7 |
 | Task Queue | Celery 5.5 |
-| Auth | python-jose, passlib, pyotp |
+| Auth | python-jose, bcrypt, pyotp |
 | Tracing | OpenTelemetry |
 | Metrics | Prometheus |
 
