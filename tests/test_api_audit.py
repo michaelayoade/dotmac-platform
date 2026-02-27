@@ -32,6 +32,11 @@ def _seed_export_events(
     db_session.commit()
 
 
+def _unique_base_time(year: int) -> datetime:
+    # Keep test windows isolated from prior seeded data in the shared sqlite DB.
+    return datetime(year, 1, 1, tzinfo=UTC) + timedelta(minutes=uuid.uuid4().int % 100000)
+
+
 class TestAuditEventsAPI:
     """Tests for the /audit-events endpoints."""
 
@@ -173,7 +178,7 @@ class TestAuditEventsAPIV1:
 
     def test_export_audit_events_csv_v1_enforces_max_rows(self, client, admin_headers, db_session, person):
         """Test CSV export applies row limit before fetching."""
-        base_time = datetime(2099, 1, 1, tzinfo=UTC)
+        base_time = _unique_base_time(2099)
         _seed_export_events(
             db_session,
             actor_id=str(person.id),
@@ -200,7 +205,7 @@ class TestAuditEventsAPIV1:
 
     def test_export_audit_events_csv_v1_filters_started_window(self, client, admin_headers, db_session, person):
         """Test CSV export filters by started_after/started_before."""
-        base_time = datetime(2098, 1, 1, tzinfo=UTC)
+        base_time = _unique_base_time(2098)
         _seed_export_events(
             db_session,
             actor_id=str(person.id),

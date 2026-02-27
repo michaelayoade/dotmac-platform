@@ -44,10 +44,11 @@ def _seed_catalog_item(db_session, *, label: str, bundle_name: str, bundle_descr
 
 
 def test_list_catalog_items_search_matches_bundle_name(client, auth_headers, db_session):
+    token = f"core-{uuid.uuid4().hex[:8]}"
     matched = _seed_catalog_item(
         db_session,
         label="Starter",
-        bundle_name="Core Platform",
+        bundle_name=f"{token} Platform",
         bundle_description="Primary bundle",
     )
     _seed_catalog_item(
@@ -57,7 +58,7 @@ def test_list_catalog_items_search_matches_bundle_name(client, auth_headers, db_
         bundle_description="Metrics and tracing",
     )
 
-    response = client.get("/api/v1/catalog/items?search=core", headers=auth_headers)
+    response = client.get(f"/api/v1/catalog/items?search={token}", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
 
@@ -66,11 +67,12 @@ def test_list_catalog_items_search_matches_bundle_name(client, auth_headers, db_
 
 
 def test_list_catalog_items_search_matches_bundle_description(client, auth_headers, db_session):
+    token = f"revenue-{uuid.uuid4().hex[:8]}"
     matched = _seed_catalog_item(
         db_session,
         label="Insights",
         bundle_name="Analytics",
-        bundle_description="Includes Revenue Dashboard",
+        bundle_description=f"Includes {token} Dashboard",
     )
     _seed_catalog_item(
         db_session,
@@ -79,7 +81,7 @@ def test_list_catalog_items_search_matches_bundle_description(client, auth_heade
         bundle_description="Helpdesk tools",
     )
 
-    response = client.get("/api/v1/catalog/items?search=revenue", headers=auth_headers)
+    response = client.get(f"/api/v1/catalog/items?search={token}", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
 
