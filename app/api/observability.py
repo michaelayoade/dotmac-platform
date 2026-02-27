@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role
-from app.schemas.observability import LogStreamRead, LogsPayloadRead, MetricsSummaryRead
+from app.schemas.observability import LogsPayloadRead, LogStreamRead, MetricsSummaryRead
 
 router = APIRouter(prefix="/observability", tags=["observability"])
 
