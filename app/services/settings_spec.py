@@ -178,6 +178,7 @@ SETTINGS_SPECS: list[SettingSpec] = [
         env_var="CELERY_BROKER_URL",
         value_type=SettingValueType.string,
         default=None,
+        is_secret=True,
     ),
     SettingSpec(
         domain=SettingDomain.scheduler,
@@ -185,6 +186,7 @@ SETTINGS_SPECS: list[SettingSpec] = [
         env_var="CELERY_RESULT_BACKEND",
         value_type=SettingValueType.string,
         default=None,
+        is_secret=True,
     ),
     SettingSpec(
         domain=SettingDomain.scheduler,
