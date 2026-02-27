@@ -5,10 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project uses semantic versioning.
 
-## [Unreleased] — 2026-02-26
+## [Unreleased] — 2026-02-27
 
 ### Added
 
+- [Added] Unit tests for `DeployService.run_deployment()` in `tests/test_deploy_service.py` covering successful full deploy, mid-pipeline `DeployError` with rollback, and instance-not-found early-return (PR #54)
 - [Added] `max_rows` (default 100,000, max 1,000,000), `started_after`, and `started_before` query parameters on `GET /audit/export` to cap result size and filter by time window; `X-Row-Limit` response header reports the applied limit (PR #35)
 - [Added] GET /api/v1/health/ready readiness endpoint returning status and UTC timestamp (PR #13)
 - [Added] GET /api/v1/health/db-pool endpoint returning SQLAlchemy connection pool metrics: pool_size, checked_in, checked_out, overflow (PR #28)
@@ -28,17 +29,26 @@ and this project uses semantic versioning.
 
 ### Changed
 
+- [Changed] `list_for_web()` in `InstanceService` now pushes text search (ILIKE on name/org_code), status filter, and LIMIT/OFFSET pagination into the SQLAlchemy query — eliminates full in-memory table scan (PR #56)
+- [Changed] `_safe_slug()` helper consolidated from 5 duplicate definitions into `app/services/common.py`; backup, clone, deploy, metrics_export, and secret_rotation services now import the shared version (PR #63)
+- [Changed] Repeated `MetricsExportService.record_deployment()` try/except block in `DeployService.run_deployment()` extracted into private `_record_deploy_metric()` helper — 4 duplicate call sites replaced (PR #64)
+- [Changed] Redundant `shlex.quote()` removed from container name f-string in `InstanceService.run_migrations()` — slug is already validated against `^[a-zA-Z0-9_-]+$` (PR #55)
+- [Changed] `httpx` bumped 0.27 → ^0.28 (stale connection pool fix) and `anyio` bumped 4.2 → ^4.9 (task group cancellation fix) (PR #58)
+- [Changed] `celery[redis]` bumped to ^5.5, `sqlalchemy` to 2.0.41, `alembic` to ^1.14, `redis` to ^5.2, `python-dotenv` to ^1.2 (b7fbfef)
 - [Changed] POST /api/v1/instances/webhooks now accepts JSON body (`url`, `events`, `secret`, `description`, `instance_id`) instead of query parameters (PR #30)
 - [Changed] Rate limiting upgraded from in-memory to Redis-backed sliding window implementation, enforced globally across all worker processes; falls back to in-memory when Redis is unavailable (PR #31)
 
 ### Fixed
 
+- [Fixed] `BackupService.transfer_backup_file()` temp file now always cleaned up in try/finally — previously leaked to disk when `sftp_put()` raised (PR #51)
+- [Fixed] `CloneService._restore_backup_to_instance()` temp file now always cleaned up in try/finally — previously leaked to disk when any restore command raised (PR #62)
 - [Fixed] `channel_config` on notification channel endpoints now raises HTTP 422 on invalid JSON instead of silently coercing to `None` (PR #47)
 - [Fixed] CI test `test_export_audit_events_csv_v1_filters_started_window` corrected time window bounds (PR #47)
 - [Fixed] Startup health check removed duplicate `SessionLocal()` and fixed import ordering (PR #12)
 
 ### Security
 
+- [Security] Jinja2 bumped from 3.1.4 to >=3.1.6 — fixes CVE-2024-56201 (sandbox escape via code generation) and CVE-2024-56326 (sandbox breakout via `__init_subclass__` override) (PR #57)
 - [Security] Webhook secret no longer exposed in server access logs or audit log metadata — moved from query params to JSON body (PR #30)
 - [Security] Rate limits now shared across all worker processes via Redis sorted-set sliding window (PR #31)
 - [Security] Sensitive query parameters (`api_key`, `token`, `access_token`, `secret`, `password`, `key`, `authorization`) are redacted to `***` in audit log metadata before storage (PR #33)
