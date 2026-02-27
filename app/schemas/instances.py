@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
 
+from app.models.alert_rule import AlertChannel, AlertMetric, AlertOperator
 from app.models.instance import AccountingFramework, SectorType
 
 
@@ -40,3 +41,19 @@ class InstanceWebhookCreateRequest(BaseModel):
     secret: str | None = Field(default=None, max_length=256)
     description: str | None = Field(default=None, max_length=500)
     instance_id: UUID | None = None
+
+
+class CreateAlertRuleRequest(BaseModel):
+    name: str
+    metric: AlertMetric | str
+    operator: AlertOperator | str
+    threshold: float
+    channel: AlertChannel | str
+    instance_id: UUID
+    cooldown_minutes: int = 30
+    channel_config: dict | None = None
+
+
+class AlertRuleRead(BaseModel):
+    rule_id: UUID
+    name: str

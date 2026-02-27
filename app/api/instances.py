@@ -8,11 +8,13 @@ import re
 from datetime import UTC
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role, require_user_auth
 from app.schemas.instances import (
+    AlertRuleRead,
+    CreateAlertRuleRequest,
     InstanceCreateRequest,
     InstanceCreateResponse,
     InstanceWebhookCreateRequest,
@@ -1187,44 +1189,28 @@ def list_alert_rules(
     return [svc.serialize_rule(r) for r in paginate_list(rules, limit, offset)]
 
 
-@router.post("/alerts/rules", status_code=status.HTTP_201_CREATED)
+@router.post("/alerts/rules", response_model=AlertRuleRead, status_code=status.HTTP_201_CREATED)
 def create_alert_rule(
-    name: str,
-    metric: str,
-    operator: str,
-    threshold: float,
-    channel: str = "webhook",
-    instance_id: UUID | None = None,
-    cooldown_minutes: int = 15,
-    channel_config: str | None = None,
+    payload: CreateAlertRuleRequest = Body(...),
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
-    import json as _json
-
     from app.models.alert_rule import AlertChannel, AlertMetric, AlertOperator
     from app.services.alert_service import AlertService
 
-    parsed_config: dict | None = None
-    if channel_config:
-        try:
-            parsed_config = _json.loads(channel_config)
-        except (ValueError, TypeError):
-            raise HTTPException(status_code=422, detail="channel_config must be valid JSON")
-
     svc = AlertService(db)
     rule = svc.create_rule(
-        name,
-        AlertMetric(metric),
-        AlertOperator(operator),
-        threshold,
-        AlertChannel(channel),
-        channel_config=parsed_config,
-        instance_id=instance_id,
-        cooldown_minutes=cooldown_minutes,
+        payload.name,
+        AlertMetric(payload.metric),
+        AlertOperator(payload.operator),
+        payload.threshold,
+        AlertChannel(payload.channel),
+        channel_config=payload.channel_config,
+        instance_id=payload.instance_id,
+        cooldown_minutes=payload.cooldown_minutes,
     )
     db.commit()
-    return {"rule_id": str(rule.rule_id), "name": rule.name}
+    return AlertRuleRead(rule_id=rule.rule_id, name=rule.name)
 
 
 @router.delete("/alerts/rules/{rule_id}")
