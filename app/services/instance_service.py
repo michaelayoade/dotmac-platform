@@ -13,10 +13,10 @@ import re
 import secrets
 import textwrap
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import String, case, cast, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.instance import (
@@ -139,16 +139,113 @@ class InstanceService:
         page_size: int,
     ) -> PagedResult[InstanceListItem]:
         """List instances for the web UI with health + catalog context."""
-        from datetime import datetime
-
+        from app.config import settings as platform_settings
         from app.models.catalog import AppCatalogItem, AppRelease
+        from app.models.health_check import HealthCheck, HealthStatus
         from app.services.health_service import HealthService
 
-        instances = self.list_all()
+        q = (q or "").strip()
+        status_value = (status_filter or "").strip().lower() or None
+        health_value = (health_filter or "").strip().lower() or None
+        sort_key = (sort_key or "").strip().lower()
+        now = datetime.now(UTC)
+        stale_cutoff = now - timedelta(seconds=platform_settings.health_stale_seconds)
+
+        stmt = select(Instance)
+        total_stmt = select(func.count(Instance.instance_id))
+
+        if q:
+            escaped_q = re.sub(r"([%_])", r"\\\1", q)
+            q_like = f"%{escaped_q}%"
+            search_predicate = or_(
+                Instance.org_code.ilike(q_like, escape="\\"),
+                Instance.org_name.ilike(q_like, escape="\\"),
+            )
+            stmt = stmt.where(search_predicate)
+            total_stmt = total_stmt.where(search_predicate)
+
+        if status_value:
+            try:
+                status_enum = InstanceStatus(status_value)
+            except ValueError:
+                return PagedResult(items=[], total=0, page=page, page_size=page_size)
+            stmt = stmt.where(Instance.status == status_enum)
+            total_stmt = total_stmt.where(Instance.status == status_enum)
+
+        latest_checked_at = None
+        health_state_expr = None
+        if health_value or sort_key in {"health", "last_check"}:
+            latest_checked_at = (
+                select(HealthCheck.checked_at)
+                .where(HealthCheck.instance_id == Instance.instance_id)
+                .order_by(HealthCheck.checked_at.desc(), HealthCheck.id.desc())
+                .limit(1)
+                .scalar_subquery()
+            )
+            latest_health_status = (
+                select(HealthCheck.status)
+                .where(HealthCheck.instance_id == Instance.instance_id)
+                .order_by(HealthCheck.checked_at.desc(), HealthCheck.id.desc())
+                .limit(1)
+                .scalar_subquery()
+            )
+            health_state_expr = case(
+                (Instance.status != InstanceStatus.running, literal("n/a")),
+                (
+                    or_(latest_checked_at.is_(None), latest_checked_at < stale_cutoff),
+                    literal("unknown"),
+                ),
+                (latest_health_status == HealthStatus.healthy, literal("healthy")),
+                else_=literal("unhealthy"),
+            )
+
+        if health_value:
+            if health_value not in {"healthy", "unhealthy", "unknown", "n/a"}:
+                return PagedResult(items=[], total=0, page=page, page_size=page_size)
+            stmt = stmt.where(health_state_expr == health_value)
+            total_stmt = total_stmt.where(health_state_expr == health_value)
+
+        if sort_key == "status":
+            sort_expr = cast(Instance.status, String)
+        elif sort_key == "port":
+            sort_expr = Instance.app_port
+        elif sort_key == "framework":
+            sort_expr = func.coalesce(cast(Instance.framework, String), "")
+        elif sort_key == "sector":
+            sort_expr = func.coalesce(cast(Instance.sector_type, String), "")
+        elif sort_key == "catalog":
+            catalog_label_expr = (
+                select(AppCatalogItem.label)
+                .where(AppCatalogItem.catalog_id == Instance.catalog_item_id)
+                .limit(1)
+                .scalar_subquery()
+            )
+            sort_expr = func.coalesce(catalog_label_expr, "")
+        elif sort_key == "health" and health_state_expr is not None:
+            sort_expr = case(
+                (health_state_expr == "healthy", 0),
+                (health_state_expr == "unhealthy", 1),
+                (health_state_expr == "unknown", 2),
+                else_=3,
+            )
+        elif sort_key == "last_check" and latest_checked_at is not None:
+            sort_expr = func.coalesce(latest_checked_at, datetime(1970, 1, 1, tzinfo=UTC))
+        else:
+            sort_expr = Instance.org_code
+
+        reverse = sort_dir == "desc"
+        if reverse:
+            stmt = stmt.order_by(sort_expr.desc(), Instance.org_code.desc())
+        else:
+            stmt = stmt.order_by(sort_expr.asc(), Instance.org_code.asc())
+
+        total = self.db.scalar(total_stmt) or 0
+        offset = max(page - 1, 0) * page_size
+        instances = list(self.db.scalars(stmt.limit(page_size).offset(offset)).all())
+
         instance_ids = [inst.instance_id for inst in instances]
         health_svc = HealthService(self.db)
         health_map = health_svc.get_latest_checks_batch(instance_ids)
-        now = datetime.now(UTC)
 
         catalog_ids = {inst.catalog_item_id for inst in instances if inst.catalog_item_id}
         item_map: dict[UUID, AppCatalogItem] = {}
@@ -179,52 +276,7 @@ class InstanceService:
                     release_version=release.version if release else None,
                 )
             )
-
-        if q:
-            q_lower = q.strip().lower()
-            rows = [
-                item
-                for item in rows
-                if q_lower in item.instance.org_code.lower() or q_lower in item.instance.org_name.lower()
-            ]
-
-        if status_filter:
-            status_filter = status_filter.strip().lower()
-            rows = [item for item in rows if item.instance.status.value.lower() == status_filter]
-
-        if health_filter:
-            health_filter = health_filter.strip().lower()
-            rows = [item for item in rows if item.health_state == health_filter]
-
-        health_rank = {"healthy": 0, "unhealthy": 1, "unknown": 2, "n/a": 3}
-
-        def _sort_value(item: InstanceListItem):
-            inst = item.instance
-            if sort_key == "status":
-                return inst.status.value
-            if sort_key == "health":
-                return health_rank.get(item.health_state, 99)
-            if sort_key == "last_check":
-                return item.health_checked_at or datetime.min.replace(tzinfo=UTC)
-            if sort_key == "port":
-                return inst.app_port or 0
-            if sort_key == "framework":
-                return inst.framework.value if inst.framework else ""
-            if sort_key == "sector":
-                return inst.sector_type.value if inst.sector_type else ""
-            if sort_key == "catalog":
-                return item.catalog_label or ""
-            return inst.org_code
-
-        reverse = sort_dir == "desc"
-        rows.sort(key=_sort_value, reverse=reverse)
-
-        total = len(rows)
-        start = (page - 1) * page_size
-        end = start + page_size
-        paginated = rows[start:end]
-
-        return PagedResult(items=paginated, total=total, page=page, page_size=page_size)
+        return PagedResult(items=rows, total=total, page=page, page_size=page_size)
 
     def get_detail_bundle(self, instance_id: UUID) -> dict:
         """Collect instance detail data for the web UI."""
