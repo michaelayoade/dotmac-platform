@@ -112,29 +112,29 @@ class TestAuthSettingsAPI:
 class TestAuditSettingsAPI:
     """Tests for the /settings/audit endpoints."""
 
-    def test_list_audit_settings(self, client, auth_headers):
-        """Test listing audit settings."""
-        response = client.get("/settings/audit", headers=auth_headers)
+    def test_list_audit_settings(self, client, admin_headers):
+        """Test listing audit settings (admin only)."""
+        response = client.get("/settings/audit", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert "items" in data
         assert "count" in data
 
-    def test_list_audit_settings_with_pagination(self, client, auth_headers):
-        """Test listing audit settings with pagination."""
-        response = client.get("/settings/audit?limit=10&offset=0", headers=auth_headers)
+    def test_list_audit_settings_with_pagination(self, client, admin_headers):
+        """Test listing audit settings with pagination (admin only)."""
+        response = client.get("/settings/audit?limit=10&offset=0", headers=admin_headers)
         assert response.status_code == 200
 
-    def test_get_audit_setting(self, client, auth_headers, db_session):
-        """Test getting a specific audit setting."""
-        response = client.get("/settings/audit/enabled", headers=auth_headers)
+    def test_get_audit_setting(self, client, admin_headers, db_session):
+        """Test getting a specific audit setting (admin only)."""
+        response = client.get("/settings/audit/enabled", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["key"] == "enabled"
 
-    def test_get_audit_setting_not_found(self, client, auth_headers):
-        """Test getting a non-existent audit setting."""
-        response = client.get("/settings/audit/nonexistent_key", headers=auth_headers)
+    def test_get_audit_setting_not_found(self, client, admin_headers):
+        """Test getting a non-existent audit setting (admin only)."""
+        response = client.get("/settings/audit/nonexistent_key", headers=admin_headers)
         assert response.status_code == 400
 
     def test_upsert_audit_setting(self, client, admin_headers):
@@ -193,9 +193,9 @@ class TestSettingsAPIV1:
         response = client.get("/api/v1/settings/auth", headers=admin_headers)
         assert response.status_code == 200
 
-    def test_list_audit_settings_v1(self, client, auth_headers):
-        """Test listing audit settings via v1 API."""
-        response = client.get("/api/v1/settings/audit", headers=auth_headers)
+    def test_list_audit_settings_v1(self, client, admin_headers):
+        """Test listing audit settings via v1 API (admin only)."""
+        response = client.get("/api/v1/settings/audit", headers=admin_headers)
         assert response.status_code == 200
 
     def test_list_scheduler_settings_v1(self, client, auth_headers):
