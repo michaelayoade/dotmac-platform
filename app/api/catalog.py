@@ -46,7 +46,7 @@ def create_release(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/releases/{release_id}")
+@router.delete("/releases/{release_id}", status_code=status.HTTP_204_NO_CONTENT)
 def deactivate_release(
     release_id: UUID,
     db: Session = Depends(get_db),
@@ -57,7 +57,7 @@ def deactivate_release(
     try:
         CatalogService(db).deactivate_release(release_id)
         db.commit()
-        return {"deactivated": str(release_id)}
+        return None
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -96,7 +96,7 @@ def create_bundle(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/bundles/{bundle_id}")
+@router.delete("/bundles/{bundle_id}", status_code=status.HTTP_204_NO_CONTENT)
 def deactivate_bundle(
     bundle_id: UUID,
     db: Session = Depends(get_db),
@@ -107,7 +107,7 @@ def deactivate_bundle(
     try:
         CatalogService(db).deactivate_bundle(bundle_id)
         db.commit()
-        return {"deactivated": str(bundle_id)}
+        return None
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -146,7 +146,7 @@ def create_catalog_item(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/items/{catalog_id}")
+@router.delete("/items/{catalog_id}", status_code=status.HTTP_204_NO_CONTENT)
 def deactivate_catalog_item(
     catalog_id: UUID,
     db: Session = Depends(get_db),
@@ -157,7 +157,7 @@ def deactivate_catalog_item(
     try:
         CatalogService(db).deactivate_catalog_item(catalog_id)
         db.commit()
-        return {"deactivated": str(catalog_id)}
+        return None
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
