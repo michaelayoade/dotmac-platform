@@ -12,9 +12,10 @@ import pyotp
 logger = logging.getLogger(__name__)
 from typing import cast
 
+import jwt
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException, Request, Response, status
-from jose import JWTError, jwt
+from jwt.exceptions import PyJWTError as JWTError
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
