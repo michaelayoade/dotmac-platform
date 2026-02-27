@@ -78,7 +78,7 @@ class UpgradeService:
         upgrade = self.db.get(AppUpgrade, upgrade_id)
         if not upgrade:
             raise ValueError("Upgrade not found")
-        if upgrade.status in (UpgradeStatus.completed, UpgradeStatus.cancelled):
+        if upgrade.status in (UpgradeStatus.completed, UpgradeStatus.cancelled, UpgradeStatus.running):
             return {"success": upgrade.status == UpgradeStatus.completed}
 
         instance = self.db.get(Instance, upgrade.instance_id)
