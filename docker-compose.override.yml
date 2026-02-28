@@ -24,11 +24,11 @@ services:
 
   db:
     ports:
-      - "5436:5432"
+      - "127.0.0.1:5439:5432"
 
   redis:
     ports:
-      - "6381:6379"
+      - "127.0.0.1:6386:6379"
     deploy:
       resources:
         limits:
