@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project uses semantic versioning.
 
-## [Unreleased] — 2026-02-27
+## [Unreleased] — 2026-02-28
 
 ### Added
 
@@ -98,4 +98,5 @@ and this project uses semantic versioning.
 - [Fixed] `tests/test_api_settings.py` audit settings tests updated to use `admin_headers` — CI broke after audit GET endpoints were restricted to admin role in PR #70 (d677892)
 - [Added] Tests covering security-cycle-3 fixes: `test_api_settings.py` verifies broker_url/result_backend masking in `GET /settings/scheduler`; `test_instance_service.py` verifies backslash escaping in `_quote_env_value`; `test_api_audit.py` + `test_api_settings.py` verify regular users get 403 on `GET /settings/audit` and `GET /settings/audit/{key}` (PR #73)
 - [Added] `tests/test_upgrade_service.py` with 3 unit tests for `UpgradeService.run_upgrade()`: successful upgrade, failed upgrade (RuntimeError → status=failed + error_message), and concurrent early-return guard (PR #79)
+- [Added] `AGENT_WORKFLOW.md` documenting the agent orchestration design: task queue structure, agent lifecycle, engine selection, worktree isolation, and coordinator/PM protocol (1dc4127)
 - [Fixed] Ruff lint errors corrected directly on main: import ordering (I001) in `observability.py` and unused import (F401) in `caddy_service.py` to restore CI lint pass (7ac3db5)
