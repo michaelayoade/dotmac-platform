@@ -13,7 +13,8 @@
 #}
 
 {# ── Modal overlay + container (scroll lock + escape + click-outside) ── #}
-{% macro modal_open(show_var="open", max_width="max-w-sm") %}
+{# aria_label: descriptive label for the dialog when no visible heading is present #}
+{% macro modal_open(show_var="open", max_width="max-w-sm", aria_label="") %}
 <div x-show="{{ show_var }}" x-cloak
      x-effect="document.body.classList.toggle('overflow-hidden', {{ show_var }})"
      @keydown.escape.window="{{ show_var }} = false"
@@ -26,6 +27,9 @@
      x-transition:leave-end="opacity-0"
      @click.self="{{ show_var }} = false">
     <div class="w-full {{ max_width }} rounded-xl bg-white p-6 shadow-xl dark:bg-surface-800"
+         role="dialog"
+         aria-modal="true"
+         {% if aria_label %}aria-label="{{ aria_label }}"{% endif %}
          @click.stop
          x-trap.noscroll="{{ show_var }}"
          x-transition:enter="transition ease-out duration-200"

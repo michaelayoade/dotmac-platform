@@ -26,10 +26,12 @@
 {% endmacro %}
 
 {# ── Text input field ── #}
-{% macro text_input(name, label, type="text", required=false, placeholder="", value="", help="", testid="", extra_class="", pattern="", maxlength="") %}
+{# input_id: optional override for the id/for pairing (useful when name alone isn't unique on the page) #}
+{% macro text_input(name, label, type="text", required=false, placeholder="", value="", help="", testid="", extra_class="", pattern="", maxlength="", input_id="") %}
+{%- set field_id = input_id if input_id else name -%}
 <div class="{{ extra_class }}">
-    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">{{ label }}</label>
-    <input type="{{ type }}" name="{{ name }}" {% if required %}required{% endif %}
+    <label for="{{ field_id }}" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">{{ label }}</label>
+    <input type="{{ type }}" id="{{ field_id }}" name="{{ name }}" {% if required %}required{% endif %}
            {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
            {% if value %}value="{{ value }}"{% endif %}
            {% if pattern %}pattern="{{ pattern }}"{% endif %}
@@ -43,10 +45,12 @@
 {% endmacro %}
 
 {# ── Select dropdown ── #}
-{% macro select_input(name, label, options, selected="", required=false, testid="", extra_class="") %}
+{# input_id: optional override for the id/for pairing #}
+{% macro select_input(name, label, options, selected="", required=false, testid="", extra_class="", input_id="") %}
+{%- set field_id = input_id if input_id else name -%}
 <div class="{{ extra_class }}">
-    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">{{ label }}</label>
-    <select name="{{ name }}" {% if required %}required{% endif %}
+    <label for="{{ field_id }}" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">{{ label }}</label>
+    <select id="{{ field_id }}" name="{{ name }}" {% if required %}required{% endif %}
             {% if testid %}data-testid="{{ testid }}"{% endif %}
             class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
         {% for opt in options %}
