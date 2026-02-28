@@ -42,3 +42,12 @@ class OtelConfigRead(BaseModel):
     last_error: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class OtelTestResult(BaseModel):
+    success: bool
+    message: str
+    latency_ms: float | None = None
+
+    class Config:
+        extra = "ignore"
