@@ -67,3 +67,28 @@ tests/            # pytest test suite
 - Ruff rules: E, F, W, I, N, UP, B, S, T20 (S101/S603/S607 ignored)
 - Imports: stdlib -> third-party -> local (absolute). Circular deps: import inside function.
 - Pagination: `offset: int = Query(0, ge=0)`, `limit: int = Query(25, ge=1, le=100)`
+
+## Plugins & Hooks
+Plugin: `frontend-design`. No Claude hooks configured.
+
+## Non-Negotiable Rules
+- **Line length is 120** — not 88 (the ruff default). Already in `pyproject.toml`.
+- **Always `poetry run`** — no Makefile, no global venv
+- SQLAlchemy 2.0: `select()` + `scalars()`, never `db.query()`
+- `db.flush()` in services, `db.commit()` in routes/tasks
+- Routes are thin wrappers — no business logic
+- Services raise `ValueError`/`RuntimeError` — NOT `HTTPException`
+- SSH: `WarningPolicy()` not `AutoAddPolicy()`
+
+## Template Rules
+- Single quotes on `x-data` with `tojson`
+- `{{ var if var else '' }}` not `{{ var | default('') }}`
+- CSRF via `app/web/helpers.py` `ctx()` helper
+- Dark mode: always pair light + dark Tailwind variants
+
+## Common Mistakes
+- Using `with_for_update()` in tests (SQLite doesn't support it)
+- Upgrading bcrypt beyond 4.0.1 (breaks passlib 1.7.4)
+- Using `AutoAddPolicy()` for SSH (security risk — use `WarningPolicy()`)
+- Forgetting `_reset_rate_limiters` fixture for rate limiter tests
+- Line length 88 instead of 120
