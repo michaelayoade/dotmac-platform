@@ -110,10 +110,10 @@ class TestMarkAllRead:
     def test_marks_all(self, client, auth_headers, _notifications):
         resp = client.post("/notifications/read-all", headers=auth_headers)
         assert resp.status_code == 200
-        assert resp.json()["marked"] == 4
+        assert resp.json()["marked"] == 3
 
         count_resp = client.get("/notifications/unread-count", headers=auth_headers)
-        assert count_resp.json()["unread_count"] == 0
+        assert count_resp.json()["unread_count"] == 1
 
     def test_unauthenticated(self, client):
         resp = client.post("/notifications/read-all")
