@@ -19,7 +19,7 @@ from app.models.auth import (  # noqa: F401
     UserCredential,
 )
 from app.models.backup import Backup, BackupStatus, BackupType  # noqa: F401
-from app.models.catalog import AppBundle, AppCatalogItem, AppRelease  # noqa: F401
+from app.models.catalog import AppCatalogItem  # noqa: F401
 from app.models.clone_operation import CloneOperation, CloneStatus  # noqa: F401
 from app.models.deploy_approval import ApprovalStatus, DeployApproval  # noqa: F401
 from app.models.deployment_batch import (  # noqa: F401
@@ -36,7 +36,7 @@ from app.models.domain_settings import (  # noqa: F401
 from app.models.dr_plan import DisasterRecoveryPlan, DRTestStatus  # noqa: F401
 from app.models.drift_report import DriftReport  # noqa: F401
 from app.models.feature_flag import InstanceFlag  # noqa: F401
-from app.models.git_repository import GitAuthType, GitRepository  # noqa: F401
+from app.models.git_repository import GitAuthType, GitRepository, RegistryEnvironment  # noqa: F401
 from app.models.github_webhook_log import GitHubWebhookLog  # noqa: F401
 from app.models.health_check import HealthCheck, HealthStatus  # noqa: F401
 from app.models.instance import (  # noqa: F401

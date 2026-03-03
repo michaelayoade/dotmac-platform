@@ -246,7 +246,7 @@ class DeployService:
         )
         for log in self.db.scalars(stmt).all():
             log.deploy_secret = None
-        self.db.commit()
+        self.db.flush()
 
     def get_deployment_logs(self, instance_id: UUID, deployment_id: str | None = None) -> list[DeploymentLog]:
         """Get deployment logs for an instance."""
@@ -305,37 +305,69 @@ class DeployService:
     ) -> None:
         """Update a deployment step's status."""
         from sqlalchemy import select
+        from sqlalchemy.exc import OperationalError
 
-        stmt = select(DeploymentLog).where(
-            DeploymentLog.instance_id == instance_id,
-            DeploymentLog.deployment_id == deployment_id,
-            DeploymentLog.step == step,
-        )
-        log = self.db.scalar(stmt)
-        if not log:
-            return
+        def _apply_update() -> None:
+            stmt = select(DeploymentLog).where(
+                DeploymentLog.instance_id == instance_id,
+                DeploymentLog.deployment_id == deployment_id,
+                DeploymentLog.step == step,
+            )
+            log = self.db.scalar(stmt)
+            if not log:
+                return
 
-        now = datetime.now(UTC)
-        log.status = status
-        if message:
-            log.message = message
-        if output:
-            if len(output) > 10000:
-                logger.warning(
-                    "Truncating deploy output for %s/%s step %s (%d chars)",
+            now = datetime.now(UTC)
+            log.status = status
+            if message:
+                log.message = message
+            if output:
+                if len(output) > 10000:
+                    logger.warning(
+                        "Truncating deploy output for %s/%s step %s (%d chars)",
+                        instance_id,
+                        deployment_id,
+                        step,
+                        len(output),
+                    )
+                log.output = output[:10000]
+
+            if status == DeployStepStatus.running:
+                log.started_at = now
+            elif status in (DeployStepStatus.success, DeployStepStatus.failed):
+                log.completed_at = now
+
+            # NOTE: Intentional commit (not flush) — called from Celery tasks,
+            # intermediate commits are required for real-time progress visibility.
+            self.db.commit()
+
+        try:
+            _apply_update()
+        except OperationalError:
+            logger.warning(
+                "OperationalError updating deploy step %s for %s/%s; retrying once",
+                step,
+                instance_id,
+                deployment_id,
+                exc_info=True,
+            )
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
+            try:
+                _apply_update()
+            except Exception:
+                logger.exception(
+                    "Failed to update deploy step %s for %s/%s after retry",
+                    step,
                     instance_id,
                     deployment_id,
-                    step,
-                    len(output),
                 )
-            log.output = output[:10000]
-
-        if status == DeployStepStatus.running:
-            log.started_at = now
-        elif status in (DeployStepStatus.success, DeployStepStatus.failed):
-            log.completed_at = now
-
-        self.db.commit()
+                try:
+                    self.db.rollback()
+                except Exception:
+                    pass
 
     def _record_deploy_metric(self, instance_id: UUID, success: bool) -> None:
         """Record a deployment metric (best-effort)."""
@@ -508,8 +540,8 @@ class DeployService:
                     from app.services.catalog_service import CatalogService
 
                     catalog_item = CatalogService(self.db).get_catalog_item(instance.catalog_item_id)
-                    if catalog_item and catalog_item.release:
-                        instance.deployed_git_ref = catalog_item.release.git_ref
+                    if catalog_item and catalog_item.git_ref:
+                        instance.deployed_git_ref = catalog_item.git_ref
                 except Exception:
                     logger.debug("Failed to resolve catalog release for deployed ref", exc_info=True)
             instance.status = InstanceStatus.running
@@ -1094,31 +1126,39 @@ class DeployService:
         step = "verify"
         self._update_step(instance.instance_id, deployment_id, step, DeployStepStatus.running)
 
-        # Try health endpoint via curl on the server
+        # App can take a short warm-up after containers start; retry before failing.
         port = int(instance.app_port)
-        result = ssh.exec_command(
-            f"curl -sf http://localhost:{port}/health || echo 'FAIL'",
-            timeout=15,
-        )
+        max_attempts = 18  # ~90s total
+        wait_seconds = 5
+        last_output = ""
 
-        if result.ok and "FAIL" not in result.stdout:
-            self._update_step(
-                instance.instance_id,
-                deployment_id,
-                step,
-                DeployStepStatus.success,
-                "Health check passed",
-                result.stdout,
+        for attempt in range(1, max_attempts + 1):
+            result = ssh.exec_command(
+                f"curl -sf http://localhost:{port}/health || echo 'FAIL'",
+                timeout=15,
             )
-            return True
+            combined = ((result.stdout or "") + "\n" + (result.stderr or "")).strip()
+            last_output = combined
+            if result.ok and "FAIL" not in (result.stdout or ""):
+                self._update_step(
+                    instance.instance_id,
+                    deployment_id,
+                    step,
+                    DeployStepStatus.success,
+                    f"Health check passed (attempt {attempt}/{max_attempts})",
+                    result.stdout,
+                )
+                return True
+            if attempt < max_attempts:
+                time.sleep(wait_seconds)
 
         self._update_step(
             instance.instance_id,
             deployment_id,
             step,
             DeployStepStatus.failed,
-            "Health check failed",
-            result.stdout + "\n" + result.stderr,
+            f"Health check failed after {max_attempts} attempts",
+            last_output,
         )
         return False
 

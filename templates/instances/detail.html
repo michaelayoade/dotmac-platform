@@ -83,9 +83,11 @@
                 <span x-text="submitting ? 'Restarting...' : 'Restart'"></span>
             </button>
         </form>
-        <form method="POST" action="/instances/{{ instance.instance_id }}/stop" onsubmit="return confirm('Stop this instance?')">
+        <form x-ref="stopForm" method="POST" action="/instances/{{ instance.instance_id }}/stop">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            {{ btn_danger("Stop", testid="instance-stop", size="sm") }}
+            <button type="button" data-testid="instance-stop"
+                    @click="$dispatch('confirm-action', { title: 'Stop Instance', message: 'Stop instance {{ instance.org_code }}?', confirmLabel: 'Stop', form: $refs.stopForm })"
+                    class="inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-1.5 text-[11px] font-medium text-red-600 hover:bg-red-50 dark:border-red-800/60 dark:text-red-400 dark:hover:bg-red-900/20 transition">Stop</button>
         </form>
         {% elif instance.status.value == 'stopped' %}
         <form method="POST" action="/instances/{{ instance.instance_id }}/start"
@@ -113,9 +115,10 @@
 
         {# Suspend / Reactivate / Archive buttons based on status #}
         {% if instance.status.value in ('running', 'stopped') and not instance.suspended_at %}
-        <form method="POST" action="/instances/{{ instance.instance_id }}/suspend" onsubmit="return confirm('Suspend this instance? Users will lose access.')">
+        <form x-ref="suspendForm" method="POST" action="/instances/{{ instance.instance_id }}/suspend">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" data-testid="instance-suspend"
+            <button type="button" data-testid="instance-suspend"
+                    @click="$dispatch('confirm-action', { title: 'Suspend Instance', message: 'Suspend instance {{ instance.org_code }}? Users will lose access.', confirmLabel: 'Suspend', form: $refs.suspendForm })"
                     class="rounded-lg border border-amber-200 px-3 py-2 text-[13px] font-medium text-amber-600 hover:bg-amber-50 dark:border-amber-800/60 dark:text-amber-400 dark:hover:bg-amber-900/20 transition">Suspend</button>
         </form>
         {% endif %}
@@ -127,18 +130,20 @@
         </form>
         {% endif %}
         {% if instance.status.value in ('stopped', 'suspended', 'error') %}
-        <form method="POST" action="/instances/{{ instance.instance_id }}/archive" onsubmit="return confirm('Archive instance {{ instance.org_code }}? This will preserve data but make the instance inaccessible.')">
+        <form x-ref="archiveForm" method="POST" action="/instances/{{ instance.instance_id }}/archive">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" data-testid="instance-archive"
+            <button type="button" data-testid="instance-archive"
+                    @click="$dispatch('confirm-action', { title: 'Archive Instance', message: 'Archive instance {{ instance.org_code }}? This will preserve data but make the instance inaccessible.', confirmLabel: 'Archive', form: $refs.archiveForm })"
                     class="rounded-lg border border-surface-200 px-3 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Archive</button>
         </form>
         {% endif %}
 
         {# Delete button (stopped, error, provisioned, suspended) #}
         {% if instance.status.value in ('stopped', 'error', 'provisioned', 'suspended') %}
-        <form method="POST" action="/instances/{{ instance.instance_id }}/delete" onsubmit="return confirm('Delete instance {{ instance.org_code }}? This cannot be undone.')">
+        <form x-ref="deleteForm" method="POST" action="/instances/{{ instance.instance_id }}/delete">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" data-testid="instance-delete"
+            <button type="button" data-testid="instance-delete"
+                    @click="$dispatch('confirm-action', { title: 'Delete Instance', message: 'Delete instance {{ instance.org_code }}? This cannot be undone.', confirmLabel: 'Delete', form: $refs.deleteForm })"
                     class="rounded-lg border border-red-200 px-3 py-2 text-[13px] font-medium text-red-600 hover:bg-red-50 dark:border-red-800/60 dark:text-red-400 dark:hover:bg-red-900/20 transition">Delete</button>
         </form>
         {% endif %}
@@ -574,13 +579,13 @@
         </h2>
         <form method="POST" action="/instances/{{ instance.instance_id }}/upgrades" class="grid gap-3 sm:grid-cols-3">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <select name="catalog_item_id" required class="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+            <select name="catalog_item_id" required class="rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
                 <option value="">Select catalog item...</option>
                 {% for c in catalog_items %}
                 <option value="{{ c.catalog_id }}">{{ c.label }}</option>
                 {% endfor %}
             </select>
-            <input type="datetime-local" name="scheduled_for" class="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            <input type="datetime-local" name="scheduled_for" class="rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
             <button type="submit" class="rounded-lg bg-surface-900 px-4 py-2 text-[13px] font-semibold text-white dark:bg-primary-500 dark:text-surface-950">Schedule / Upgrade</button>
         </form>
         <p class="mt-2 text-[11px] text-surface-400">Leave schedule empty to run immediately.</p>
@@ -607,7 +612,7 @@
                                 {{ cat.label if cat else '--' }}
                             </td>
                             <td class="py-2 pr-4 text-surface-500">
-                                {{ cat.release.version if cat and cat.release else '--' }}
+                                {{ cat.version if cat else '--' }}
                             </td>
                             <td class="py-2 pr-4 text-surface-500">
                                 {{ u.status.value }}
@@ -648,7 +653,7 @@
                 <p class="text-[12px] text-surface-500 dark:text-surface-400">Rotate a single secret</p>
                 <form method="POST" action="/instances/{{ instance.instance_id }}/secrets/rotate" class="mt-3 space-y-3">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                    <select name="secret_name" class="w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                    <select name="secret_name" class="w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
                         <option value="POSTGRES_PASSWORD">POSTGRES_PASSWORD</option>
                         <option value="REDIS_PASSWORD">REDIS_PASSWORD</option>
                         <option value="JWT_SECRET">JWT_SECRET</option>
@@ -788,6 +793,23 @@
     <div x-show="activeTab === 'domains'" x-cloak class="mt-4 rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
         <h2 class="text-lg font-display text-surface-700 dark:text-surface-300 mb-5">Custom Domains</h2>
 
+        {# Expiring Certificates Warning #}
+        {% if expiring_certs %}
+        <div class="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/50 dark:bg-amber-900/20">
+            <div class="flex items-start gap-2">
+                <svg class="h-5 w-5 text-amber-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/></svg>
+                <div>
+                    <p class="text-[13px] font-semibold text-amber-800 dark:text-amber-300">SSL Certificates Expiring Soon</p>
+                    <ul class="mt-1 space-y-0.5">
+                        {% for ec in expiring_certs %}
+                        <li class="text-[12px] text-amber-700 dark:text-amber-400">{{ ec.domain }} — expires {{ ec.ssl_expires_at.strftime('%Y-%m-%d') if ec.ssl_expires_at else 'unknown' }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         {# Add Domain Form #}
         <form method="POST" action="/instances/{{ instance.instance_id }}/domains/add" class="mb-6 flex flex-wrap items-end gap-3"
               x-data="{ submitting: false }" @submit="submitting = true">
@@ -813,6 +835,7 @@
                         <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Domain</th>
                         <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Primary</th>
                         <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Status</th>
+                        <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">SSL Expiry</th>
                         <th class="pb-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Verification Token</th>
                         <th class="pb-3 text-right text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Actions</th>
                     </tr>
@@ -829,14 +852,23 @@
                             {% endif %}
                         </td>
                         <td class="py-3 pr-4">
-                            {% if d.status.value == 'verified' %}
-                                <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Verified</span>
-                            {% elif d.status.value == 'pending' %}
+                            {% if d.status.value == 'active' %}
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Active</span>
+                            {% elif d.status.value == 'verified' %}
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-blue-600 dark:text-blue-400"><span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>Verified</span>
+                            {% elif d.status.value == 'pending_verification' %}
                                 <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400"><span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>Pending</span>
                             {% elif d.status.value == 'failed' %}
                                 <span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-red-600 dark:text-red-400"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>Failed</span>
                             {% else %}
                                 <span class="text-[11px] text-surface-500">{{ d.status.value|title }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 pr-4 text-[12px] text-surface-500 dark:text-surface-400">
+                            {% if d.ssl_expires_at %}
+                                {{ d.ssl_expires_at.strftime('%Y-%m-%d') }}
+                            {% else %}
+                                <span class="text-surface-400">--</span>
                             {% endif %}
                         </td>
                         <td class="py-3 pr-4">
@@ -848,10 +880,26 @@
                         </td>
                         <td class="py-3 text-right">
                             <div class="flex items-center justify-end gap-2">
-                                {% if d.status.value != 'verified' %}
+                                {% if d.status.value == 'pending_verification' %}
                                 <form method="POST" action="/instances/{{ instance.instance_id }}/domains/{{ d.domain_id }}/verify" class="inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                                     <button type="submit" class="rounded-md px-2 py-1 text-[11px] font-medium text-primary-600 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-900/20 transition">Verify</button>
+                                </form>
+                                {% endif %}
+                                {% if d.status.value == 'verified' %}
+                                <form method="POST" action="/instances/{{ instance.instance_id }}/domains/{{ d.domain_id }}/provision-ssl" class="inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                    <button type="submit" class="rounded-md px-2 py-1 text-[11px] font-medium text-primary-600 hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-900/20 transition">Activate (auto-SSL)</button>
+                                </form>
+                                <form method="POST" action="/instances/{{ instance.instance_id }}/domains/{{ d.domain_id }}/activate" class="inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                    <button type="submit" class="rounded-md px-2 py-1 text-[11px] font-medium text-surface-600 hover:bg-surface-100 dark:text-surface-400 dark:hover:bg-surface-800 transition">Activate</button>
+                                </form>
+                                {% endif %}
+                                {% if d.status.value == 'active' and not d.is_primary %}
+                                <form method="POST" action="/instances/{{ instance.instance_id }}/domains/{{ d.domain_id }}/primary" class="inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                                    <button type="submit" class="rounded-md px-2 py-1 text-[11px] font-medium text-surface-600 hover:bg-surface-100 dark:text-surface-400 dark:hover:bg-surface-800 transition">Set Primary</button>
                                 </form>
                                 {% endif %}
                                 <form method="POST" action="/instances/{{ instance.instance_id }}/domains/{{ d.domain_id }}/delete" onsubmit="return confirm('Remove domain {{ d.domain }}?')" class="inline">

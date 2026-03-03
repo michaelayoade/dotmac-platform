@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 from app.api.instances import create_upgrade
 from app.models.app_upgrade import AppUpgrade
-from app.models.catalog import AppBundle, AppCatalogItem, AppRelease
+from app.models.catalog import AppCatalogItem
 from app.models.deploy_approval import DeployApproval
 from app.models.git_repository import GitAuthType, GitRepository
 from app.models.instance import Instance
@@ -34,7 +34,7 @@ def _make_server(db_session):
 def _make_catalog(db_session):
     repo = GitRepository(
         label=f"repo-{uuid.uuid4().hex[:6]}",
-        url="git@example.com:repo.git",
+        github_url="git@example.com:repo.git",
         auth_type=GitAuthType.none,
         is_active=True,
     )
@@ -42,24 +42,14 @@ def _make_catalog(db_session):
     db_session.commit()
     db_session.refresh(repo)
 
-    release = AppRelease(
-        name="Release A",
+    item = AppCatalogItem(
+        label="Standard",
         version="1.2.3",
         git_ref="v1.2.3",
         git_repo_id=repo.repo_id,
-    )
-    bundle = AppBundle(
-        name="Core",
-        description="Core bundle",
         module_slugs=["core"],
         flag_keys=["feature_x"],
     )
-    db_session.add_all([release, bundle])
-    db_session.commit()
-    db_session.refresh(release)
-    db_session.refresh(bundle)
-
-    item = AppCatalogItem(label="Standard", release_id=release.release_id, bundle_id=bundle.bundle_id)
     db_session.add(item)
     db_session.commit()
     db_session.refresh(item)

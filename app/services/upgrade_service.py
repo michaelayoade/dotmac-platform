@@ -88,27 +88,28 @@ class UpgradeService:
         catalog_item = self.db.get(AppCatalogItem, upgrade.catalog_item_id)
         if not catalog_item:
             raise ValueError("Catalog item not found")
-        release = catalog_item.release
-        if not release or not release.is_active:
-            raise ValueError("Catalog release not found or inactive")
+        if not catalog_item.git_ref:
+            raise ValueError("Catalog item has no git ref")
 
         try:
             upgrade.status = UpgradeStatus.running
             upgrade.started_at = datetime.now(UTC)
+            # NOTE: Intentional commit (not flush) — called from Celery tasks,
+            # intermediate commits are required for real-time progress visibility.
             self.db.commit()
 
             # Update instance catalog selection
             instance.catalog_item_id = catalog_item.catalog_id
-            self.db.flush()
+            self.db.commit()
 
-            # Deploy using catalog release git_ref/repo
+            # Deploy using catalog item git_ref
             from app.services.deploy_service import DeployService
 
             deploy_svc = DeployService(self.db)
             deployment_id = deploy_svc.create_deployment(
                 instance.instance_id,
                 deployment_type="upgrade",
-                git_ref=release.git_ref,
+                git_ref=catalog_item.git_ref,
                 upgrade_id=upgrade.upgrade_id,
             )
             self.db.flush()
@@ -118,7 +119,7 @@ class UpgradeService:
                 deployment_id,
                 admin_password="",
                 deployment_type="upgrade",
-                git_ref=release.git_ref,
+                git_ref=catalog_item.git_ref,
             )
             if not result.get("success"):
                 raise ValueError(result.get("error", "Upgrade deploy failed"))
@@ -168,18 +169,17 @@ class UpgradeService:
         approval_svc = ApprovalService(self.db)
         if approval_svc.requires_approval(instance_id):
             catalog_item = CatalogService(self.db).get_catalog_item(catalog_item_id)
-            release = catalog_item.release if catalog_item else None
             reason: str | None = None
             if catalog_item:
                 reason = f"Upgrade to {catalog_item.label}"
-                if release and release.version:
-                    reason = f"{reason} ({release.version})"
+                if catalog_item.version:
+                    reason = f"{reason} ({catalog_item.version})"
             approval = approval_svc.request_approval(
                 instance_id,
                 requested_by=requested_by or "unknown",
                 requested_by_name=requested_by_name,
                 deployment_type="upgrade",
-                git_ref=release.git_ref if release else None,
+                git_ref=catalog_item.git_ref if catalog_item else None,
                 reason=reason,
                 upgrade_id=upgrade.upgrade_id,
             )

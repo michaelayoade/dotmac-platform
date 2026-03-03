@@ -4,8 +4,8 @@ import uuid
 
 import pytest
 
-from app.models.catalog import AppRelease
-from app.models.git_repository import GitAuthType, GitRepository
+from app.models.catalog import AppCatalogItem
+from app.models.git_repository import GitAuthType, GitRepository, RegistryEnvironment
 from app.models.instance import Instance
 from app.models.server import Server
 from app.services.git_repo_service import GitRepoService
@@ -17,7 +17,7 @@ TestBase.metadata.create_all(_test_engine)
 @pytest.fixture(autouse=True)
 def _clean_git_repo_data(db_session):
     db_session.query(Instance).delete()
-    db_session.query(AppRelease).delete()
+    db_session.query(AppCatalogItem).delete()
     db_session.query(Server).delete()
     db_session.query(GitRepository).delete()
     db_session.commit()
@@ -117,17 +117,6 @@ def test_create_repo_requires_registry_url(db_session):
         )
 
 
-def test_create_repo_rejects_ssh_key_auth(db_session):
-    svc = GitRepoService(db_session)
-    with pytest.raises(ValueError, match="SSH key auth is not supported"):
-        svc.create_repo(
-            label=f"ssh-{uuid.uuid4().hex[:6]}",
-            auth_type=GitAuthType.ssh_key,
-            registry_url="ghcr.io/acme/repo",
-            credential="-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----",
-        )
-
-
 def test_create_repo_allows_registry_only(db_session):
     svc = GitRepoService(db_session)
     repo = svc.create_repo(
@@ -137,7 +126,7 @@ def test_create_repo_allows_registry_only(db_session):
     )
     db_session.commit()
 
-    assert repo.url is None
+    assert repo.github_url is None
     assert repo.registry_url == "ghcr.io/acme/repo"
 
 
@@ -154,17 +143,6 @@ def test_create_repo_with_token(db_session):
     assert repo.registry_url == "ghcr.io/acme/repo"
     assert repo.token_encrypted is not None
     assert repo.auth_type == GitAuthType.token
-
-
-def test_update_repo_rejects_ssh_key_auth(db_session):
-    svc = GitRepoService(db_session)
-    repo = svc.create_repo(
-        label=f"upd-{uuid.uuid4().hex[:6]}",
-        auth_type=GitAuthType.none,
-        registry_url="ghcr.io/acme/repo",
-    )
-    with pytest.raises(ValueError, match="SSH key auth is not supported"):
-        svc.update_repo(repo.repo_id, auth_type=GitAuthType.ssh_key)
 
 
 def test_purge_repo_requires_inactive(db_session):
@@ -192,23 +170,49 @@ def test_purge_repo_deletes_inactive_repo(db_session):
     assert db_session.get(GitRepository, repo.repo_id) is None
 
 
-def test_purge_repo_refuses_when_referenced_by_release(db_session):
+def test_purge_repo_refuses_when_referenced_by_catalog_item(db_session):
     svc = GitRepoService(db_session)
     repo = svc.create_repo(
-        label=f"with-release-{uuid.uuid4().hex[:6]}",
+        label=f"with-item-{uuid.uuid4().hex[:6]}",
         auth_type=GitAuthType.none,
         registry_url="ghcr.io/acme/repo",
     )
-    release = AppRelease(
-        name="R1",
+    item = AppCatalogItem(
+        label="Test Item",
         version="1.0.0",
         git_ref="main",
         git_repo_id=repo.repo_id,
-        is_active=False,
+        is_active=True,
     )
-    db_session.add(release)
+    db_session.add(item)
     db_session.commit()
 
     svc.delete_repo(repo.repo_id)
     with pytest.raises(ValueError, match="referenced"):
         svc.purge_repo(repo.repo_id)
+
+
+def test_create_repo_defaults_to_production(db_session):
+    svc = GitRepoService(db_session)
+    repo = svc.create_repo(
+        label=f"prod-{uuid.uuid4().hex[:6]}",
+        auth_type=GitAuthType.none,
+        registry_url="ghcr.io/acme/repo",
+    )
+    db_session.commit()
+
+    assert repo.environment == RegistryEnvironment.production
+
+
+def test_create_repo_with_environment_staging(db_session):
+    svc = GitRepoService(db_session)
+    repo = svc.create_repo(
+        label=f"staging-{uuid.uuid4().hex[:6]}",
+        auth_type=GitAuthType.none,
+        registry_url="ghcr.io/acme/staging",
+        environment=RegistryEnvironment.staging,
+    )
+    db_session.commit()
+
+    assert repo.environment == RegistryEnvironment.staging
+    assert repo.registry_url == "ghcr.io/acme/staging"

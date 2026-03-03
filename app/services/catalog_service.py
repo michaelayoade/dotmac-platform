@@ -1,4 +1,4 @@
-"""Catalog Service — manage app releases, bundles, and catalog items."""
+"""Catalog Service — manage catalog items (deployable app configurations)."""
 
 from __future__ import annotations
 
@@ -7,137 +7,47 @@ from uuid import UUID
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models.catalog import AppBundle, AppCatalogItem, AppRelease
+from app.models.catalog import AppCatalogItem
 
 
 class CatalogService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session) -> None:
         self.db = db
 
-    # Releases
-    def create_release(
+    # ── Catalog items ──
+
+    def create_catalog_item(
         self,
-        name: str,
+        label: str,
         version: str,
         git_ref: str,
         git_repo_id: UUID,
+        module_slugs: list[str] | None = None,
+        flag_keys: list[str] | None = None,
         notes: str | None = None,
-    ) -> AppRelease:
-        if not name.strip():
-            raise ValueError("Release name is required")
+    ) -> AppCatalogItem:
+        if not label.strip():
+            raise ValueError("Catalog label is required")
         if not version.strip():
             raise ValueError("Version is required")
         if not git_ref.strip():
             raise ValueError("Git ref is required")
+
         from app.models.git_repository import GitRepository
 
         repo = self.db.get(GitRepository, git_repo_id)
         if not repo or not repo.is_active:
             raise ValueError("Git repository not found or inactive")
-        release = AppRelease(
-            name=name.strip(),
+
+        item = AppCatalogItem(
+            label=label.strip(),
             version=version.strip(),
             git_ref=git_ref.strip(),
             git_repo_id=git_repo_id,
-            notes=notes,
-        )
-        self.db.add(release)
-        self.db.flush()
-        return release
-
-    def list_releases(self, active_only: bool = True) -> list[AppRelease]:
-        stmt = select(AppRelease)
-        if active_only:
-            stmt = stmt.where(AppRelease.is_active.is_(True))
-        stmt = stmt.order_by(AppRelease.created_at.desc())
-        return list(self.db.scalars(stmt).all())
-
-    def get_release(self, release_id: UUID) -> AppRelease | None:
-        return self.db.get(AppRelease, release_id)
-
-    def deactivate_release(self, release_id: UUID) -> None:
-        release = self.get_release(release_id)
-        if not release:
-            raise ValueError("Release not found")
-        release.is_active = False
-        self.db.flush()
-
-    def delete_release(self, release_id: UUID) -> None:
-        release = self.get_release(release_id)
-        if not release:
-            raise ValueError("Release not found")
-        if release.is_active:
-            raise ValueError("Release must be inactive before deletion")
-        has_items = self.db.scalar(
-            select(AppCatalogItem.catalog_id).where(AppCatalogItem.release_id == release_id).limit(1)
-        )
-        if has_items:
-            raise ValueError("Release is still referenced by catalog items")
-        self.db.delete(release)
-        self.db.flush()
-
-    # Bundles
-    def create_bundle(
-        self,
-        name: str,
-        description: str | None = None,
-        module_slugs: list[str] | None = None,
-        flag_keys: list[str] | None = None,
-    ) -> AppBundle:
-        if not name.strip():
-            raise ValueError("Bundle name is required")
-        bundle = AppBundle(
-            name=name.strip(),
-            description=description,
             module_slugs=module_slugs or [],
             flag_keys=flag_keys or [],
+            notes=notes,
         )
-        self.db.add(bundle)
-        self.db.flush()
-        return bundle
-
-    def list_bundles(self, active_only: bool = True) -> list[AppBundle]:
-        stmt = select(AppBundle)
-        if active_only:
-            stmt = stmt.where(AppBundle.is_active.is_(True))
-        stmt = stmt.order_by(AppBundle.created_at.desc())
-        return list(self.db.scalars(stmt).all())
-
-    def get_bundle(self, bundle_id: UUID) -> AppBundle | None:
-        return self.db.get(AppBundle, bundle_id)
-
-    def deactivate_bundle(self, bundle_id: UUID) -> None:
-        bundle = self.get_bundle(bundle_id)
-        if not bundle:
-            raise ValueError("Bundle not found")
-        bundle.is_active = False
-        self.db.flush()
-
-    def delete_bundle(self, bundle_id: UUID) -> None:
-        bundle = self.get_bundle(bundle_id)
-        if not bundle:
-            raise ValueError("Bundle not found")
-        if bundle.is_active:
-            raise ValueError("Bundle must be inactive before deletion")
-        has_items = self.db.scalar(
-            select(AppCatalogItem.catalog_id).where(AppCatalogItem.bundle_id == bundle_id).limit(1)
-        )
-        if has_items:
-            raise ValueError("Bundle is still referenced by catalog items")
-        self.db.delete(bundle)
-        self.db.flush()
-
-    # Catalog items
-    def create_catalog_item(self, label: str, release_id: UUID, bundle_id: UUID) -> AppCatalogItem:
-        if not label.strip():
-            raise ValueError("Catalog label is required")
-        release = self.get_release(release_id)
-        if not release or not release.is_active:
-            raise ValueError("Release not found or inactive")
-        bundle = self.get_bundle(bundle_id)
-        if not bundle or not bundle.is_active:
-            raise ValueError("Bundle not found or inactive")
-        item = AppCatalogItem(label=label.strip(), release_id=release_id, bundle_id=bundle_id)
         self.db.add(item)
         self.db.flush()
         return item
@@ -152,14 +62,14 @@ class CatalogService:
         stmt = stmt.order_by(AppCatalogItem.created_at.desc())
         return list(self.db.scalars(stmt).all())
 
-    def get_index_bundle(self) -> dict:
+    def get_index_bundle(self) -> dict[str, object]:
         from app.services.git_repo_service import GitRepoService
 
-        releases = self.list_releases(active_only=False)
-        bundles = self.list_bundles(active_only=False)
+        repo_svc = GitRepoService(self.db)
         items = self.list_catalog_items(active_only=False)
-        repos = GitRepoService(self.db).list_repos(active_only=True)
-        return {"releases": releases, "bundles": bundles, "items": items, "repos": repos}
+        repos = repo_svc.list_for_web(active_only=False)
+        active_repos = [r for r in repos if r.is_active]
+        return {"items": items, "repos": repos, "active_repos": active_repos}
 
     @staticmethod
     def split_csv(value: str | None) -> list[str]:
@@ -207,35 +117,16 @@ class CatalogService:
         self.db.delete(item)
         self.db.flush()
 
-    def serialize_release(self, release: AppRelease) -> dict:
-        return {
-            "release_id": str(release.release_id),
-            "name": release.name,
-            "version": release.version,
-            "git_ref": release.git_ref,
-            "git_repo_id": str(release.git_repo_id),
-            "notes": release.notes,
-            "is_active": release.is_active,
-            "created_at": release.created_at.isoformat() if release.created_at else None,
-        }
-
-    def serialize_bundle(self, bundle: AppBundle) -> dict:
-        return {
-            "bundle_id": str(bundle.bundle_id),
-            "name": bundle.name,
-            "description": bundle.description,
-            "module_slugs": bundle.module_slugs or [],
-            "flag_keys": bundle.flag_keys or [],
-            "is_active": bundle.is_active,
-            "created_at": bundle.created_at.isoformat() if bundle.created_at else None,
-        }
-
-    def serialize_item(self, item: AppCatalogItem) -> dict:
+    def serialize_item(self, item: AppCatalogItem) -> dict[str, object]:
         return {
             "catalog_id": str(item.catalog_id),
             "label": item.label,
-            "release_id": str(item.release_id),
-            "bundle_id": str(item.bundle_id),
+            "version": item.version,
+            "git_ref": item.git_ref,
+            "git_repo_id": str(item.git_repo_id),
+            "notes": item.notes,
+            "module_slugs": item.module_slugs or [],
+            "flag_keys": item.flag_keys or [],
             "is_active": item.is_active,
             "created_at": item.created_at.isoformat() if item.created_at else None,
         }

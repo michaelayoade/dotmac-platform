@@ -166,7 +166,7 @@ class ApprovalService:
 
     def get_list_bundle(self, history_limit: int = 100) -> dict:
         from app.models.app_upgrade import AppUpgrade
-        from app.models.catalog import AppCatalogItem, AppRelease
+        from app.models.catalog import AppCatalogItem
         from app.services.instance_service import InstanceService
 
         pending = self.get_pending()
@@ -178,7 +178,7 @@ class ApprovalService:
         instances = InstanceService(self.db).list_all()
         inst_map = {i.instance_id: i for i in instances}
 
-        upgrade_map: dict[UUID, dict] = {}
+        upgrade_map: dict[UUID, dict[str, str | None]] = {}
         upgrade_ids = {a.upgrade_id for a in pending + history if a.upgrade_id}
         if upgrade_ids:
             upgrades = list(self.db.scalars(select(AppUpgrade).where(AppUpgrade.upgrade_id.in_(upgrade_ids))).all())
@@ -187,17 +187,12 @@ class ApprovalService:
                 self.db.scalars(select(AppCatalogItem).where(AppCatalogItem.catalog_id.in_(catalog_ids))).all()
             )
             item_map = {i.catalog_id: i for i in items}
-            release_ids = {i.release_id for i in items}
-            releases = list(self.db.scalars(select(AppRelease).where(AppRelease.release_id.in_(release_ids))).all())
-            release_map = {r.release_id: r for r in releases}
 
             for up in upgrades:
                 item = item_map.get(up.catalog_item_id)
-                release = release_map.get(item.release_id) if item else None
                 upgrade_map[up.upgrade_id] = {
                     "catalog_label": item.label if item else None,
-                    "release_version": release.version if release else None,
-                    "release_name": release.name if release else None,
+                    "release_version": item.version if item else None,
                 }
 
         return {

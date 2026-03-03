@@ -74,15 +74,12 @@ class SignupService:
         catalog_item = CatalogService(self.db).get_catalog_item(catalog_item_id)
         if not catalog_item or not catalog_item.is_active:
             raise ValueError("Selected catalog item is invalid")
-        release = catalog_item.release
-        if not release or not release.is_active:
-            raise ValueError("Catalog release is invalid")
         from app.services.git_repo_service import GitRepoService
 
-        repo = GitRepoService(self.db).get_by_id(release.git_repo_id)
+        repo = GitRepoService(self.db).get_by_id(catalog_item.git_repo_id)
         if not repo or not repo.is_active:
-            raise ValueError("Catalog release repo is invalid")
-        return cast(UUID, release.git_repo_id)
+            raise ValueError("Catalog item registry is invalid")
+        return cast(UUID, catalog_item.git_repo_id)
 
     def _generate_org_code(self, org_name: str) -> str:
         import re

@@ -1,4 +1,4 @@
-"""Catalog API — manage releases, bundles, and catalog items."""
+"""Catalog API — manage catalog items."""
 
 from __future__ import annotations
 
@@ -8,147 +8,11 @@ from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role, require_user_auth
-from app.schemas.catalog import CatalogBundleRead, CatalogItemRead, CatalogReleaseRead
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
 
-@router.get("/releases", response_model=list[CatalogReleaseRead])
-def list_releases(
-    active_only: bool = True,
-    db: Session = Depends(get_db),
-    auth=Depends(require_user_auth),
-):
-    from app.services.catalog_service import CatalogService
-
-    svc = CatalogService(db)
-    releases = svc.list_releases(active_only=active_only)
-    return [svc.serialize_release(r) for r in releases]
-
-
-@router.post("/releases", status_code=status.HTTP_201_CREATED)
-def create_release(
-    name: str = Body(...),
-    version: str = Body(...),
-    git_ref: str = Body(...),
-    git_repo_id: UUID = Body(...),
-    notes: str | None = Body(None),
-    db: Session = Depends(get_db),
-    auth=Depends(require_role("admin")),
-):
-    from app.services.catalog_service import CatalogService
-
-    try:
-        release = CatalogService(db).create_release(name, version, git_ref, git_repo_id, notes)
-        db.commit()
-        return {"release_id": str(release.release_id)}
-    except ValueError as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.delete("/releases/{release_id}", status_code=status.HTTP_204_NO_CONTENT)
-def deactivate_release(
-    release_id: UUID,
-    db: Session = Depends(get_db),
-    auth=Depends(require_role("admin")),
-):
-    from app.services.catalog_service import CatalogService
-
-    try:
-        CatalogService(db).deactivate_release(release_id)
-        db.commit()
-        return None
-    except ValueError as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.delete("/releases/{release_id}/purge")
-def delete_release(
-    release_id: UUID,
-    db: Session = Depends(get_db),
-    auth=Depends(require_role("admin")),
-):
-    from app.services.catalog_service import CatalogService
-
-    try:
-        CatalogService(db).delete_release(release_id)
-        db.commit()
-        return {"deleted": str(release_id)}
-    except ValueError as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/bundles", response_model=list[CatalogBundleRead])
-def list_bundles(
-    active_only: bool = True,
-    db: Session = Depends(get_db),
-    auth=Depends(require_user_auth),
-):
-    from app.services.catalog_service import CatalogService
-
-    svc = CatalogService(db)
-    bundles = svc.list_bundles(active_only=active_only)
-    return [svc.serialize_bundle(b) for b in bundles]
-
-
-@router.post("/bundles", status_code=status.HTTP_201_CREATED)
-def create_bundle(
-    name: str = Body(...),
-    description: str | None = Body(None),
-    module_slugs: list[str] | None = Body(None),
-    flag_keys: list[str] | None = Body(None),
-    db: Session = Depends(get_db),
-    auth=Depends(require_role("admin")),
-):
-    from app.services.catalog_service import CatalogService
-
-    try:
-        bundle = CatalogService(db).create_bundle(name, description, module_slugs, flag_keys)
-        db.commit()
-        return {"bundle_id": str(bundle.bundle_id)}
-    except ValueError as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.delete("/bundles/{bundle_id}", status_code=status.HTTP_204_NO_CONTENT)
-def deactivate_bundle(
-    bundle_id: UUID,
-    db: Session = Depends(get_db),
-    auth=Depends(require_role("admin")),
-):
-    from app.services.catalog_service import CatalogService
-
-    try:
-        CatalogService(db).deactivate_bundle(bundle_id)
-        db.commit()
-        return None
-    except ValueError as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.delete("/bundles/{bundle_id}/purge")
-def delete_bundle(
-    bundle_id: UUID,
-    db: Session = Depends(get_db),
-    auth=Depends(require_role("admin")),
-):
-    from app.services.catalog_service import CatalogService
-
-    try:
-        CatalogService(db).delete_bundle(bundle_id)
-        db.commit()
-        return {"deleted": str(bundle_id)}
-    except ValueError as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/items", response_model=list[CatalogItemRead])
+@router.get("/items")
 def list_catalog_items(
     active_only: bool = True,
     search: str | None = None,
@@ -165,15 +29,21 @@ def list_catalog_items(
 @router.post("/items", status_code=status.HTTP_201_CREATED)
 def create_catalog_item(
     label: str = Body(...),
-    release_id: UUID = Body(...),
-    bundle_id: UUID = Body(...),
+    version: str = Body(...),
+    git_ref: str = Body(...),
+    git_repo_id: UUID = Body(...),
+    module_slugs: list[str] | None = Body(None),
+    flag_keys: list[str] | None = Body(None),
+    notes: str | None = Body(None),
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
     from app.services.catalog_service import CatalogService
 
     try:
-        item = CatalogService(db).create_catalog_item(label, release_id, bundle_id)
+        item = CatalogService(db).create_catalog_item(
+            label, version, git_ref, git_repo_id, module_slugs, flag_keys, notes
+        )
         db.commit()
         return {"catalog_id": str(item.catalog_id)}
     except ValueError as e:

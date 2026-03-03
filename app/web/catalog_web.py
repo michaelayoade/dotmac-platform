@@ -1,4 +1,4 @@
-"""Catalog — Web routes for releases, bundles, and catalog items."""
+"""Catalog — Web routes for registries and catalog items."""
 
 from __future__ import annotations
 
@@ -36,66 +36,11 @@ def catalog_index(
             auth,
             "Catalog",
             active_page="catalog",
-            releases=bundle["releases"],
-            bundles=bundle["bundles"],
             items=bundle["items"],
             repos=bundle["repos"],
+            active_repos=bundle["active_repos"],
         ),
     )
-
-
-@router.post("/releases/create")
-def catalog_create_release(
-    request: Request,
-    auth: WebAuthContext = Depends(require_web_auth),
-    db: Session = Depends(get_db),
-    name: str = Form(...),
-    version: str = Form(...),
-    git_ref: str = Form(...),
-    git_repo_id: UUID = Form(...),
-    notes: str | None = Form(None),
-    csrf_token: str = Form(""),
-):
-    require_admin(auth)
-    validate_csrf_token(request, csrf_token)
-    from app.services.catalog_service import CatalogService
-
-    try:
-        CatalogService(db).create_release(name, version, git_ref, git_repo_id, notes)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        logger.exception("Failed to create release: %s", e)
-    return RedirectResponse("/catalog", status_code=302)
-
-
-@router.post("/bundles/create")
-def catalog_create_bundle(
-    request: Request,
-    auth: WebAuthContext = Depends(require_web_auth),
-    db: Session = Depends(get_db),
-    name: str = Form(...),
-    description: str | None = Form(None),
-    module_slugs: str | None = Form(None),
-    flag_keys: str | None = Form(None),
-    csrf_token: str = Form(""),
-):
-    require_admin(auth)
-    validate_csrf_token(request, csrf_token)
-    from app.services.catalog_service import CatalogService
-
-    try:
-        CatalogService(db).create_bundle(
-            name,
-            description,
-            module_slugs=CatalogService.split_csv(module_slugs),
-            flag_keys=CatalogService.split_csv(flag_keys),
-        )
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        logger.exception("Failed to create bundle: %s", e)
-    return RedirectResponse("/catalog", status_code=302)
 
 
 @router.post("/items/create")
@@ -104,8 +49,12 @@ def catalog_create_item(
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
     label: str = Form(...),
-    release_id: UUID = Form(...),
-    bundle_id: UUID = Form(...),
+    version: str = Form(...),
+    git_ref: str = Form(...),
+    git_repo_id: UUID = Form(...),
+    module_slugs: str | None = Form(None),
+    flag_keys: str | None = Form(None),
+    notes: str | None = Form(None),
     csrf_token: str = Form(""),
 ):
     require_admin(auth)
@@ -113,95 +62,19 @@ def catalog_create_item(
     from app.services.catalog_service import CatalogService
 
     try:
-        CatalogService(db).create_catalog_item(label, release_id, bundle_id)
+        CatalogService(db).create_catalog_item(
+            label,
+            version,
+            git_ref,
+            git_repo_id,
+            module_slugs=CatalogService.split_csv(module_slugs),
+            flag_keys=CatalogService.split_csv(flag_keys),
+            notes=notes,
+        )
         db.commit()
     except Exception as e:
         db.rollback()
         logger.exception("Failed to create catalog item: %s", e)
-    return RedirectResponse("/catalog", status_code=302)
-
-
-@router.post("/releases/{release_id}/deactivate")
-def catalog_deactivate_release(
-    request: Request,
-    release_id: UUID,
-    auth: WebAuthContext = Depends(require_web_auth),
-    db: Session = Depends(get_db),
-    csrf_token: str = Form(""),
-):
-    require_admin(auth)
-    validate_csrf_token(request, csrf_token)
-    from app.services.catalog_service import CatalogService
-
-    try:
-        CatalogService(db).deactivate_release(release_id)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        logger.exception("Failed to deactivate release: %s", e)
-    return RedirectResponse("/catalog", status_code=302)
-
-
-@router.post("/releases/{release_id}/delete")
-def catalog_delete_release(
-    request: Request,
-    release_id: UUID,
-    auth: WebAuthContext = Depends(require_web_auth),
-    db: Session = Depends(get_db),
-    csrf_token: str = Form(""),
-):
-    require_admin(auth)
-    validate_csrf_token(request, csrf_token)
-    from app.services.catalog_service import CatalogService
-
-    try:
-        CatalogService(db).delete_release(release_id)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        logger.exception("Failed to delete release: %s", e)
-    return RedirectResponse("/catalog", status_code=302)
-
-
-@router.post("/bundles/{bundle_id}/deactivate")
-def catalog_deactivate_bundle(
-    request: Request,
-    bundle_id: UUID,
-    auth: WebAuthContext = Depends(require_web_auth),
-    db: Session = Depends(get_db),
-    csrf_token: str = Form(""),
-):
-    require_admin(auth)
-    validate_csrf_token(request, csrf_token)
-    from app.services.catalog_service import CatalogService
-
-    try:
-        CatalogService(db).deactivate_bundle(bundle_id)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        logger.exception("Failed to deactivate bundle: %s", e)
-    return RedirectResponse("/catalog", status_code=302)
-
-
-@router.post("/bundles/{bundle_id}/delete")
-def catalog_delete_bundle(
-    request: Request,
-    bundle_id: UUID,
-    auth: WebAuthContext = Depends(require_web_auth),
-    db: Session = Depends(get_db),
-    csrf_token: str = Form(""),
-):
-    require_admin(auth)
-    validate_csrf_token(request, csrf_token)
-    from app.services.catalog_service import CatalogService
-
-    try:
-        CatalogService(db).delete_bundle(bundle_id)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        logger.exception("Failed to delete bundle: %s", e)
     return RedirectResponse("/catalog", status_code=302)
 
 

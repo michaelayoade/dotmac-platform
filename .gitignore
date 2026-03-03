@@ -84,7 +84,8 @@ static/css/tailwind.out.css
 # Test artifacts
 pytest_results*.txt
 playwright-*.png
-file:dotmac_test*
+*.png
+file:*
 erp-*.png
 .aider*
 .agent-run.sh

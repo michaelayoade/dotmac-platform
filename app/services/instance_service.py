@@ -145,7 +145,7 @@ class InstanceService:
     ) -> PagedResult[InstanceListItem]:
         """List instances for the web UI with health + catalog context."""
         from app.config import settings as platform_settings
-        from app.models.catalog import AppCatalogItem, AppRelease
+        from app.models.catalog import AppCatalogItem
         from app.models.health_check import HealthCheck, HealthStatus
         from app.services.health_service import HealthService
 
@@ -257,23 +257,17 @@ class InstanceService:
 
         catalog_ids = {inst.catalog_item_id for inst in instances if inst.catalog_item_id}
         item_map: dict[UUID, AppCatalogItem] = {}
-        release_map: dict[UUID, AppRelease] = {}
         if catalog_ids:
             items = list(
                 self.db.scalars(select(AppCatalogItem).where(AppCatalogItem.catalog_id.in_(catalog_ids))).all()
             )
             item_map = {item.catalog_id: item for item in items}
-            release_ids = {item.release_id for item in items}
-            if release_ids:
-                releases = list(self.db.scalars(select(AppRelease).where(AppRelease.release_id.in_(release_ids))).all())
-                release_map = {rel.release_id: rel for rel in releases}
 
         rows: list[InstanceListItem] = []
         for inst in instances:
             check = health_map.get(inst.instance_id)
             health_state = health_svc.classify_health(check, now) if inst.status.value == "running" else "n/a"
             catalog_item = item_map.get(inst.catalog_item_id) if inst.catalog_item_id else None
-            release = release_map.get(catalog_item.release_id) if catalog_item else None
             rows.append(
                 InstanceListItem(
                     instance=inst,
@@ -281,7 +275,7 @@ class InstanceService:
                     health_state=health_state,
                     health_checked_at=check.checked_at if check else None,
                     catalog_label=catalog_item.label if catalog_item else None,
-                    release_version=release.version if release else None,
+                    release_version=catalog_item.version if catalog_item else None,
                 )
             )
         return PagedResult(items=rows, total=total, page=page, page_size=page_size)
@@ -323,7 +317,11 @@ class InstanceService:
         flags = FeatureFlagService(self.db).list_for_instance(instance_id)
         plans = PlanService(self.db).list_all()
         backups = BackupService(self.db).list_for_instance(instance_id)
-        domains = DomainService(self.db).list_for_instance(instance_id)
+        domain_svc = DomainService(self.db)
+        domains = domain_svc.list_for_instance(instance_id)
+        now = datetime.now(UTC)
+        cutoff = now + timedelta(days=14)
+        expiring_certs = [d for d in domains if d.ssl_expires_at is not None and d.ssl_expires_at <= cutoff]
         audit_logs = TenantAuditService(self.db).get_logs(instance_id, limit=20)
         enforcement_svc = ResourceEnforcementService(self.db)
         usage_summary = enforcement_svc.get_usage_summary(instance_id)
@@ -347,6 +345,7 @@ class InstanceService:
             "plans": plans,
             "backups": backups,
             "domains": domains,
+            "expiring_certs": expiring_certs,
             "audit_logs": audit_logs,
             "usage_summary": usage_summary,
             "compliance_violations": compliance_violations,
@@ -360,20 +359,17 @@ class InstanceService:
         }
 
     def resolve_catalog_repo(self, catalog_id: UUID) -> tuple[UUID, str | None]:
-        """Validate catalog item and return (repo_id, git_ref) from the release."""
+        """Validate catalog item and return (repo_id, git_ref)."""
         from app.services.catalog_service import CatalogService
         from app.services.git_repo_service import GitRepoService
 
-        catalog_item = CatalogService(self.db).get_catalog_item(catalog_id)
-        if not catalog_item or not catalog_item.is_active:
+        item = CatalogService(self.db).get_catalog_item(catalog_id)
+        if not item or not item.is_active:
             raise ValueError("Selected catalog item is invalid")
-        release = catalog_item.release
-        if not release or not release.is_active:
-            raise ValueError("Catalog release is invalid")
-        repo = GitRepoService(self.db).get_by_id(UUID(str(release.git_repo_id)))
+        repo = GitRepoService(self.db).get_by_id(UUID(str(item.git_repo_id)))
         if not repo or not repo.is_active:
-            raise ValueError("Catalog release repo is invalid")
-        return repo.repo_id, release.git_ref
+            raise ValueError("Catalog item registry is invalid")
+        return repo.repo_id, item.git_ref
 
     def set_git_repo(self, instance_id: UUID, git_repo_id: UUID) -> None:
         from app.services.git_repo_service import GitRepoService
@@ -589,15 +585,14 @@ class InstanceService:
                 from app.services.module_service import ModuleService
 
                 catalog_item = CatalogService(self.db).get_catalog_item(catalog_item_id)
-                if catalog_item and catalog_item.bundle:
-                    bundle = catalog_item.bundle
+                if catalog_item:
                     mod_svc = ModuleService(self.db)
                     flag_svc = FeatureFlagService(self.db)
-                    for slug in bundle.module_slugs or []:
+                    for slug in catalog_item.module_slugs or []:
                         mod = mod_svc.get_by_slug(slug)
                         if mod:
                             mod_svc.set_module_enabled(instance.instance_id, mod.module_id, True)
-                    for flag_key in bundle.flag_keys or []:
+                    for flag_key in catalog_item.flag_keys or []:
                         flag_svc.set_flag(instance.instance_id, flag_key, "true")
             except Exception:
                 logger.exception("Failed to apply catalog bundle for instance %s", instance.instance_id)

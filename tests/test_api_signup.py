@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from app.models.catalog import AppBundle, AppCatalogItem, AppRelease
+from app.models.catalog import AppCatalogItem
 from app.models.deployment_log import DeploymentLog
 from app.models.git_repository import GitRepository
 from app.models.instance import Instance, InstanceStatus
@@ -11,22 +11,17 @@ from app.services.settings_crypto import encrypt_value
 
 
 def _seed_catalog(db_session):
-    repo = GitRepository(label=f"repo-{uuid.uuid4().hex[:6]}", url="https://example.com/repo.git")
+    repo = GitRepository(label=f"repo-{uuid.uuid4().hex[:6]}", registry_url="ghcr.io/acme/repo")
     db_session.add(repo)
     db_session.flush()
 
-    release = AppRelease(
-        name="Starter",
+    item = AppCatalogItem(
+        label="Starter",
         version="1.0.0",
         git_ref="main",
         git_repo_id=repo.repo_id,
         is_active=True,
     )
-    bundle = AppBundle(name="Starter", is_active=True)
-    db_session.add_all([release, bundle])
-    db_session.flush()
-
-    item = AppCatalogItem(label="Starter", release_id=release.release_id, bundle_id=bundle.bundle_id, is_active=True)
     db_session.add(item)
     db_session.commit()
     db_session.refresh(item)

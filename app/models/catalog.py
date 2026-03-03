@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import uuid
 from datetime import UTC, datetime
 
@@ -9,6 +11,8 @@ from app.db import Base
 
 
 class AppRelease(Base):
+    """Deprecated — kept for migration rollback safety. Use AppCatalogItem fields directly."""
+
     __tablename__ = "app_releases"
 
     release_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -22,6 +26,8 @@ class AppRelease(Base):
 
 
 class AppBundle(Base):
+    """Deprecated — kept for migration rollback safety. Use AppCatalogItem fields directly."""
+
     __tablename__ = "app_bundles"
 
     bundle_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -38,10 +44,20 @@ class AppCatalogItem(Base):
 
     catalog_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     label: Mapped[str] = mapped_column(String(200), nullable=False)
-    release_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("app_releases.release_id"))
-    bundle_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("app_bundles.bundle_id"))
+
+    # Flattened from AppRelease
+    version: Mapped[str] = mapped_column(String(60), nullable=False)
+    git_ref: Mapped[str] = mapped_column(String(120), nullable=False)
+    git_repo_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("git_repositories.repo_id"), nullable=False
+    )
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    # Flattened from AppBundle
+    module_slugs: Mapped[list[str] | None] = mapped_column(JSON)
+    flag_keys: Mapped[list[str] | None] = mapped_column(JSON)
+
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
-    release = relationship("AppRelease")
-    bundle = relationship("AppBundle")
+    git_repo: Mapped[object] = relationship("GitRepository")

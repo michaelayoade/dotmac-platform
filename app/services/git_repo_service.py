@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.git_repository import GitAuthType, GitRepository
+from app.models.git_repository import GitAuthType, GitRepository, RegistryEnvironment
 from app.models.instance import Instance
 from app.services.settings_crypto import decrypt_value, encrypt_value
 
@@ -24,14 +24,13 @@ class GitRepoService:
         credential: str | None = None,
         default_branch: str = "main",
         is_platform_default: bool = False,
+        environment: RegistryEnvironment = RegistryEnvironment.production,
     ) -> GitRepository:
         if not label.strip():
             raise ValueError("Label is required")
         registry_val = registry_url.strip() if registry_url else ""
         if not registry_val:
             raise ValueError("Registry URL is required")
-        if auth_type == GitAuthType.ssh_key:
-            raise ValueError("SSH key auth is not supported for registry-only deployments")
         if auth_type == GitAuthType.token and not credential:
             raise ValueError("Credential is required for this auth type")
         repo = GitRepository(
@@ -40,6 +39,7 @@ class GitRepoService:
             default_branch=(default_branch or "main").strip(),
             is_platform_default=is_platform_default,
             registry_url=registry_val,
+            environment=environment,
             is_active=True,
         )
         if auth_type == GitAuthType.token and credential:
@@ -59,11 +59,7 @@ class GitRepoService:
 
         if "auth_type" in kwargs and kwargs["auth_type"] is not None:
             auth_type = kwargs.pop("auth_type")
-            if auth_type == GitAuthType.ssh_key:
-                raise ValueError("SSH key auth is not supported for registry-only deployments")
             repo.auth_type = auth_type  # type: ignore[assignment]
-            if repo.auth_type != GitAuthType.ssh_key:
-                repo.ssh_key_encrypted = None
             if repo.auth_type != GitAuthType.token:
                 repo.token_encrypted = None
 
@@ -77,8 +73,14 @@ class GitRepoService:
         if "registry_url" in kwargs and isinstance(kwargs["registry_url"], str):
             repo.registry_url = kwargs["registry_url"].strip() or None
 
+        if "environment" in kwargs and kwargs["environment"] is not None:
+            env_val = kwargs.pop("environment")
+            if isinstance(env_val, str):
+                env_val = RegistryEnvironment(env_val)
+            repo.environment = env_val  # type: ignore[assignment]
+
         for key, value in kwargs.items():
-            if key in {"registry_url"}:
+            if key in {"registry_url", "environment"}:
                 continue
             if not hasattr(repo, key):
                 continue
@@ -108,7 +110,7 @@ class GitRepoService:
         self.db.flush()
 
     def purge_repo(self, repo_id: UUID) -> None:
-        from app.models.catalog import AppRelease
+        from app.models.catalog import AppCatalogItem
 
         repo = self.get_by_id(repo_id)
         if not repo:
@@ -120,11 +122,11 @@ class GitRepoService:
         )
         if in_use_instance:
             raise ValueError("Repo is assigned to instance(s)")
-        in_use_release = self.db.scalar(
-            select(AppRelease.release_id).where(AppRelease.git_repo_id == repo.repo_id).limit(1)
+        in_use_item = self.db.scalar(
+            select(AppCatalogItem.catalog_id).where(AppCatalogItem.git_repo_id == repo.repo_id).limit(1)
         )
-        if in_use_release:
-            raise ValueError("Repo is still referenced by catalog releases")
+        if in_use_item:
+            raise ValueError("Repo is still referenced by catalog items")
         self.db.delete(repo)
         self.db.flush()
 
@@ -147,8 +149,10 @@ class GitRepoService:
         default_branch: str,
         is_platform_default: bool,
         registry_url: str,
+        environment: str = "production",
     ) -> GitRepository:
         auth_enum = GitAuthType(auth_type)
+        env_enum = RegistryEnvironment(environment)
         return self.create_repo(
             label=label,
             auth_type=auth_enum,
@@ -156,6 +160,7 @@ class GitRepoService:
             default_branch=default_branch,
             is_platform_default=is_platform_default,
             registry_url=registry_url,
+            environment=env_enum,
         )
 
     def get_by_id(self, repo_id: UUID) -> GitRepository | None:
@@ -185,11 +190,12 @@ class GitRepoService:
         return {
             "repo_id": str(repo.repo_id),
             "label": repo.label,
-            "url": repo.url,
+            "github_url": repo.github_url,
             "auth_type": repo.auth_type.value,
             "default_branch": repo.default_branch,
             "is_platform_default": repo.is_platform_default,
             "registry_url": repo.registry_url,
+            "environment": repo.environment.value,
             "is_active": repo.is_active,
             "created_at": repo.created_at.isoformat() if repo.created_at else None,
             "updated_at": repo.updated_at.isoformat() if repo.updated_at else None,

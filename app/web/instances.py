@@ -35,9 +35,8 @@ def _build_catalog_map_json(catalog_items: Sequence[AppCatalogItem]) -> str:
     for c in catalog_items:
         catalog_map[str(c.catalog_id)] = {
             "label": c.label,
-            "release_name": c.release.name if c.release else None,
-            "release_version": c.release.version if c.release else None,
-            "bundle_name": c.bundle.name if c.bundle else None,
+            "version": c.version,
+            "git_ref": c.git_ref,
         }
     return json.dumps(catalog_map)
 
@@ -110,11 +109,29 @@ def instance_form(
 ):
     require_admin(auth)
     from app.services.catalog_service import CatalogService
+    from app.services.organization_service import OrganizationService
     from app.services.server_service import ServerService
 
     servers = ServerService(db).list_all()
     catalog_items = CatalogService(db).list_catalog_items(active_only=True)
     catalog_map_json = _build_catalog_map_json(catalog_items)
+    selected_server_id = (request.query_params.get("server_id") or "").strip()
+    selected_catalog_item_id = (request.query_params.get("catalog_item_id") or "").strip()
+
+    # Org-first flow: if org_id is provided, pre-select the organization
+    from app.models.organization import Organization as OrgModel
+
+    selected_org: OrgModel | None = None
+    organizations: list[OrgModel] = []
+    org_id_param = (request.query_params.get("org_id") or "").strip()
+    if org_id_param:
+        try:
+            selected_org = OrganizationService(db).get_by_id(UUID(org_id_param))
+        except ValueError:
+            pass
+    if not selected_org:
+        organizations = OrganizationService(db).list_all(active_only=True)
+
     return templates.TemplateResponse(
         "instances/form.html",
         ctx(
@@ -125,6 +142,10 @@ def instance_form(
             servers=servers,
             catalog_items=catalog_items,
             catalog_map_json=catalog_map_json,
+            selected_server_id=selected_server_id,
+            selected_catalog_item_id=selected_catalog_item_id,
+            selected_org=selected_org,
+            organizations=organizations,
             errors=None,
         ),
     )
@@ -136,8 +157,9 @@ def instance_create(
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
     server_id: str = Form(...),
-    org_code: str = Form(...),
-    org_name: str = Form(...),
+    org_id: str = Form(""),
+    org_code: str = Form(""),
+    org_name: str = Form(""),
     sector_type: str = Form(""),
     framework: str = Form(""),
     currency: str = Form(""),
@@ -155,10 +177,24 @@ def instance_create(
     validate_csrf_token(request, csrf_token)
 
     from app.services.instance_service import InstanceService
+    from app.services.organization_service import OrganizationService
     from app.services.server_service import ServerService
 
     svc = InstanceService(db)
     try:
+        # Resolve org from org_id if provided (org-first flow)
+        if org_id and org_id != "__new__":
+            try:
+                org = OrganizationService(db).get_by_id(UUID(org_id))
+                if org:
+                    org_code = org.org_code
+                    org_name = org.org_name
+            except ValueError:
+                pass
+
+        if not org_code or not org_name:
+            raise ValueError("Organization code and name are required")
+
         if not catalog_item_id:
             raise ValueError("Catalog item is required")
         catalog_id = UUID(catalog_item_id)
@@ -266,6 +302,7 @@ def instance_detail(
             plans=bundle["plans"],
             backups=bundle["backups"],
             domains=bundle["domains"],
+            expiring_certs=bundle["expiring_certs"],
             audit_logs=bundle["audit_logs"],
             usage_summary=bundle["usage_summary"],
             compliance_violations=bundle["compliance_violations"],
@@ -821,7 +858,7 @@ def add_domain(
         db.commit()
     except ValueError as e:
         logger.warning("Domain add failed: %s", e)
-    return RedirectResponse(f"/instances/{instance_id}#domains", status_code=302)
+    return RedirectResponse(f"/instances/{instance_id}?tab=domains", status_code=302)
 
 
 @router.post("/{instance_id}/domains/{domain_id}/verify")
@@ -841,7 +878,7 @@ def verify_domain(
     svc = DomainService(db)
     svc.verify_domain(instance_id, domain_id)
     db.commit()
-    return RedirectResponse(f"/instances/{instance_id}#domains", status_code=302)
+    return RedirectResponse(f"/instances/{instance_id}?tab=domains", status_code=302)
 
 
 @router.post("/{instance_id}/domains/{domain_id}/delete")
@@ -861,4 +898,76 @@ def delete_domain(
     svc = DomainService(db)
     svc.remove_domain(instance_id, domain_id)
     db.commit()
-    return RedirectResponse(f"/instances/{instance_id}#domains", status_code=302)
+    return RedirectResponse(f"/instances/{instance_id}?tab=domains", status_code=302)
+
+
+@router.post("/{instance_id}/domains/{domain_id}/provision-ssl")
+def provision_ssl(
+    request: Request,
+    instance_id: UUID,
+    domain_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.services.domain_service import DomainService
+
+    svc = DomainService(db)
+    try:
+        svc.provision_ssl(instance_id, domain_id)
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        logger.warning("SSL provision failed: %s", e)
+    return RedirectResponse(f"/instances/{instance_id}?tab=domains", status_code=302)
+
+
+@router.post("/{instance_id}/domains/{domain_id}/activate")
+def activate_domain(
+    request: Request,
+    instance_id: UUID,
+    domain_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.services.domain_service import DomainService
+
+    svc = DomainService(db)
+    try:
+        svc.activate_domain(instance_id, domain_id)
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        logger.warning("Domain activation failed: %s", e)
+    return RedirectResponse(f"/instances/{instance_id}?tab=domains", status_code=302)
+
+
+@router.post("/{instance_id}/domains/{domain_id}/primary")
+def set_primary_domain(
+    request: Request,
+    instance_id: UUID,
+    domain_id: UUID,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    csrf_token: str = Form(""),
+):
+    require_admin(auth)
+    validate_csrf_token(request, csrf_token)
+
+    from app.services.domain_service import DomainService
+
+    svc = DomainService(db)
+    try:
+        svc.set_primary(instance_id, domain_id)
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        logger.warning("Set primary domain failed: %s", e)
+    return RedirectResponse(f"/instances/{instance_id}?tab=domains", status_code=302)
