@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,6 +18,9 @@ class Organization(Base):
     org_code: Mapped[str] = mapped_column(String(40), nullable=False)
     org_name: Mapped[str] = mapped_column(String(200), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    contact_phone: Mapped[str | None] = mapped_column(String(40), nullable=True, default=None)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
@@ -25,3 +30,4 @@ class Organization(Base):
     )
 
     members = relationship("OrganizationMember", back_populates="organization")
+    instances = relationship("Instance", foreign_keys="Instance.org_id")

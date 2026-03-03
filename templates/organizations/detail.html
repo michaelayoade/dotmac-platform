@@ -1,0 +1,138 @@
+{% extends "platform_base.html" %}
+{% from "components/breadcrumb.html" import breadcrumb %}
+{% from "components/buttons.html" import btn_submit, btn_secondary %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        {{ breadcrumb([
+            {"label": "Organizations", "url": "/organizations"},
+            {"label": org.org_name}
+        ]) }}
+        <h1 class="text-2xl font-display text-surface-800 dark:text-surface-100">{{ org.org_name }}</h1>
+        <p class="mt-0.5 text-[13px] font-mono text-surface-400 dark:text-surface-500">{{ org.org_code }}</p>
+    </div>
+    {{ btn_secondary("Back to Organizations", href="/organizations") }}
+</div>
+
+<div class="grid gap-6 lg:grid-cols-[1fr_1fr]">
+    {# ── Left: Organization Details ── #}
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-800 dark:text-white">Organization Details</h2>
+        <form method="POST" action="/organizations/{{ org.org_id }}/update" class="mt-4 space-y-5"
+              x-data="{ submitting: false }" @submit="submitting = true">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Organization Name</label>
+                <input type="text" name="org_name" value="{{ org.org_name }}" required
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Contact Email</label>
+                <input type="email" name="contact_email" value="{{ org.contact_email or '' }}"
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Contact Phone</label>
+                <input type="tel" name="contact_phone" value="{{ org.contact_phone or '' }}"
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Notes</label>
+                <textarea name="notes" rows="3"
+                          class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">{{ org.notes or '' }}</textarea>
+            </div>
+            <div class="flex items-center gap-2">
+                <input type="checkbox" name="is_active" value="true" {% if org.is_active %}checked{% endif %}
+                       class="h-4 w-4 rounded border-surface-300 text-primary-600 focus:ring-primary-500 dark:border-surface-600 dark:bg-surface-800" />
+                <label class="text-[13px] text-surface-600 dark:text-surface-400">Active</label>
+            </div>
+            {{ btn_submit("Save", submitting_text="Saving...", size="md") }}
+        </form>
+    </div>
+
+    {# ── Right: Deploy + Instances + Members ── #}
+    <div class="space-y-6">
+        {# Deploy Instance card #}
+        <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+            <h2 class="text-lg font-display text-surface-800 dark:text-white">Deploy Instance</h2>
+            <p class="mt-1 text-[12px] text-surface-400 dark:text-surface-500">Create and deploy a new instance for this organization.</p>
+            <div class="mt-4">
+                <a href="/instances/new?org_id={{ org.org_id }}"
+                   class="inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2.5 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition shadow-sm">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                    Deploy Instance
+                </a>
+            </div>
+        </div>
+
+        {# Instances card #}
+        <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+            <h2 class="text-lg font-display text-surface-800 dark:text-white">Instances</h2>
+            <div class="mt-4 space-y-2">
+                {% if instances %}
+                    {% for inst in instances %}
+                    <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-800/50 dark:bg-surface-800/40">
+                        <div>
+                            <a href="/instances/{{ inst.instance_id }}" class="font-medium text-surface-800 hover:text-primary-600 dark:text-surface-100 dark:hover:text-primary-400 transition">{{ inst.org_code }}</a>
+                            <p class="text-[11px] text-surface-400 dark:text-surface-500">{{ inst.status.value if inst.status else "unknown" }}</p>
+                        </div>
+                        <a href="/instances/{{ inst.instance_id }}" class="text-[12px] text-surface-400 hover:text-surface-600 dark:text-surface-500 dark:hover:text-surface-300 transition">&rarr;</a>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-[12px] text-surface-400 dark:text-surface-500">No instances yet.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Members card #}
+        <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+            <h2 class="text-lg font-display text-surface-800 dark:text-white">Members</h2>
+            <form method="POST" action="/organizations/{{ org.org_id }}/members" class="mt-4 flex items-end gap-3"
+                  x-data="{ submitting: false }" @submit="submitting = true">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <div class="flex-1">
+                    <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Add member</label>
+                    <select name="person_id" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
+                        {% for person in all_people %}
+                            {% if person.id not in current_member_ids %}
+                            <option value="{{ person.id }}">{{ person.first_name }} {{ person.last_name }} ({{ person.email }})</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" :disabled="submitting"
+                        :class="submitting && 'opacity-60 pointer-events-none'"
+                        class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">
+                    <span x-text="submitting ? 'Adding...' : 'Add'"></span>
+                </button>
+            </form>
+
+            <div class="mt-5 space-y-2">
+                {% set active_members = members | selectattr("is_active") | list %}
+                {% if active_members %}
+                    {% for member in active_members %}
+                    <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-800/50 dark:bg-surface-800/40">
+                        <div>
+                            {% if member.person %}
+                            <p class="font-medium text-surface-800 dark:text-surface-100">{{ member.person.first_name }} {{ member.person.last_name }}</p>
+                            <p class="text-[11px] text-surface-400 dark:text-surface-500">{{ member.person.email }}</p>
+                            {% else %}
+                            <p class="font-medium text-surface-800 dark:text-surface-100">{{ member.person_id }}</p>
+                            {% endif %}
+                        </div>
+                        <form method="POST" action="/organizations/{{ org.org_id }}/members/{{ member.person_id }}/remove">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                            <button type="submit" class="text-[12px] text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300">Remove</button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-[12px] text-surface-400 dark:text-surface-500">No members yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

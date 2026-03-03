@@ -1,0 +1,120 @@
+{% extends "platform_base.html" %}
+{% from "components/buttons.html" import btn_submit %}
+{% from "components/pagination.html" import pagination %}
+
+{% block content %}
+<div class="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
+    <div>
+        <form method="GET" action="/organizations" class="mb-4 flex flex-wrap items-end gap-3">
+            <div class="flex-1 min-w-[220px]">
+                <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Search</label>
+                <input type="text" name="q" value="{{ q }}" placeholder="Search name, code, or email"
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] text-surface-700 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200/50 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200 dark:focus:ring-primary-500/20 transition" />
+            </div>
+            <div>
+                <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Active</label>
+                <select name="is_active" class="mt-1.5 rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] text-surface-700 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200">
+                    <option value="">All</option>
+                    <option value="true" {% if is_active == "true" %}selected{% endif %}>Active</option>
+                    <option value="false" {% if is_active == "false" %}selected{% endif %}>Inactive</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Page Size</label>
+                <select name="page_size" class="mt-1.5 rounded-lg border border-surface-200 bg-white px-3 py-2 text-[13px] text-surface-700 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-200">
+                    {% for size in [10, 25, 50, 100] %}
+                    <option value="{{ size }}" {% if page_size == size %}selected{% endif %}>{{ size }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="submit" class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950 hover:bg-surface-800 dark:hover:bg-primary-400 transition">Apply</button>
+                <a href="/organizations" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">Reset</a>
+            </div>
+        </form>
+
+        <div class="mb-3 text-[12px] text-surface-400 dark:text-surface-500">
+            Showing {{ orgs | length }} of {{ total }} organizations
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-surface-200/80 bg-white dark:border-surface-800/50 dark:bg-surface-900/80 max-h-[calc(100vh-280px)]">
+            <table class="min-w-full divide-y divide-surface-100 dark:divide-surface-800/60">
+                <thead class="sticky top-0 z-10">
+                    <tr class="bg-surface-50 dark:bg-surface-800/80 backdrop-blur-sm">
+                        <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Organization</th>
+                        <th class="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Contact</th>
+                        <th class="px-5 py-3 text-center text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Instances</th>
+                        <th class="px-5 py-3 text-center text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Members</th>
+                        <th class="px-5 py-3"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-surface-100/80 dark:divide-surface-800/40">
+                    {% for org in orgs %}
+                    <tr class="hover:bg-surface-50/60 dark:hover:bg-surface-800/20 transition-colors">
+                        <td class="px-5 py-4">
+                            <a href="/organizations/{{ org.org_id }}" class="text-[13px] font-medium text-surface-900 hover:text-primary-600 dark:text-white dark:hover:text-primary-400 transition">{{ org.org_name }}</a>
+                            <p class="text-[11px] font-mono text-surface-400 dark:text-surface-500">{{ org.org_code }}</p>
+                        </td>
+                        <td class="px-5 py-4 text-[13px] text-surface-500 dark:text-surface-400">
+                            {% if org.contact_email %}{{ org.contact_email }}{% else %}<span class="text-surface-300 dark:text-surface-600">--</span>{% endif %}
+                        </td>
+                        <td class="px-5 py-4 text-center text-[13px] text-surface-500 dark:text-surface-400">
+                            {{ instance_counts.get(org.org_id, 0) }}
+                        </td>
+                        <td class="px-5 py-4 text-center text-[13px] text-surface-500 dark:text-surface-400">
+                            {{ member_counts.get(org.org_id, 0) }}
+                        </td>
+                        <td class="px-5 py-4 text-right">
+                            <a href="/organizations/{{ org.org_id }}" class="text-[13px] text-surface-400 hover:text-surface-600 dark:text-surface-500 dark:hover:text-surface-300 transition">&rarr;</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not orgs %}
+                    <tr>
+                        <td colspan="5" class="px-5 py-8 text-center text-[13px] text-surface-400 dark:text-surface-500">No organizations found.</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        {{ pagination(page=page, total=total, page_size=page_size, base_qs="q=" ~ (q | urlencode) ~ "&is_active=" ~ is_active) }}
+    </div>
+
+    <div class="rounded-xl border border-surface-200/80 bg-white p-6 dark:border-surface-800/50 dark:bg-surface-900/80">
+        <h2 class="text-lg font-display text-surface-800 dark:text-white">Add Organization</h2>
+        <p class="mt-1 text-[12px] text-surface-400 dark:text-surface-500">Register a new tenant organization.</p>
+        <form method="POST" action="/organizations/new" class="mt-4 space-y-5"
+              x-data="{ submitting: false }" @submit="submitting = true">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Organization Code</label>
+                <input type="text" name="org_code" required pattern="[A-Za-z0-9_-]+" placeholder="ACME"
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] font-mono uppercase dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+                <p class="mt-1 text-[11px] text-surface-400 dark:text-surface-500">Unique identifier. Letters, numbers, hyphens only.</p>
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Organization Name</label>
+                <input type="text" name="org_name" required placeholder="ACME Corporation"
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Contact Email</label>
+                <input type="email" name="contact_email" placeholder="admin@acme.com"
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Contact Phone</label>
+                <input type="tel" name="contact_phone" placeholder="+1 555-0100"
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Notes</label>
+                <textarea name="notes" rows="3" placeholder="Address, internal notes..."
+                          class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition"></textarea>
+            </div>
+            {{ btn_submit("Create Organization", submitting_text="Creating...", size="lg", extra_class="w-full") }}
+        </form>
+    </div>
+</div>
+{% endblock %}

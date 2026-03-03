@@ -357,6 +357,10 @@ app.include_router(git_repos_web_router)
 app.include_router(dr_web_router)
 app.include_router(catalog_web_router)
 
+from app.web.organizations_web import router as organizations_web_router  # noqa: E402
+
+app.include_router(organizations_web_router)
+
 from app.web.notification_channels_web import router as notification_channels_web_router  # noqa: E402
 
 app.include_router(notification_channels_web_router)
