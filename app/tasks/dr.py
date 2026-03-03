@@ -174,7 +174,6 @@ def run_dr_restore(
     target_server_id: str,
     new_org_code: str,
     new_org_name: str | None = None,
-    admin_password: str | None = None,
 ) -> dict:
     with SessionLocal() as db:
         from app.services.dr_service import DisasterRecoveryService
@@ -184,7 +183,6 @@ def run_dr_restore(
             UUID(target_server_id),
             new_org_code,
             new_org_name=new_org_name,
-            admin_password=admin_password,
         )
         db.commit()
         return {"instance_id": str(instance.instance_id)}

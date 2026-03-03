@@ -114,7 +114,6 @@ def dr_restore(
     target_server_id: UUID = Form(...),
     new_org_code: str = Form(...),
     new_org_name: str | None = Form(None),
-    admin_password: str | None = Form(None),
     csrf_token: str = Form(""),
 ):
     require_admin(auth)
@@ -126,7 +125,6 @@ def dr_restore(
         str(target_server_id),
         new_org_code,
         new_org_name=new_org_name,
-        admin_password=admin_password,
     )
     return RedirectResponse("/dr", status_code=302)
 

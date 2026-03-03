@@ -168,7 +168,6 @@ def trigger_dr_restore(
     target_server_id: UUID = Body(...),
     new_org_code: str = Body(...),
     new_org_name: str | None = Body(None),
-    admin_password: str | None = Body(None),
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
@@ -184,6 +183,5 @@ def trigger_dr_restore(
         str(target_server_id),
         new_org_code,
         new_org_name=new_org_name,
-        admin_password=admin_password,
     )
     return {"task_id": task.id, "status": "queued"}

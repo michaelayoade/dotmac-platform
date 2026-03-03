@@ -3,6 +3,8 @@
 import uuid
 from unittest.mock import patch
 
+import pytest
+
 from app.models.app_upgrade import AppUpgrade, UpgradeStatus
 from app.models.catalog import AppBundle, AppCatalogItem, AppRelease
 from app.models.git_repository import GitAuthType, GitRepository
@@ -148,3 +150,22 @@ def test_run_upgrade_returns_early_when_upgrade_is_already_running(db_session):
     assert upgrade.status == UpgradeStatus.running
     mock_create.assert_not_called()
     mock_run.assert_not_called()
+
+
+def test_cancel_for_instance_rejects_mismatched_instance_before_mutation(db_session):
+    server = _make_server(db_session)
+    catalog_item = _make_catalog_item(db_session)
+    instance = _make_instance(db_session, server.server_id)
+    upgrade = _make_upgrade(db_session, instance.instance_id, catalog_item.catalog_id)
+
+    with patch.object(UpgradeService, "cancel_upgrade") as mock_cancel_upgrade:
+        with pytest.raises(ValueError, match="does not match instance"):
+            UpgradeService(db_session).cancel_for_instance(
+                uuid.uuid4(),
+                upgrade.upgrade_id,
+                reason="nope",
+            )
+
+    db_session.refresh(upgrade)
+    assert upgrade.status == UpgradeStatus.scheduled
+    mock_cancel_upgrade.assert_not_called()

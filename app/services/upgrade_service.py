@@ -224,15 +224,18 @@ class UpgradeService:
         cancelled_by_name: str | None = None,
     ) -> AppUpgrade:
         """Cancel an upgrade, verifying it belongs to the given instance."""
-        upgrade = self.cancel_upgrade(
+        upgrade = self.db.get(AppUpgrade, upgrade_id)
+        if not upgrade:
+            raise ValueError("Upgrade not found")
+        if upgrade.instance_id != instance_id:
+            raise ValueError("Upgrade does not match instance")
+
+        return self.cancel_upgrade(
             upgrade_id,
             reason=reason,
             cancelled_by=cancelled_by,
             cancelled_by_name=cancelled_by_name,
         )
-        if upgrade.instance_id != instance_id:
-            raise ValueError("Upgrade does not match instance")
-        return upgrade
 
     def cancel_upgrade(
         self,

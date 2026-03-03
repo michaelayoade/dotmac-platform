@@ -165,11 +165,27 @@ class TestMarkRead:
 
 
 class TestMarkAllRead:
-    def test_marks_personal_and_broadcast(self, svc, person_id, db_session):
+    def test_marks_only_personal_notifications(self, svc, person_id, db_session):
         svc.create(person_id, NotificationCategory.deploy, NotificationSeverity.info, "A", "msg")
         svc.create_for_admins(NotificationCategory.system, NotificationSeverity.info, "B", "msg")
         db_session.commit()
         count = svc.mark_all_read(person_id)
         db_session.commit()
-        assert count == 2
-        assert svc.get_unread_count(person_id) == 0
+        assert count == 1
+        assert svc.get_unread_count(person_id) == 1
+
+    def test_mark_all_read_does_not_mutate_broadcast_rows(self, svc, person_id, db_session):
+        broadcast = svc.create_for_admins(
+            NotificationCategory.system,
+            NotificationSeverity.info,
+            "Broadcast",
+            "msg",
+        )
+        db_session.commit()
+
+        count = svc.mark_all_read(person_id)
+        db_session.commit()
+
+        db_session.refresh(broadcast)
+        assert count == 0
+        assert broadcast.is_read is False

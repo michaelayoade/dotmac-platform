@@ -103,12 +103,16 @@ class NotificationService:
         self.db.flush()
 
     def mark_all_read(self, person_id: UUID) -> int:
-        """Mark all unread notifications as read for a person (including broadcasts)."""
+        """Mark all unread *personal* notifications as read for a person.
+
+        Broadcast notifications are shared rows (person_id=None), so mutating them
+        here would globally mark them as read for every admin.
+        """
         stmt = (
             update(Notification)
             .where(
                 Notification.is_read.is_(False),
-                or_(Notification.person_id == person_id, Notification.person_id.is_(None)),
+                Notification.person_id == person_id,
             )
             .values(is_read=True)
         )
