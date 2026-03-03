@@ -25,20 +25,8 @@ def git_repos_index(
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
 ):
-    require_admin(auth)
-    from app.services.git_repo_service import GitRepoService
-
-    repos = GitRepoService(db).list_for_web(active_only=False)
-    return templates.TemplateResponse(
-        "git_repos/index.html",
-        ctx(
-            request,
-            auth,
-            "Git Repositories",
-            active_page="git_repos",
-            repos=repos,
-        ),
-    )
+    """Redirect to catalog repos tab (standalone page removed)."""
+    return RedirectResponse("/catalog?tab=repos", status_code=302)
 
 
 @router.post("/create")
@@ -52,6 +40,7 @@ def git_repos_create(
     default_branch: str = Form("main"),
     is_platform_default: bool = Form(False),
     registry_url: str = Form(...),
+    environment: str = Form("production"),
     csrf_token: str = Form(""),
 ):
     require_admin(auth)
@@ -66,12 +55,13 @@ def git_repos_create(
             default_branch=default_branch,
             is_platform_default=is_platform_default,
             registry_url=registry_url,
+            environment=environment,
         )
         db.commit()
     except Exception as e:
         db.rollback()
         logger.exception("Failed to create git repo: %s", e)
-    return RedirectResponse("/git-repos", status_code=302)
+    return RedirectResponse("/catalog?tab=repos", status_code=302)
 
 
 @router.get("/{repo_id}/edit", response_class=HTMLResponse)
@@ -86,14 +76,14 @@ def git_repos_edit_form(
 
     repo = GitRepoService(db).get_by_id(repo_id)
     if not repo:
-        return RedirectResponse("/git-repos", status_code=302)
+        return RedirectResponse("/catalog?tab=repos", status_code=302)
     return templates.TemplateResponse(
         "git_repos/edit.html",
         ctx(
             request,
             auth,
             "Edit Repository",
-            active_page="git_repos",
+            active_page="catalog",
             repo=repo,
             errors=None,
         ),
@@ -112,6 +102,7 @@ def git_repos_edit(
     default_branch: str = Form("main"),
     is_platform_default: bool = Form(False),
     registry_url: str = Form(...),
+    environment: str = Form("production"),
     csrf_token: str = Form(""),
 ):
     require_admin(auth)
@@ -126,6 +117,7 @@ def git_repos_edit(
             "default_branch": default_branch,
             "is_platform_default": is_platform_default,
             "registry_url": registry_url,
+            "environment": environment,
             "is_active": True,
         }
         # Preserve existing secret/key when credential field is intentionally left blank.
@@ -133,7 +125,7 @@ def git_repos_edit(
             update_payload["credential"] = credential
         svc.update_repo(repo_id, **update_payload)
         db.commit()
-        return RedirectResponse("/git-repos", status_code=302)
+        return RedirectResponse("/catalog?tab=repos", status_code=302)
     except Exception as e:
         db.rollback()
         logger.exception("Failed to update git repo: %s", e)
@@ -144,7 +136,7 @@ def git_repos_edit(
                 request,
                 auth,
                 "Edit Repository",
-                active_page="git_repos",
+                active_page="catalog",
                 repo=repo,
                 errors=[str(e)],
             ),
@@ -169,7 +161,7 @@ def git_repos_set_default(
     except Exception as e:
         db.rollback()
         logger.exception("Failed to set default repo: %s", e)
-    return RedirectResponse("/git-repos", status_code=302)
+    return RedirectResponse("/catalog?tab=repos", status_code=302)
 
 
 @router.post("/{repo_id}/deactivate")
@@ -190,7 +182,7 @@ def git_repos_deactivate(
     except Exception as e:
         db.rollback()
         logger.exception("Failed to deactivate repo: %s", e)
-    return RedirectResponse("/git-repos", status_code=302)
+    return RedirectResponse("/catalog?tab=repos", status_code=302)
 
 
 @router.post("/{repo_id}/delete")
@@ -211,4 +203,4 @@ def git_repos_delete(
     except Exception as e:
         db.rollback()
         logger.exception("Failed to delete repo: %s", e)
-    return RedirectResponse("/git-repos", status_code=302)
+    return RedirectResponse("/catalog?tab=repos", status_code=302)

@@ -27,17 +27,24 @@
             </div>
         </div>
 
-        <div class="grid gap-4 lg:grid-cols-3">
+        <div class="grid gap-4 lg:grid-cols-4">
             <div>
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Auth Type</label>
-                <select name="auth_type" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                <select name="auth_type" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
                     <option value="none" {% if repo.auth_type.value == 'none' %}selected{% endif %}>none</option>
                     <option value="token" {% if repo.auth_type.value == 'token' %}selected{% endif %}>token</option>
                 </select>
             </div>
             <div>
+                <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Environment</label>
+                <select name="environment" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                    <option value="production" {% if repo.environment.value == 'production' %}selected{% endif %}>production</option>
+                    <option value="staging" {% if repo.environment.value == 'staging' %}selected{% endif %}>staging</option>
+                </select>
+            </div>
+            <div>
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Default Branch</label>
-                <input type="text" name="default_branch" value="{{ repo.default_branch }}" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+                <input type="text" name="default_branch" value="{{ repo.default_branch }}" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
             </div>
             <div class="flex items-end gap-2">
                 <label class="inline-flex items-center gap-2 text-[12px] text-surface-500 dark:text-surface-400">
@@ -55,7 +62,7 @@
 
         <div class="flex items-center gap-3">
             <button type="submit" class="rounded-lg bg-surface-900 px-4 py-2 text-[13px] font-semibold text-white hover:bg-surface-800 dark:bg-primary-500 dark:text-surface-950 dark:hover:bg-primary-400 transition">Save Changes</button>
-            <a href="/git-repos" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-semibold text-surface-600 dark:border-surface-700 dark:text-surface-300">Cancel</a>
+            <a href="/catalog?tab=repos" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-semibold text-surface-600 dark:border-surface-700 dark:text-surface-300">Cancel</a>
         </div>
     </form>
 </div>

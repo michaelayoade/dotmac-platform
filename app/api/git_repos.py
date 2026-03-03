@@ -34,6 +34,7 @@ def create_repo(
     default_branch: str = Body("main"),
     is_platform_default: bool = Body(False),
     registry_url: str = Body(...),
+    environment: str = Body("production"),
     db: Session = Depends(get_db),
     auth: object = Depends(require_role("admin")),
 ) -> dict[str, object]:
@@ -45,6 +46,9 @@ def create_repo(
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
+        from app.models.git_repository import RegistryEnvironment
+
+        env_enum = RegistryEnvironment(environment)
         repo = GitRepoService(db).create_repo(
             label=label,
             auth_type=auth_enum,
@@ -52,6 +56,7 @@ def create_repo(
             default_branch=default_branch,
             is_platform_default=is_platform_default,
             registry_url=registry_url,
+            environment=env_enum,
         )
         db.commit()
         return GitRepoService.serialize_repo(repo)
@@ -70,6 +75,7 @@ def update_repo(
     is_platform_default: bool | None = Body(None),
     is_active: bool | None = Body(None),
     registry_url: str | None = Body(None),
+    environment: str | None = Body(None),
     db: Session = Depends(get_db),
     auth: object = Depends(require_role("admin")),
 ) -> dict[str, object]:
@@ -82,6 +88,7 @@ def update_repo(
         "is_platform_default": is_platform_default,
         "is_active": is_active,
         "registry_url": registry_url,
+        "environment": environment,
     }
     if auth_type is not None:
         try:

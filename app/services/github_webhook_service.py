@@ -42,9 +42,9 @@ class GitHubWebhookService:
         normalized = clone_url.rstrip("/").removesuffix(".git")
         stmt = select(GitRepository).where(GitRepository.is_active.is_(True))
         for repo in self.db.scalars(stmt).all():
-            if not repo.url:
+            if not repo.github_url:
                 continue
-            repo_norm = repo.url.rstrip("/").removesuffix(".git")
+            repo_norm = repo.github_url.rstrip("/").removesuffix(".git")
             if repo_norm == normalized:
                 return repo
         return None
@@ -151,9 +151,9 @@ class GitHubWebhookService:
         if not token:
             return False
 
-        owner_repo = _extract_owner_repo(repo.url or "")
+        owner_repo = _extract_owner_repo(repo.github_url or "")
         if not owner_repo:
-            logger.warning("Cannot extract owner/repo from URL: %s", repo.url)
+            logger.warning("Cannot extract owner/repo from URL: %s", repo.github_url)
             return False
 
         url = f"https://api.github.com/repos/{owner_repo}/statuses/{sha}"
