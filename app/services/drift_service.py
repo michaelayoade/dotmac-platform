@@ -109,19 +109,21 @@ class DriftService:
     def detect_for_web(self, instance_id: UUID) -> tuple[bool, str | None]:
         try:
             report = self.detect_drift(instance_id)
-            self.db.commit()
             if report.has_drift:
                 return True, "Drift detected. Review details below."
             return True, "No drift detected."
         except ValueError as exc:
-            self.db.rollback()
             return False, str(exc)
         except Exception:
-            self.db.rollback()
+            logger.warning("Drift detection failed for instance %s", instance_id, exc_info=True)
             return False, "Drift detection failed."
 
     def detect_all_drift(self) -> int:
-        """Run drift detection across all running instances."""
+        """Run drift detection across all running instances.
+
+        Note: This method calls db.flush() per instance but does NOT commit.
+        The caller (Celery task or route) must commit the transaction.
+        """
         stmt = select(Instance).where(Instance.status == InstanceStatus.running)
         instances = list(self.db.scalars(stmt).all())
         count = 0
@@ -132,8 +134,6 @@ class DriftService:
                     count += 1
             except Exception:
                 logger.warning("Drift detection failed for %s", inst.org_code, exc_info=True)
-        if instances:
-            self.db.commit()
         return count
 
     def _get_expected_env(self, instance: Instance) -> dict[str, str]:

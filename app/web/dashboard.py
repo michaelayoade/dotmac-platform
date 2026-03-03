@@ -29,18 +29,27 @@ def dashboard(
     db: Session = Depends(get_db),
 ) -> Response:
     from app.services.common import coerce_uuid
+    from app.services.domain_service import DomainService
     from app.services.health_service import HealthService
     from app.services.instance_service import InstanceService
     from app.services.onboarding_service import OnboardingService
+    from app.services.organization_service import OrganizationService
     from app.services.server_service import ServerService
 
     health_svc = HealthService(db)
     instance_svc = InstanceService(db)
     server_svc = ServerService(db)
+    org_svc = OrganizationService(db)
+    expiring_certs = DomainService(db).get_expiring_certs(14)
 
     stats = health_svc.get_dashboard_stats()
     instances = instance_svc.list_all()
     servers = server_svc.list_all()
+
+    # Organization data for org-first dashboard
+    org_list = org_svc.list_all(active_only=True)
+    org_ids = [o.org_id for o in org_list]
+    org_instance_counts = org_svc.instance_counts_batch(org_ids) if org_ids else {}
 
     # Onboarding
     show_onboarding = False
@@ -71,6 +80,9 @@ def dashboard(
             stats=stats,
             instances=instance_data,
             servers=servers,
+            org_list=org_list,
+            org_instance_counts=org_instance_counts,
+            expiring_certs=expiring_certs,
             show_onboarding=show_onboarding,
             onboarding_checklist=onboarding_checklist,
         ),

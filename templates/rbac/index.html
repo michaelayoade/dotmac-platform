@@ -14,8 +14,8 @@
         <h2 class="text-lg font-display text-surface-800 dark:text-white">Roles</h2>
         <form method="POST" action="/rbac/roles" class="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto_auto]">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <input type="text" name="name" placeholder="role name" required class="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
-            <input type="text" name="description" placeholder="description" class="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            <input type="text" name="name" placeholder="role name" required class="rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            <input type="text" name="description" placeholder="description" class="rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
             <label class="inline-flex items-center gap-1.5 text-[13px] text-surface-600 dark:text-surface-400">
                 <input type="checkbox" name="is_active" value="true" checked class="h-4 w-4 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
                 Active
@@ -24,7 +24,7 @@
         </form>
         <div class="mt-4 space-y-2">
             {% for role in roles %}
-            <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-800/50 dark:bg-surface-800/40">
+            <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-800/50 dark:bg-surface-800/40">
                 <div>
                     <a href="/rbac?role_id={{ role.id }}" class="font-medium text-surface-800 dark:text-surface-100 hover:text-primary-600 dark:hover:text-primary-400">{{ role.name }}</a>
                     <p class="text-[11px] text-surface-400 dark:text-surface-500">{{ role.description or "No description" }}</p>
@@ -46,8 +46,8 @@
         <h2 class="text-lg font-display text-surface-800 dark:text-white">Permissions</h2>
         <form method="POST" action="/rbac/permissions" class="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto_auto]">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <input type="text" name="key" placeholder="permission.key" required class="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
-            <input type="text" name="description" placeholder="description" class="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            <input type="text" name="key" placeholder="permission.key" required class="rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+            <input type="text" name="description" placeholder="description" class="rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
             <label class="inline-flex items-center gap-1.5 text-[13px] text-surface-600 dark:text-surface-400">
                 <input type="checkbox" name="is_active" value="true" checked class="h-4 w-4 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
                 Active
@@ -56,7 +56,7 @@
         </form>
         <div class="mt-4 space-y-2">
             {% for perm in permissions %}
-            <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-800/50 dark:bg-surface-800/40">
+            <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-800/50 dark:bg-surface-800/40">
                 <div>
                     <p class="font-medium text-surface-800 dark:text-surface-100">{{ perm.key }}</p>
                     <p class="text-[11px] text-surface-400 dark:text-surface-500">{{ perm.description or "No description" }}</p>
@@ -87,7 +87,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
         <div class="min-w-[220px]">
             <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Role</label>
-            <select name="role_id" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+            <select name="role_id" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
                 {% for role in roles %}
                 <option value="{{ role.id }}" {% if selected_role_id_uuid == role.id %}selected{% endif %}>{{ role.name }}</option>
                 {% endfor %}
@@ -95,7 +95,7 @@
         </div>
         <div class="min-w-[260px]">
             <label class="block text-[10px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Permission</label>
-            <select name="permission_id" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+            <select name="permission_id" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
                 {% for perm in permissions %}
                 <option value="{{ perm.id }}">{{ perm.key }}</option>
                 {% endfor %}
@@ -108,7 +108,7 @@
         {% if role_permissions %}
             {% for link in role_permissions %}
             {% set perm = perm_map.get(link.permission_id) %}
-            <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-800/50 dark:bg-surface-800/40">
+            <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-800/50 dark:bg-surface-800/40">
                 <div>
                     <p class="font-medium text-surface-800 dark:text-surface-100">{{ perm.key if perm else link.permission_id }}</p>
                     <p class="text-[11px] text-surface-400 dark:text-surface-500">{{ perm.description if perm else "Permission" }}</p>

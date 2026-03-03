@@ -17,6 +17,7 @@ import starlette.concurrency as starlette_concurrency
 import starlette.routing as starlette_routing
 from fastapi.routing import APIRoute
 from sqlalchemy import create_engine
+from sqlalchemy import text as sa_text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from starlette.routing import request_response
 
@@ -169,7 +170,7 @@ from app.models.auth import (
     SessionStatus,
     UserCredential,
 )
-from app.models.catalog import AppBundle, AppCatalogItem, AppRelease  # noqa: F401
+from app.models.catalog import AppCatalogItem  # noqa: F401
 from app.models.deployment_log import DeploymentLog  # noqa: F401
 from app.models.domain_settings import DomainSetting, SettingDomain
 from app.models.git_repository import GitRepository  # noqa: F401
@@ -189,6 +190,29 @@ from app.models.signup_request import SignupRequest  # noqa: F401
 
 # Create all tables
 TestBase.metadata.create_all(_test_engine)
+
+# Ensure new columns exist on organizations table (SQLite can't ALTER via create_all checkfirst)
+with _test_engine.connect() as _conn:
+    _existing_cols = {row[1] for row in _conn.execute(sa_text("PRAGMA table_info(organizations)"))}
+    if "contact_email" not in _existing_cols:
+        _conn.execute(sa_text("ALTER TABLE organizations ADD COLUMN contact_email VARCHAR(255)"))
+    if "contact_phone" not in _existing_cols:
+        _conn.execute(sa_text("ALTER TABLE organizations ADD COLUMN contact_phone VARCHAR(40)"))
+    if "notes" not in _existing_cols:
+        _conn.execute(sa_text("ALTER TABLE organizations ADD COLUMN notes TEXT"))
+    _conn.commit()
+
+# Ensure git_repositories schema matches current model (url→github_url, +environment, -ssh_key_encrypted)
+with _test_engine.connect() as _conn:
+    _git_cols = {row[1] for row in _conn.execute(sa_text("PRAGMA table_info(git_repositories)"))}
+    if "github_url" not in _git_cols:
+        if "url" in _git_cols:
+            _conn.execute(sa_text("ALTER TABLE git_repositories RENAME COLUMN url TO github_url"))
+        else:
+            _conn.execute(sa_text("ALTER TABLE git_repositories ADD COLUMN github_url VARCHAR(512)"))
+    if "environment" not in _git_cols:
+        _conn.execute(sa_text("ALTER TABLE git_repositories ADD COLUMN environment VARCHAR(20) DEFAULT 'production'"))
+    _conn.commit()
 
 # Re-export Base for compatibility
 Base = TestBase

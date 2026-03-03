@@ -2,7 +2,6 @@
 Domains — Web routes for domain management.
 """
 
-from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -11,23 +10,17 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.web.deps import WebAuthContext, get_db, require_web_auth
-from app.web.helpers import ctx, require_admin, validate_csrf_token
+from app.web.helpers import require_admin, validate_csrf_token
 
 templates = Jinja2Templates(directory="templates")
 router = APIRouter(prefix="/domains")
 
 
 def _redirect_with(instance_id: UUID | None, message: str | None = None, error: str | None = None):
-    params = {}
+    """Redirect to the instance detail domains tab after a domain mutation."""
     if instance_id:
-        params["instance_id"] = str(instance_id)
-    if message:
-        params["message"] = message
-    if error:
-        params["error"] = error
-    if params:
-        return RedirectResponse(f"/domains?{urlencode(params)}", status_code=302)
-    return RedirectResponse("/domains", status_code=302)
+        return RedirectResponse(f"/instances/{instance_id}?tab=domains", status_code=302)
+    return RedirectResponse("/instances", status_code=302)
 
 
 @router.get("", response_class=HTMLResponse)
@@ -36,29 +29,11 @@ def domains_index(
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
     instance_id: UUID | None = None,
-    message: str | None = None,
-    error: str | None = None,
 ):
-    require_admin(auth)
-    from app.services.domain_service import DomainService
-
-    bundle = DomainService(db).get_index_bundle(instance_id)
-
-    return templates.TemplateResponse(
-        "domains/index.html",
-        ctx(
-            request,
-            auth,
-            "Domains",
-            active_page="domains",
-            instances=bundle["instances"],
-            instance_id=bundle["instance_id"],
-            domains=bundle["domains"],
-            expiring=bundle["expiring"],
-            message=message,
-            error=error,
-        ),
-    )
+    """Redirect to instance detail domains tab (standalone page removed)."""
+    if instance_id:
+        return RedirectResponse(f"/instances/{instance_id}?tab=domains", status_code=302)
+    return RedirectResponse("/instances", status_code=302)
 
 
 @router.post("/add")

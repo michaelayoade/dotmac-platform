@@ -24,12 +24,12 @@
             <div>
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Display name</label>
                 <input type="text" name="display_name" value="{{ person.display_name or '' }}"
-                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
+                       class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition" />
             </div>
             <div class="grid gap-3 sm:grid-cols-2">
                 <div>
                     <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Status</label>
-                    <select name="status" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
+                    <select name="status" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
                         {% for value in ["active", "inactive", "archived"] %}
                         <option value="{{ value }}" {% if person.status and person.status.value == value %}selected{% endif %}>{{ value | title }}</option>
                         {% endfor %}
@@ -52,7 +52,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <div class="flex-1">
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Assign role</label>
-                <select name="role_id" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
+                <select name="role_id" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
                     {% for role in roles %}
                         {% if role.id not in assigned_role_ids %}
                         <option value="{{ role.id }}">{{ role.name }}</option>
@@ -71,7 +71,7 @@
             {% if assigned %}
                 {% for link in assigned %}
                 {% set role = roles_map.get(link.role_id) %}
-                <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-800/50 dark:bg-surface-800/40">
+                <div class="flex items-center justify-between rounded-lg border border-surface-200/80 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-800/50 dark:bg-surface-800/40">
                     <div>
                         <p class="font-medium text-surface-800 dark:text-surface-100">{{ role.name if role else link.role_id }}</p>
                         <p class="text-[11px] text-surface-400 dark:text-surface-500">Assigned {{ link.assigned_at.strftime('%Y-%m-%d') }}</p>

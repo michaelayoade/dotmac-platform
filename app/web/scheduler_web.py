@@ -62,7 +62,10 @@ def scheduler_create(
         kwargs_json=kwargs,
         enabled=enabled,
     )
-    scheduled_tasks.create(db, payload)
+    try:
+        scheduled_tasks.create(db, payload)
+    except ValueError as exc:
+        return scheduler_list(request, auth, db, error=str(exc))
     return RedirectResponse("/scheduler", status_code=302)
 
 
@@ -80,7 +83,10 @@ def scheduler_toggle(
     from app.services.scheduler import scheduled_tasks
 
     enabled_bool = enabled.lower() in ("true", "1", "on")
-    scheduled_tasks.update(db, task_id, ScheduledTaskUpdate(enabled=enabled_bool))
+    try:
+        scheduled_tasks.update(db, task_id, ScheduledTaskUpdate(enabled=enabled_bool))
+    except ValueError as exc:
+        return scheduler_list(request, auth, db, error=str(exc))
     return RedirectResponse("/scheduler", status_code=302)
 
 
@@ -96,5 +102,8 @@ def scheduler_delete(
     validate_csrf_token(request, csrf_token)
     from app.services.scheduler import scheduled_tasks
 
-    scheduled_tasks.delete(db, task_id)
+    try:
+        scheduled_tasks.delete(db, task_id)
+    except ValueError as exc:
+        return scheduler_list(request, auth, db, error=str(exc))
     return RedirectResponse("/scheduler", status_code=302)

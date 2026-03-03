@@ -14,6 +14,7 @@ celery_app.autodiscover_tasks(
         "app.tasks.cleanup",
         "app.tasks.monitoring",
         "app.tasks.lifecycle",
+        "app.tasks.server_setup",
         "app.tasks.webhooks",
         "app.tasks.dr",
         "app.tasks.github_webhooks",

@@ -11,6 +11,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.catalog import AppCatalogItem
 from app.models.server import Server, ServerStatus
 from app.services.ssh_service import get_ssh_for_server
 
@@ -98,6 +99,15 @@ class ServerService:
         try:
             result = ssh.test_connection()
             if result.ok:
+                if not server.ssh_host_key_fingerprint and not server.is_local:
+                    try:
+                        server.ssh_host_key_fingerprint = ssh.host_key_fingerprint()
+                    except Exception:
+                        logger.warning(
+                            "Unable to capture SSH host key fingerprint for server %s",
+                            server.server_id,
+                            exc_info=True,
+                        )
                 server.status = ServerStatus.connected
                 server.last_connected = datetime.now(UTC)
                 self.db.flush()
@@ -178,6 +188,7 @@ class ServerService:
 
         server = self.get_or_404(server_id)
         instances = InstanceService(self.db).list_for_server(server_id)
+        checklist = self._build_checklist(server, len(instances))
         ssh_key = None
         ssh_key_label = None
         if server.ssh_key_id:
@@ -192,4 +203,53 @@ class ServerService:
             "instances": instances,
             "ssh_key": ssh_key,
             "ssh_key_label": ssh_key_label,
+            "checklist": checklist,
         }
+
+    def _build_checklist(self, server: Server, instance_count: int) -> list[dict[str, str | bool]]:
+        ssh_ready = server.status == ServerStatus.connected
+        deps_ready = self._dependencies_ready(server) if ssh_ready else False
+        app_registered = (
+            self.db.scalar(select(AppCatalogItem.catalog_id).where(AppCatalogItem.is_active.is_(True)).limit(1))
+            is not None
+        )
+        return [
+            {
+                "key": "ssh",
+                "label": "SSH Ready",
+                "ready": ssh_ready,
+                "hint": "Use Test Connection to verify access.",
+            },
+            {
+                "key": "deps",
+                "label": "Dependencies Ready",
+                "ready": deps_ready,
+                "hint": "Requires Docker, Compose, Caddy, and /opt/dotmac/instances.",
+            },
+            {
+                "key": "catalog",
+                "label": "App Registered",
+                "ready": app_registered,
+                "hint": "Repo + release + bundle + catalog item must exist.",
+            },
+            {
+                "key": "instance",
+                "label": "Instance Created",
+                "ready": instance_count > 0,
+                "hint": f"{instance_count} instance(s) on this server.",
+            },
+        ]
+
+    def _dependencies_ready(self, server: Server) -> bool:
+        """Best-effort readiness check used for server checklist rendering."""
+        try:
+            ssh = get_ssh_for_server(server)
+            cmd = (
+                "command -v docker >/dev/null"
+                " && docker compose version >/dev/null 2>&1"
+                " && command -v caddy >/dev/null"
+                " && test -d /opt/dotmac/instances"
+            )
+            return bool(ssh.exec_command(cmd, timeout=20).ok)
+        except Exception:
+            return False

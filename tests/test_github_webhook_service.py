@@ -25,7 +25,7 @@ def git_repo(db_session):
     unique = uuid.uuid4().hex[:8]
     repo = GitRepository(
         label=f"test-repo-{unique}",
-        url=f"https://github.com/acme/erp-{unique}.git",
+        github_url=f"https://github.com/acme/erp-{unique}.git",
         auth_type=GitAuthType.token,
         token_encrypted=encrypt_value("ghp_testtoken123"),
         webhook_secret_encrypted=encrypt_value("supersecret"),
@@ -111,7 +111,7 @@ class TestFindRepoByUrl:
         from app.services.github_webhook_service import GitHubWebhookService
 
         svc = GitHubWebhookService(db_session)
-        found = svc.find_repo_by_url(git_repo.url)
+        found = svc.find_repo_by_url(git_repo.github_url)
         assert found is not None
         assert found.repo_id == git_repo.repo_id
 
@@ -120,7 +120,7 @@ class TestFindRepoByUrl:
 
         svc = GitHubWebhookService(db_session)
         # Remove .git suffix — should still match
-        url_no_git = git_repo.url.removesuffix(".git")
+        url_no_git = git_repo.github_url.removesuffix(".git")
         found = svc.find_repo_by_url(url_no_git)
         assert found is not None
         assert found.repo_id == git_repo.repo_id

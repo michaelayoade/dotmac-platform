@@ -98,12 +98,22 @@ class SecretRotationService:
                         try:
                             self._rotate_postgres_password(instance, ssh, old_password)
                         except Exception:
-                            logger.warning("Failed to roll back Postgres password for %s", instance.org_code)
+                            logger.error(
+                                "INCONSISTENT STATE: Failed to roll back Postgres password for %s. "
+                                "DB password was changed but rollback failed — manual intervention required.",
+                                instance.org_code,
+                                exc_info=True,
+                            )
                     if env_written:
                         try:
                             ssh.sftp_put_string(env_content, env_path)
                         except Exception:
-                            logger.warning("Failed to roll back .env for %s", instance.org_code)
+                            logger.error(
+                                "INCONSISTENT STATE: Failed to roll back .env for %s. "
+                                "Env file may not match DB password — manual intervention required.",
+                                instance.org_code,
+                                exc_info=True,
+                            )
                     raise
 
             elif secret_name == "REDIS_PASSWORD":
@@ -132,12 +142,22 @@ class SecretRotationService:
                             rollback_password = old_redis_password or ""
                             self._rotate_redis_password(instance, ssh, new_password, rollback_password)
                         except Exception:
-                            logger.warning("Failed to roll back Redis password for %s", instance.org_code)
+                            logger.error(
+                                "INCONSISTENT STATE: Failed to roll back Redis password for %s. "
+                                "Redis password was changed but rollback failed — manual intervention required.",
+                                instance.org_code,
+                                exc_info=True,
+                            )
                     if env_written:
                         try:
                             ssh.sftp_put_string(env_content, env_path)
                         except Exception:
-                            logger.warning("Failed to roll back .env for %s", instance.org_code)
+                            logger.error(
+                                "INCONSISTENT STATE: Failed to roll back .env for %s. "
+                                "Env file may not match Redis password — manual intervention required.",
+                                instance.org_code,
+                                exc_info=True,
+                            )
                     raise
 
             elif secret_name == "JWT_SECRET":

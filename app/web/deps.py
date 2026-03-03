@@ -9,13 +9,15 @@ from __future__ import annotations
 from datetime import UTC
 
 from fastapi import Depends, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.models.auth import Session as AuthSession
 from app.models.auth import SessionStatus
 from app.models.person import Person
-from app.services.auth_flow import decode_access_token
+from app.models.rbac import PersonRole, Role
+from app.services.auth_flow import AuthFlow, decode_access_token, hash_session_token
 from app.services.common import coerce_uuid
 
 
@@ -74,6 +76,62 @@ def _extract_token(request: Request) -> str | None:
     return None
 
 
+def _person_roles(db: Session, person_id: str) -> list[str]:
+    person_uuid = coerce_uuid(person_id)
+    stmt = (
+        select(Role.name)
+        .join(PersonRole, PersonRole.role_id == Role.id)
+        .where(PersonRole.person_id == person_uuid)
+        .where(Role.is_active.is_(True))
+    )
+    return list(db.scalars(stmt).all())
+
+
+def _build_auth_context(person: Person, org_id: str | None, roles: list[str] | None = None) -> WebAuthContext:
+    name = person.display_name or f"{person.first_name} {person.last_name}"
+    first_initial = person.first_name[0] if person.first_name else ""
+    last_initial = person.last_name[0] if person.last_name else ""
+    initials = (first_initial + last_initial).upper() or "?"
+    return WebAuthContext(
+        is_authenticated=True,
+        person_id=str(person.id),
+        org_id=org_id,
+        user_name=name,
+        user_initials=initials,
+        roles=roles or [],
+    )
+
+
+def _context_from_refresh_cookie(request: Request, db: Session) -> WebAuthContext:
+    refresh_cookie_name = AuthFlow.refresh_cookie_settings(db)["key"]
+    refresh_token = request.cookies.get(refresh_cookie_name)
+    if not refresh_token:
+        return WebAuthContext()
+
+    from datetime import datetime
+
+    session = db.scalar(
+        select(AuthSession)
+        .where(AuthSession.token_hash == hash_session_token(refresh_token))
+        .where(AuthSession.status == SessionStatus.active)
+        .where(AuthSession.revoked_at.is_(None))
+    )
+    if not session:
+        return WebAuthContext()
+
+    expires_at = _as_utc(session.expires_at)
+    if expires_at and expires_at <= datetime.now(UTC):
+        return WebAuthContext()
+
+    person = db.get(Person, session.person_id)
+    if not person:
+        return WebAuthContext()
+
+    roles = _person_roles(db, str(person.id))
+    org_id = str(session.org_id) if session.org_id else None
+    return _build_auth_context(person, org_id, roles)
+
+
 def require_web_auth(
     request: Request,
     db: Session = Depends(get_db),
@@ -81,6 +139,9 @@ def require_web_auth(
     """Require authentication for web routes. Redirects to login if not authenticated."""
     token = _extract_token(request)
     if not token:
+        ctx = _context_from_refresh_cookie(request, db)
+        if ctx.is_authenticated:
+            return ctx
         raise HTTPException(status_code=302, headers={"Location": "/login"})
 
     try:
@@ -107,24 +168,19 @@ def require_web_auth(
         if not person:
             raise HTTPException(status_code=302, headers={"Location": "/login"})
 
-        name = person.display_name or f"{person.first_name} {person.last_name}"
-        first_initial = person.first_name[0] if person.first_name else ""
-        last_initial = person.last_name[0] if person.last_name else ""
-        initials = (first_initial + last_initial).upper() or "?"
-
-        roles = payload.get("roles", [])
-
-        return WebAuthContext(
-            is_authenticated=True,
-            person_id=person_id,
-            org_id=str(org_id) if org_id else None,
-            user_name=name,
-            user_initials=initials,
-            roles=roles,
-        )
-    except HTTPException:
-        raise
+        roles = payload.get("roles", []) or _person_roles(db, str(person.id))
+        return _build_auth_context(person, str(org_id) if org_id else None, roles)
+    except HTTPException as exc:
+        if exc.status_code == 302:
+            raise
+        ctx = _context_from_refresh_cookie(request, db)
+        if ctx.is_authenticated:
+            return ctx
+        raise HTTPException(status_code=302, headers={"Location": "/login"})
     except Exception:
+        ctx = _context_from_refresh_cookie(request, db)
+        if ctx.is_authenticated:
+            return ctx
         raise HTTPException(status_code=302, headers={"Location": "/login"})
 
 
@@ -135,7 +191,7 @@ def optional_web_auth(
     """Optional auth — returns unauthenticated context if no valid token."""
     token = _extract_token(request)
     if not token:
-        return WebAuthContext()
+        return _context_from_refresh_cookie(request, db)
 
     try:
         payload = decode_access_token(db, token)
@@ -159,17 +215,7 @@ def optional_web_auth(
         if not person:
             return WebAuthContext()
 
-        name = person.display_name or f"{person.first_name} {person.last_name}"
-        first_initial = person.first_name[0] if person.first_name else ""
-        last_initial = person.last_name[0] if person.last_name else ""
-        initials = (first_initial + last_initial).upper() or "?"
-
-        return WebAuthContext(
-            is_authenticated=True,
-            person_id=person_id,
-            user_name=name,
-            user_initials=initials,
-            roles=payload.get("roles", []),
-        )
+        roles = payload.get("roles", []) or _person_roles(db, str(person.id))
+        return _build_auth_context(person, str(payload.get("org_id")) if payload.get("org_id") else None, roles)
     except Exception:
-        return WebAuthContext()
+        return _context_from_refresh_cookie(request, db)

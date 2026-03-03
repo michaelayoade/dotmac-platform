@@ -105,8 +105,11 @@ class BatchDeployService:
         success: bool,
     ) -> None:
         """Update batch progress after an individual instance deploy completes."""
-        batch = self.get_by_id(batch_id)
+        # Lock the row to prevent concurrent workers from racing on counter updates
+        stmt = select(DeploymentBatch).where(DeploymentBatch.batch_id == batch_id).with_for_update()
+        batch = self.db.scalar(stmt)
         if not batch:
+            logger.warning("Batch %s not found for progress update", batch_id)
             return
 
         results = batch.results or {}
@@ -123,6 +126,12 @@ class BatchDeployService:
         if total_done >= batch.total_instances:
             batch.status = BatchStatus.completed if batch.failed_count == 0 else BatchStatus.failed
             batch.completed_at = datetime.now(UTC)
+            logger.info(
+                "Batch %s finished: %d succeeded, %d failed",
+                batch_id,
+                batch.completed_count,
+                batch.failed_count,
+            )
 
         self.db.flush()
 
@@ -130,20 +139,27 @@ class BatchDeployService:
         """Mark a batch as running."""
         batch = self.get_by_id(batch_id)
         if not batch:
+            logger.warning("Batch %s not found for start", batch_id)
             return
         batch.status = BatchStatus.running
         batch.started_at = datetime.now(UTC)
         self.db.flush()
+        logger.info(
+            "Started batch %s (%d instances, strategy=%s)", batch_id, batch.total_instances, batch.strategy.value
+        )
 
     def cancel_batch(self, batch_id: UUID) -> None:
         """Cancel a scheduled or running batch."""
         batch = self.get_by_id(batch_id)
         if not batch:
+            logger.warning("Batch %s not found for cancel", batch_id)
             return
         if batch.status in (BatchStatus.scheduled, BatchStatus.running):
+            prev_status = batch.status.value
             batch.status = BatchStatus.cancelled
             batch.completed_at = datetime.now(UTC)
             self.db.flush()
+            logger.info("Cancelled batch %s (was %s)", batch_id, prev_status)
 
     def get_pending_batches(self) -> list[DeploymentBatch]:
         """Get batches that are scheduled and past their scheduled time."""

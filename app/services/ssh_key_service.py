@@ -86,12 +86,12 @@ class SSHKeyService:
         key = self._get_key(key_id)
         return decrypt_value(key.private_key_encrypted)
 
-    def deploy_to_server(self, key_id: UUID, server_id: UUID) -> None:
+    def deploy_to_server(self, key_id: UUID, server_id: UUID, ssh: SSHService | None = None) -> None:
         key = self._get_key(key_id)
         server = self._get_server(server_id)
 
-        ssh = get_ssh_for_server(server)
-        self._ensure_authorized_key(ssh, key.public_key)
+        active_ssh = ssh or get_ssh_for_server(server)
+        self._ensure_authorized_key(active_ssh, key.public_key)
 
         server.ssh_key_id = key.key_id
         self.db.flush()

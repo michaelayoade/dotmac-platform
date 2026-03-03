@@ -54,14 +54,14 @@ class OnboardingService:
                 "title": "Configure a domain",
                 "description": "Assign a custom domain to an instance for production access.",
                 "completed": has_domain,
-                "url": "/domains",
+                "url": "/instances",
             },
             {
                 "key": "setup_git_repo",
                 "title": "Set up a Git repository",
                 "description": "Connect a Git repo to enable version-controlled deployments.",
                 "completed": has_git_repo,
-                "url": "/git-repos/new",
+                "url": "/catalog?tab=repos",
             },
             {
                 "key": "first_deploy",

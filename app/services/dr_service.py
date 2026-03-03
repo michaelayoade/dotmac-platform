@@ -43,24 +43,31 @@ class DisasterRecoveryService:
         )
         self.db.add(plan)
         self.db.flush()
+        logger.info("Created DR plan %s for instance %s (cron=%s)", plan.dr_plan_id, instance_id, backup_schedule_cron)
         return plan
 
-    def update_dr_plan(self, dr_plan_id: UUID, **kwargs) -> DisasterRecoveryPlan:
+    def update_dr_plan(self, dr_plan_id: UUID, **kwargs: object) -> DisasterRecoveryPlan:
         plan = self.get_by_id(dr_plan_id)
         if not plan:
             raise ValueError("DR plan not found")
         if "backup_schedule_cron" in kwargs and kwargs["backup_schedule_cron"]:
             _validate_cron(str(kwargs["backup_schedule_cron"]))
+
+        updatable_fields = {"backup_schedule_cron", "retention_days", "target_server_id", "is_active"}
         for key, value in kwargs.items():
-            if hasattr(plan, key) and value is not None:
+            if key not in updatable_fields:
+                continue
+            if value is not None:
                 setattr(plan, key, value)
         self.db.flush()
+        logger.info("Updated DR plan %s: %s", dr_plan_id, list(kwargs.keys()))
         return plan
 
     def delete_dr_plan(self, dr_plan_id: UUID) -> None:
         plan = self.get_by_id(dr_plan_id)
         if not plan:
             raise ValueError("DR plan not found")
+        logger.info("Deleting DR plan %s for instance %s", dr_plan_id, plan.instance_id)
         self.db.delete(plan)
         self.db.flush()
 

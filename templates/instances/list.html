@@ -1,6 +1,6 @@
 {% extends "platform_base.html" %}
 {% from "components/pagination.html" import pagination %}
-{% from "components/badges.html" import status_badge %}
+{% from "components/badges.html" import status_pill %}
 {% from "components/empty_state.html" import empty_state %}
 
 {% block header_actions %}
@@ -170,7 +170,7 @@
                     {% endif %}
                 </td>
                 <td class="px-5 py-4">
-                    {{ status_badge(inst.status.value) }}
+                    {{ status_pill(inst.status.value) }}
                 </td>
                 <td class="px-5 py-4">
                     {% if health_state == 'healthy' %}

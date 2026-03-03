@@ -48,19 +48,19 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <div>
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">URL</label>
-                <input type="url" name="url" required placeholder="https://example.com/webhooks" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+                <input type="url" name="url" required placeholder="https://example.com/webhooks" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
             </div>
             <div>
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Description</label>
-                <input type="text" name="description" placeholder="Billing alerts" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+                <input type="text" name="description" placeholder="Billing alerts" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
             </div>
             <div>
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Signing Secret (optional)</label>
-                <input type="text" name="secret" placeholder="secret" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+                <input type="text" name="secret" placeholder="secret" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
             </div>
             <div>
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Instance Scope</label>
-                <select name="instance_id" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                <select name="instance_id" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
                     <option value="">All instances</option>
                     {% for inst in instances %}
                     <option value="{{ inst.instance_id }}">{{ inst.org_code }}</option>

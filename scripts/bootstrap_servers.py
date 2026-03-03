@@ -213,13 +213,24 @@ def main(argv: list[str]) -> int:
         print("No servers matched.")
         return 1
 
+    rc = 0
     for s in targets:
         print(f"\n== {s.name} ({s.hostname}) ==")
-        ssh = get_ssh_for_server(s)
-        _check_only_steps(s, ssh)
-        _bootstrap_steps_debian(s, ssh, execute=args.execute)
+        try:
+            ssh = get_ssh_for_server(s)
+            _check_only_steps(s, ssh)
+            _bootstrap_steps_debian(s, ssh, execute=args.execute)
+        except Exception as exc:
+            rc = 1
+            msg = str(exc) or exc.__class__.__name__
+            print(f"[{s.name}] error: {msg}")
+            if "Authentication" in msg or "authentication" in msg:
+                print(
+                    f"[{s.name}] hint: worker could not authenticate with configured key; "
+                    "verify authorized_keys for the server user."
+                )
 
-    return 0
+    return rc
 
 
 if __name__ == "__main__":

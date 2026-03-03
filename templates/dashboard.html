@@ -1,5 +1,5 @@
 {% extends "platform_base.html" %}
-{% from "components/badges.html" import status_badge %}
+{% from "components/badges.html" import status_pill %}
 
 {% block content %}
 {% set testing = testing if testing is defined else false %}
@@ -45,7 +45,19 @@
 {% endif %}
 
 <!-- Stats Row -->
-<div class="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-10">
+<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 mb-10">
+    <a href="/organizations" class="group rounded-xl border border-primary-200/60 bg-gradient-to-br from-white to-primary-50/40 p-5 dark:border-primary-900/40 dark:from-surface-900/80 dark:to-primary-950/30 card-lift no-underline">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-[11px] font-semibold uppercase tracking-[0.15em] text-primary-600 dark:text-primary-400">Organizations</p>
+                <p class="mt-2 text-3xl font-display text-surface-900 dark:text-white">{{ org_list | length }}</p>
+            </div>
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-100 dark:bg-primary-900/30">
+                <svg class="h-5 w-5 text-primary-500" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/></svg>
+            </div>
+        </div>
+    </a>
+
     <div class="group rounded-xl border border-surface-200/80 bg-white p-5 dark:border-surface-800/50 dark:bg-surface-900/80 card-lift">
         <div class="flex items-center justify-between">
             <div>
@@ -53,7 +65,7 @@
                 <p class="mt-2 text-3xl font-display text-surface-900 dark:text-white">{{ stats.total_instances }}</p>
             </div>
             <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-100 dark:bg-surface-800/80">
-                <svg class="h-5 w-5 text-surface-400 dark:text-surface-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/></svg>
+                <svg class="h-5 w-5 text-surface-400 dark:text-surface-500" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/></svg>
             </div>
         </div>
     </div>
@@ -65,7 +77,7 @@
                 <p class="mt-2 text-3xl font-display text-emerald-600 dark:text-emerald-400">{{ stats.healthy }}</p>
             </div>
             <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-900/20">
-                <svg class="h-5 w-5 text-emerald-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+                <svg class="h-5 w-5 text-emerald-500" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
             </div>
         </div>
     </div>
@@ -77,7 +89,7 @@
                 <p class="mt-2 text-3xl font-display text-red-600 dark:text-red-400">{{ stats.unhealthy + stats.error }}</p>
             </div>
             <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 dark:bg-red-900/20">
-                <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/></svg>
+                <svg class="h-5 w-5 text-red-500" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/></svg>
             </div>
         </div>
     </div>
@@ -89,11 +101,71 @@
                 <p class="mt-2 text-3xl font-display text-amber-600 dark:text-amber-400">{{ stats.unknown }}</p>
             </div>
             <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-900/20">
-                <svg class="h-5 w-5 text-amber-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3h.007v.008H12v-.008ZM21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+                <svg class="h-5 w-5 text-amber-500" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3h.007v.008H12v-.008ZM21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
             </div>
         </div>
     </div>
 </div>
+
+{% if expiring_certs %}
+<div class="mb-6 rounded-xl border border-amber-200/80 bg-amber-50 p-5 dark:border-amber-800/40 dark:bg-amber-950/20">
+    <div class="flex items-start gap-3">
+        <svg class="h-5 w-5 text-amber-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/></svg>
+        <div class="flex-1">
+            <p class="text-[13px] font-semibold text-amber-800 dark:text-amber-300">SSL Certificates Expiring Soon</p>
+            <ul class="mt-2 space-y-1">
+                {% for ec in expiring_certs %}
+                <li class="flex items-center justify-between text-[12px]">
+                    <span class="text-amber-700 dark:text-amber-400">{{ ec.domain }} — expires {{ ec.ssl_expires_at.strftime('%Y-%m-%d') if ec.ssl_expires_at else 'unknown' }}</span>
+                    <a href="/instances/{{ ec.instance_id }}?tab=domains" class="text-[11px] font-medium text-amber-700 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-300 transition">Manage &rarr;</a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Organizations -->
+{% if org_list %}
+<div class="mb-10">
+    <div class="flex items-end justify-between mb-4">
+        <div>
+            <h2 class="text-2xl font-display text-surface-800 dark:text-surface-100">Organizations</h2>
+            <p class="mt-0.5 text-[13px] text-surface-400 dark:text-surface-500">Tenant organizations and their deployments</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="/organizations" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">View All</a>
+            <a href="/organizations" class="inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-medium text-white dark:text-surface-950 shadow-sm hover:bg-surface-800 dark:hover:bg-primary-400 transition">
+                <svg class="h-4 w-4" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                New Organization
+            </a>
+        </div>
+    </div>
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {% for org in org_list[:8] %}
+        <a href="/organizations/{{ org.org_id }}" class="group flex items-center justify-between rounded-xl border border-surface-200/80 bg-white px-5 py-4 no-underline transition-all duration-200 hover:border-primary-300/60 hover:shadow-md dark:border-surface-800/50 dark:bg-surface-900/80 dark:hover:border-primary-700/40">
+            <div class="min-w-0 flex-1">
+                <p class="truncate text-[13px] font-semibold text-surface-800 group-hover:text-primary-600 dark:text-surface-100 dark:group-hover:text-primary-400 transition-colors">{{ org.org_name }}</p>
+                <div class="mt-1 flex items-center gap-3">
+                    <span class="text-[11px] font-mono text-surface-400 dark:text-surface-500">{{ org.org_code }}</span>
+                    <span class="inline-flex items-center gap-1 text-[11px] text-surface-400 dark:text-surface-500">
+                        <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/></svg>
+                        {{ org_instance_counts.get(org.org_id, 0) }}
+                    </span>
+                </div>
+            </div>
+            <svg class="h-4 w-4 shrink-0 text-surface-300 group-hover:text-primary-500 dark:text-surface-600 dark:group-hover:text-primary-400 transition-colors" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg>
+        </a>
+        {% endfor %}
+    </div>
+    {% if org_list | length > 8 %}
+    <div class="mt-3 text-center">
+        <a href="/organizations" class="text-[12px] text-primary-600 hover:text-primary-700 dark:text-primary-400 transition">View all {{ org_list | length }} organizations &rarr;</a>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
 
 <div class="mb-8 flex flex-wrap items-center gap-2 text-[12px]">
     <a href="/instances" class="rounded-full border border-surface-200 px-3 py-1.5 text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">All Instances</a>
@@ -117,7 +189,7 @@
     <div class="flex items-center gap-3">
         <a href="/instances" class="rounded-lg border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-500 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-400 dark:hover:bg-surface-800 transition">View All</a>
         <a href="/instances/new" data-testid="dashboard-new-instance" class="inline-flex items-center gap-2 rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-medium text-white dark:text-surface-950 shadow-sm hover:bg-surface-800 dark:hover:bg-primary-400 transition">
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            <svg class="h-4 w-4" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
             New Instance
         </a>
     </div>
@@ -150,7 +222,7 @@
                     <p class="text-[11px] text-surface-400 dark:text-surface-500">{{ inst.org_name }}</p>
                 </td>
                 <td class="px-5 py-4">
-                    {{ status_badge(inst.status.value) }}
+                    {{ status_pill(inst.status.value) }}
                 </td>
                 <td class="px-5 py-4">
                     {% if health_state == 'healthy' %}

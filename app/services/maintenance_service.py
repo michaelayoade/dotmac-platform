@@ -69,6 +69,7 @@ class MaintenanceService:
             existing.end_time = end_time
             existing.timezone = tz
             self.db.flush()
+            logger.info("Updated maintenance window for instance %s day=%d", instance_id, day_of_week)
             return existing
 
         window = MaintenanceWindow(
@@ -80,6 +81,9 @@ class MaintenanceService:
         )
         self.db.add(window)
         self.db.flush()
+        logger.info(
+            "Created maintenance window for instance %s day=%d %s-%s", instance_id, day_of_week, start_time, end_time
+        )
         return window
 
     def delete_window(self, instance_id: UUID, window_id: UUID) -> None:
@@ -88,6 +92,7 @@ class MaintenanceService:
             raise ValueError(f"Maintenance window {window_id} not found for instance {instance_id}")
         window.is_active = False
         self.db.flush()
+        logger.info("Deleted maintenance window %s for instance %s", window_id, instance_id)
 
     def parse_times(self, start_time: str, end_time: str) -> tuple[time, time]:
         try:

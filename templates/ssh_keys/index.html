@@ -18,14 +18,14 @@
             <div class="grid grid-cols-2 gap-3">
                 <div>
                     <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Type</label>
-                    <select name="key_type" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                    <select name="key_type" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
                         <option value="ed25519">ed25519</option>
                         <option value="rsa">rsa</option>
                     </select>
                 </div>
                 <div>
                     <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">RSA Bits</label>
-                    <input type="number" name="bit_size" placeholder="4096" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+                    <input type="number" name="bit_size" placeholder="4096" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
                 </div>
             </div>
             <button type="submit" class="rounded-lg bg-surface-900 px-4 py-2 text-[13px] font-semibold text-white hover:bg-surface-800 dark:bg-primary-500 dark:text-surface-950 dark:hover:bg-primary-400 transition">Generate</button>
@@ -106,7 +106,7 @@
         <form method="POST" action="/ssh-keys/servers/{{ s.server_id }}/rotate" class="flex flex-wrap items-center gap-3">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <div class="text-[13px] text-surface-600 dark:text-surface-300 min-w-[160px]">{{ s.name }}</div>
-            <select name="new_key_id" class="rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+            <select name="new_key_id" class="rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
                 {% for key in keys %}
                 <option value="{{ key.key_id }}">{{ key.label }}</option>
                 {% endfor %}

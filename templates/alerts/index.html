@@ -16,11 +16,11 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <div class="sm:col-span-2">
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Name</label>
-                <input type="text" name="name" required class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+                <input type="text" name="name" required class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
             </div>
             <div>
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Metric</label>
-                <select name="metric" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                <select name="metric" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
                     {% for value in metrics %}
                     <option value="{{ value }}">{{ value }}</option>
                     {% endfor %}
@@ -28,7 +28,7 @@
             </div>
             <div>
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Operator</label>
-                <select name="operator" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                <select name="operator" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
                     {% for value in operators %}
                     <option value="{{ value }}">{{ value }}</option>
                     {% endfor %}
@@ -36,11 +36,11 @@
             </div>
             <div>
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Threshold</label>
-                <input type="number" step="0.01" name="threshold" required class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+                <input type="number" step="0.01" name="threshold" required class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
             </div>
             <div>
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Channel</label>
-                <select name="channel" x-ref="channelSelect" @change="$el.dispatchEvent(new Event('input'))" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                <select name="channel" x-ref="channelSelect" @change="$el.dispatchEvent(new Event('input'))" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
                     {% for value in channels %}
                     <option value="{{ value }}">{{ value }}</option>
                     {% endfor %}
@@ -48,11 +48,11 @@
             </div>
             <div class="sm:col-span-2" x-show="$refs.channelSelect && $refs.channelSelect.value === 'email'" x-cloak>
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Email Recipients</label>
-                <input type="text" name="email_recipients" placeholder="admin@example.com, ops@example.com" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+                <input type="text" name="email_recipients" placeholder="admin@example.com, ops@example.com" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
             </div>
             <div class="sm:col-span-2">
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Instance (optional)</label>
-                <select name="instance_id" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
+                <select name="instance_id" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white">
                     <option value="">All instances</option>
                     {% for inst in instances %}
                     <option value="{{ inst.instance_id }}">{{ inst.org_code }}</option>
@@ -61,7 +61,7 @@
             </div>
             <div>
                 <label class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">Cooldown (min)</label>
-                <input type="number" name="cooldown_minutes" value="15" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
+                <input type="number" name="cooldown_minutes" value="15" class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white" />
             </div>
             <div class="sm:col-span-2">
                 <button type="submit" class="rounded-lg bg-surface-900 dark:bg-primary-500 px-4 py-2 text-[13px] font-semibold text-white dark:text-surface-950">Create Rule</button>

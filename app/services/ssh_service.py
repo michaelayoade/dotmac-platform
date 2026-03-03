@@ -12,6 +12,8 @@ import os
 import shlex
 import threading
 import time
+from base64 import b64encode
+from hashlib import sha256
 from typing import Any, TypedDict, cast
 
 import paramiko
@@ -103,6 +105,8 @@ class SSHService:
         username: str = "root",
         key_path: str = "/root/.ssh/id_rsa",
         pkey_data: str | None = None,
+        password: str | None = None,
+        expected_host_key_fingerprint: str | None = None,
         is_local: bool = False,
         server_id: str | None = None,
     ):
@@ -111,6 +115,8 @@ class SSHService:
         self.username = username
         self.key_path = key_path
         self.pkey_data = pkey_data
+        self.password = password
+        self.expected_host_key_fingerprint = expected_host_key_fingerprint
         self.is_local = is_local
         self.server_id = server_id
 
@@ -151,6 +157,10 @@ class SSHService:
             pkey = _load_private_key(self.pkey_data)
             if pkey:
                 connect_kwargs["pkey"] = pkey
+        elif self.password:
+            connect_kwargs["password"] = self.password
+            connect_kwargs["allow_agent"] = False
+            connect_kwargs["look_for_keys"] = False
         elif self.key_path and os.path.isfile(self.key_path):
             connect_kwargs["key_filename"] = self.key_path
         else:
@@ -162,6 +172,14 @@ class SSHService:
         for attempt in range(3):
             try:
                 client.connect(**connect_kwargs)
+                if self.expected_host_key_fingerprint:
+                    remote_fp = self.get_remote_host_key_fingerprint(client)
+                    if remote_fp != self.expected_host_key_fingerprint:
+                        client.close()
+                        raise ConnectionError(
+                            "SSH host key fingerprint mismatch. "
+                            f"expected={self.expected_host_key_fingerprint} actual={remote_fp}"
+                        )
                 _circuit_record_success(self.server_id)
                 break
             except Exception as e:
@@ -391,6 +409,13 @@ class SSHService:
         """Test SSH connectivity by running hostname."""
         return self.exec_command("hostname && uname -a", timeout=10)
 
+    def host_key_fingerprint(self) -> str:
+        """Return the connected remote host key fingerprint (SHA256:...)."""
+        if self.is_local:
+            return "local"
+        client = self._get_client()
+        return self.get_remote_host_key_fingerprint(client)
+
     def close(self) -> None:
         """Close the SSH connection."""
         with _SSH_POOL_LOCK:
@@ -400,6 +425,15 @@ class SSHService:
                     entry["client"].close()
                 except Exception:
                     pass
+
+    @staticmethod
+    def get_remote_host_key_fingerprint(client: paramiko.SSHClient) -> str:
+        transport = client.get_transport()
+        if transport is None:
+            raise ConnectionError("SSH transport not available")
+        key = transport.get_remote_server_key()
+        digest = b64encode(sha256(key.asbytes()).digest()).decode("ascii").rstrip("=")
+        return f"SHA256:{digest}"
 
 
 def get_ssh_for_server(server) -> SSHService:
@@ -423,6 +457,7 @@ def get_ssh_for_server(server) -> SSHService:
         username=server.ssh_user,
         key_path=server.ssh_key_path,
         pkey_data=pkey_data,
+        expected_host_key_fingerprint=getattr(server, "ssh_host_key_fingerprint", None),
         is_local=server.is_local,
         server_id=str(server.server_id),
     )

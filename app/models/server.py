@@ -25,6 +25,7 @@ class Server(Base):
     ssh_user: Mapped[str] = mapped_column(String(80), default="root")
     ssh_key_path: Mapped[str] = mapped_column(String(512), default="/root/.ssh/id_rsa")
     ssh_key_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("ssh_keys.key_id"))
+    ssh_host_key_fingerprint: Mapped[str | None] = mapped_column(String(255))
     base_domain: Mapped[str | None] = mapped_column(String(255))
     is_local: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[ServerStatus] = mapped_column(Enum(ServerStatus), default=ServerStatus.unknown)

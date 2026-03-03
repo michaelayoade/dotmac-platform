@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -25,25 +24,26 @@ def _validate_schedule_type(value: str | ScheduleType | None) -> ScheduleType | 
     try:
         return ScheduleType(value)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid schedule_type") from exc
+        raise ValueError("Invalid schedule_type") from exc
 
 
 class ScheduledTasks(ListResponseMixin):
     @staticmethod
     def create(db: Session, payload: ScheduledTaskCreate):
         if payload.interval_seconds < 1:
-            raise HTTPException(status_code=400, detail="interval_seconds must be >= 1")
+            raise ValueError("interval_seconds must be >= 1")
         task = ScheduledTask(**payload.model_dump())
         db.add(task)
         db.flush()
         db.refresh(task)
+        logger.info("Created scheduled task %s: %s", task.id, task.name)
         return task
 
     @staticmethod
     def get(db: Session, task_id: str):
         task = db.get(ScheduledTask, coerce_uuid(task_id))
         if not task:
-            raise HTTPException(status_code=404, detail="Scheduled task not found")
+            raise ValueError("Scheduled task not found")
         return task
 
     @staticmethod
@@ -71,24 +71,26 @@ class ScheduledTasks(ListResponseMixin):
     def update(db: Session, task_id: str, payload: ScheduledTaskUpdate):
         task = db.get(ScheduledTask, coerce_uuid(task_id))
         if not task:
-            raise HTTPException(status_code=404, detail="Scheduled task not found")
+            raise ValueError("Scheduled task not found")
         data = payload.model_dump(exclude_unset=True)
         if "schedule_type" in data:
             data["schedule_type"] = _validate_schedule_type(data["schedule_type"])
         if "interval_seconds" in data and data["interval_seconds"] is not None:
             if data["interval_seconds"] < 1:
-                raise HTTPException(status_code=400, detail="interval_seconds must be >= 1")
+                raise ValueError("interval_seconds must be >= 1")
         for key, value in data.items():
             setattr(task, key, value)
         db.flush()
         db.refresh(task)
+        logger.info("Updated scheduled task %s: %s", task.id, list(data.keys()))
         return task
 
     @staticmethod
     def delete(db: Session, task_id: str):
         task = db.get(ScheduledTask, coerce_uuid(task_id))
         if not task:
-            raise HTTPException(status_code=404, detail="Scheduled task not found")
+            raise ValueError("Scheduled task not found")
+        logger.info("Deleting scheduled task %s: %s", task.id, task.name)
         db.delete(task)
         db.flush()
 
@@ -116,11 +118,9 @@ ALLOWED_TASK_PREFIXES = ("app.tasks.",)
 
 def enqueue_task(task_name: str, args: list | None, kwargs: dict | None) -> dict:
     if not any(task_name.startswith(prefix) for prefix in ALLOWED_TASK_PREFIXES):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Task name must start with one of: {', '.join(ALLOWED_TASK_PREFIXES)}",
-        )
+        raise ValueError(f"Task name must start with one of: {', '.join(ALLOWED_TASK_PREFIXES)}")
     from app.celery_app import celery_app
 
     async_result = celery_app.send_task(task_name, args=args or [], kwargs=kwargs or {})
+    logger.info("Enqueued task %s (id=%s)", task_name, async_result.id)
     return {"queued": True, "task_id": str(async_result.id)}

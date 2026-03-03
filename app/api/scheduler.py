@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -70,7 +70,10 @@ def get_scheduler_status(db: Session = Depends(get_db)):
     dependencies=[Depends(require_role("admin"))],
 )
 def create_scheduled_task(payload: ScheduledTaskCreate, db: Session = Depends(get_db)):
-    return scheduler_service.scheduled_tasks.create(db, payload)
+    try:
+        return scheduler_service.scheduled_tasks.create(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get(
@@ -79,7 +82,10 @@ def create_scheduled_task(payload: ScheduledTaskCreate, db: Session = Depends(ge
     dependencies=[Depends(require_user_auth)],
 )
 def get_scheduled_task(task_id: str, db: Session = Depends(get_db)):
-    return scheduler_service.scheduled_tasks.get(db, task_id)
+    try:
+        return scheduler_service.scheduled_tasks.get(db, task_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.patch(
@@ -88,7 +94,11 @@ def get_scheduled_task(task_id: str, db: Session = Depends(get_db)):
     dependencies=[Depends(require_role("admin"))],
 )
 def update_scheduled_task(task_id: str, payload: ScheduledTaskUpdate, db: Session = Depends(get_db)):
-    return scheduler_service.scheduled_tasks.update(db, task_id, payload)
+    try:
+        return scheduler_service.scheduled_tasks.update(db, task_id, payload)
+    except ValueError as exc:
+        code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
 
 
 @router.delete(
@@ -97,7 +107,10 @@ def update_scheduled_task(task_id: str, payload: ScheduledTaskUpdate, db: Sessio
     dependencies=[Depends(require_role("admin"))],
 )
 def delete_scheduled_task(task_id: str, db: Session = Depends(get_db)):
-    scheduler_service.scheduled_tasks.delete(db, task_id)
+    try:
+        scheduler_service.scheduled_tasks.delete(db, task_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post(
@@ -115,5 +128,9 @@ def refresh_schedule():
     dependencies=[Depends(require_role("admin"))],
 )
 def enqueue_scheduled_task(task_id: str, db: Session = Depends(get_db)):
-    task = scheduler_service.scheduled_tasks.get(db, task_id)
-    return scheduler_service.enqueue_task(task.task_name, task.args_json or [], task.kwargs_json or {})
+    try:
+        task = scheduler_service.scheduled_tasks.get(db, task_id)
+        return scheduler_service.enqueue_task(task.task_name, task.args_json or [], task.kwargs_json or {})
+    except ValueError as exc:
+        code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
