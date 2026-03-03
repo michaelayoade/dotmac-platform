@@ -1,0 +1,50 @@
+<div id="server-job-status"
+     class="rounded-lg border px-4 py-3 text-[12px] {% if done and success %}border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-300{% elif done %}border-red-200 bg-red-50 text-red-800 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300{% else %}border-surface-200 bg-white text-surface-700 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-300{% endif %}"
+     {% if not done %}hx-get="/servers/{{ server_id }}/jobs/{{ task_id }}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+    {% set msg = (message or '')|lower %}
+    {% set progress = 10 %}
+    {% if done and success %}
+        {% set progress = 100 %}
+    {% elif done %}
+        {% set progress = 100 %}
+    {% elif 'queued' in msg or 'pending' in msg %}
+        {% set progress = 12 %}
+    {% elif 'resolving ssh access' in msg %}
+        {% set progress = 20 %}
+    {% elif 'generating per-server ssh key' in msg or 'generating ssh key' in msg %}
+        {% set progress = 35 %}
+    {% elif 'installing per-server ssh key' in msg or 'deploying key to server' in msg %}
+        {% set progress = 55 %}
+    {% elif 'verifying key-based connectivity' in msg or 'verifying server connectivity' in msg %}
+        {% set progress = 70 %}
+    {% elif 'installing server dependencies' in msg or 'running dependency bootstrap' in msg %}
+        {% set progress = 85 %}
+    {% endif %}
+    <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+            {% if not done %}
+            <svg class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
+            {% elif success %}
+            <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+            {% else %}
+            <span class="h-2 w-2 rounded-full bg-red-500"></span>
+            {% endif %}
+            <span class="font-medium">{{ message }}</span>
+        </div>
+        <span class="font-mono text-[11px] opacity-80">{{ state }}</span>
+    </div>
+    <div class="mt-3">
+        <div class="h-1.5 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+            <div
+                class="h-1.5 rounded-full transition-all duration-500 {% if done and success %}bg-emerald-500{% elif done %}bg-red-500{% else %}bg-primary-500 animate-pulse{% endif %}"
+                style="width: {{ progress }}%;"
+            ></div>
+        </div>
+        <div class="mt-1 text-[10px] opacity-70">
+            {% if done and success %}Completed{% elif done %}Completed with errors{% else %}In progress ({{ progress }}%){% endif %}
+        </div>
+    </div>
+    {% if output %}
+    <pre class="mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded border border-current/15 bg-black/5 p-2 font-mono text-[11px] dark:bg-black/20">{{ output }}</pre>
+    {% endif %}
+</div>
