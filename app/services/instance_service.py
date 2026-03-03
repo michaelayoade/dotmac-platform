@@ -15,6 +15,7 @@ import shlex
 import textwrap
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import String, case, cast, func, literal, or_, select
@@ -110,7 +111,7 @@ class InstanceService:
         if search:
             # Escape special LIKE characters (% and _) in the search term
             escaped_search = re.sub(r"([%_])", r"\\\1", search)
-            stmt = stmt.where(Instance.name.ilike(f"%{escaped_search}%", escape="\\"))
+            stmt = stmt.where(Instance.org_name.ilike(f"%{escaped_search}%", escape="\\"))
         return list(self.db.scalars(stmt).all())
 
     def list_for_server(self, server_id: UUID) -> list[Instance]:
@@ -205,9 +206,12 @@ class InstanceService:
         if health_value:
             if health_value not in {"healthy", "unhealthy", "unknown", "n/a"}:
                 return PagedResult(items=[], total=0, page=page, page_size=page_size)
+            if health_state_expr is None:
+                return PagedResult(items=[], total=0, page=page, page_size=page_size)
             stmt = stmt.where(health_state_expr == health_value)
             total_stmt = total_stmt.where(health_state_expr == health_value)
 
+        sort_expr: Any
         if sort_key == "status":
             sort_expr = cast(Instance.status, String)
         elif sort_key == "port":
