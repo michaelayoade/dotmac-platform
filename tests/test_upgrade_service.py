@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from app.models.app_upgrade import AppUpgrade, UpgradeStatus
-from app.models.catalog import AppBundle, AppCatalogItem, AppRelease
+from app.models.catalog import AppCatalogItem
 from app.models.git_repository import GitAuthType, GitRepository
 from app.models.instance import Instance
 from app.models.server import Server
@@ -34,36 +34,21 @@ def _make_server(db_session):
 def _make_catalog_item(db_session):
     repo = GitRepository(
         label=f"repo-{uuid.uuid4().hex[:6]}",
-        url="git@example.com:repo.git",
         auth_type=GitAuthType.none,
+        registry_url="ghcr.io/acme/repo",
         is_active=True,
     )
     db_session.add(repo)
     db_session.commit()
     db_session.refresh(repo)
 
-    release = AppRelease(
-        name="Release A",
+    catalog_item = AppCatalogItem(
+        label="Standard",
         version="1.2.3",
         git_ref="v1.2.3",
         git_repo_id=repo.repo_id,
-        is_active=True,
-    )
-    bundle = AppBundle(
-        name="Core",
-        description="Core bundle",
         module_slugs=["core"],
         flag_keys=["feature_x"],
-    )
-    db_session.add_all([release, bundle])
-    db_session.commit()
-    db_session.refresh(release)
-    db_session.refresh(bundle)
-
-    catalog_item = AppCatalogItem(
-        label="Standard",
-        release_id=release.release_id,
-        bundle_id=bundle.bundle_id,
         is_active=True,
     )
     db_session.add(catalog_item)

@@ -51,7 +51,7 @@ def test_admin_cannot_purge_active_catalog_item(client, admin_headers, db_sessio
 
     response = client.delete(f"/api/v1/catalog/items/{item.catalog_id}/purge", headers=admin_headers)
     assert response.status_code == 400
-    assert "inactive" in response.json()["detail"].lower()
+    assert "inactive" in response.json()["message"].lower()
 
 
 def test_purge_requires_admin(client, auth_headers, db_session):
