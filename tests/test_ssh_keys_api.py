@@ -52,8 +52,8 @@ def test_generate_and_list_keys(db_session):
     )
     assert data["label"] == "test"
 
-    keys = list_keys(active_only=True, db=db_session, auth={"person_id": "tester"})
-    assert len(keys) == 1
+    result = list_keys(active_only=True, limit=25, offset=0, db=db_session, auth={"person_id": "tester"})
+    assert len(result["items"]) == 1
 
 
 def test_import_and_get_public(db_session):
@@ -82,4 +82,4 @@ def test_delete_key(db_session):
     key = svc.generate_key("todelete", key_type="rsa", bit_size=2048)
 
     resp = delete_key(key.key_id, db=db_session, auth={"person_id": "tester"})
-    assert resp["deleted"] == str(key.key_id)
+    assert resp is None

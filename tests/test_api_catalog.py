@@ -40,8 +40,7 @@ def test_admin_can_purge_inactive_catalog_item(client, admin_headers, db_session
     db_session.commit()
 
     response = client.delete(f"/api/v1/catalog/items/{item.catalog_id}/purge", headers=admin_headers)
-    assert response.status_code == 200
-    assert response.json()["deleted"] == str(item.catalog_id)
+    assert response.status_code == 204
     assert db_session.get(AppCatalogItem, item.catalog_id) is None
 
 
@@ -71,7 +70,7 @@ def test_list_catalog_items(client, auth_headers, db_session):
     response = client.get("/api/v1/catalog/items", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
-    assert any(d["catalog_id"] == str(item.catalog_id) for d in data)
+    assert any(d["catalog_id"] == str(item.catalog_id) for d in data["items"])
 
 
 def test_create_catalog_item(client, admin_headers, db_session):

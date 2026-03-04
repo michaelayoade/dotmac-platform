@@ -4,38 +4,47 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role
+from app.schemas.common import ListResponse
 from app.schemas.ssh_keys import SSHKeyCreateResponse, SSHKeyRead, SSHPublicKeyResponse
 
 router = APIRouter(prefix="/ssh-keys", tags=["ssh-keys"])
 
 
-@router.get("", response_model=list[SSHKeyRead])
+@router.get("", response_model=ListResponse[SSHKeyRead])
 def list_keys(
     active_only: bool = True,
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     auth=Depends(require_role("admin")),
 ):
     from app.services.ssh_key_service import SSHKeyService
 
     keys = SSHKeyService(db).list_keys(active_only=active_only)
-    return [
-        {
-            "key_id": str(k.key_id),
-            "label": k.label,
-            "public_key": k.public_key,
-            "fingerprint": k.fingerprint,
-            "key_type": k.key_type.value,
-            "bit_size": k.bit_size,
-            "created_by": k.created_by,
-            "is_active": k.is_active,
-            "created_at": k.created_at.isoformat() if k.created_at else None,
-        }
-        for k in keys
-    ]
+    page = keys[offset : offset + limit]
+    return {
+        "items": [
+            {
+                "key_id": str(k.key_id),
+                "label": k.label,
+                "public_key": k.public_key,
+                "fingerprint": k.fingerprint,
+                "key_type": k.key_type.value,
+                "bit_size": k.bit_size,
+                "created_by": k.created_by,
+                "is_active": k.is_active,
+                "created_at": k.created_at.isoformat() if k.created_at else None,
+            }
+            for k in page
+        ],
+        "count": len(keys),
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.post("/generate", response_model=SSHKeyCreateResponse, status_code=status.HTTP_201_CREATED)
@@ -130,7 +139,7 @@ def rotate_key(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/{key_id}")
+@router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_key(
     key_id: UUID,
     db: Session = Depends(get_db),
@@ -141,6 +150,6 @@ def delete_key(
     try:
         SSHKeyService(db).delete_key(key_id)
         db.commit()
-        return {"deleted": str(key_id)}
+        return None
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

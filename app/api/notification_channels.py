@@ -5,11 +5,12 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_user_auth
 from app.models.notification_channel import ChannelType
+from app.schemas.common import ListResponse
 from app.schemas.notification_channels import (
     NotificationChannelCreate,
     NotificationChannelRead,
@@ -31,17 +32,25 @@ def _person_id(auth: dict[str, object]) -> UUID:
     return pid
 
 
-@router.get("", response_model=list[NotificationChannelRead])
+@router.get("", response_model=ListResponse[NotificationChannelRead])
 def list_channels(
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     auth: dict[str, object] = Depends(require_user_auth),
-) -> list[dict[str, object]]:
+) -> dict[str, object]:
     from app.services.notification_channel_service import NotificationChannelService
 
     pid = _person_id(auth)
     svc = NotificationChannelService(db)
     channels = svc.list_channels(pid)
-    return [svc.serialize_channel(ch, config_masked=svc.mask_config(ch)) for ch in channels]
+    page = channels[offset : offset + limit]
+    return {
+        "items": [svc.serialize_channel(ch, config_masked=svc.mask_config(ch)) for ch in page],
+        "count": len(channels),
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=NotificationChannelRead)

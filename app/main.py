@@ -24,6 +24,7 @@ from app.api.deps import require_instance_access_from_path, require_role, requir
 from app.api.dr import router as dr_api_router
 from app.api.git_repos import router as git_repos_api_router
 from app.api.health import router as health_api_router
+from app.api.instance_export import router as instance_export_router
 from app.api.observability import router as observability_api_router
 from app.api.organizations import router as organizations_api_router
 from app.api.persons import router as people_router
@@ -295,6 +296,7 @@ _include_api_router(rbac_router, dependencies=[Depends(require_user_auth)])
 app.include_router(people_router, prefix="/api/v1", dependencies=[Depends(require_user_auth)])
 _include_api_router(audit_router)
 app.include_router(audit_export_router, prefix="/api/v1")
+app.include_router(instance_export_router, prefix="/api/v1", dependencies=[Depends(require_user_auth)])
 _include_api_router(settings_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(scheduler_router, dependencies=[Depends(require_user_auth)])
 _include_api_router(organizations_api_router, dependencies=[Depends(require_user_auth)])

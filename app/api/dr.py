@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_instance_access, require_role, require_user_auth
+from app.schemas.common import ListResponse
 from app.schemas.dr import DRPlanRead, DRTaskResponse
 
 router = APIRouter(prefix="/dr/plans", tags=["disaster-recovery"])
@@ -40,7 +41,7 @@ def create_dr_plan(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("", response_model=list[DRPlanRead])
+@router.get("", response_model=ListResponse[DRPlanRead])
 def list_dr_plans(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -54,7 +55,12 @@ def list_dr_plans(
         raise HTTPException(status_code=401, detail="Organization context required")
     svc = DisasterRecoveryService(db)
     plans = svc.list_for_org(UUID(org_id), limit=limit, offset=offset)
-    return [svc.serialize_plan(p) for p in plans]
+    return {
+        "items": [svc.serialize_plan(p) for p in plans],
+        "count": len(plans),
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/{dr_plan_id}", response_model=DRPlanRead)
