@@ -30,8 +30,8 @@
 {% macro text_input(name, label, type="text", required=false, placeholder="", value="", help="", testid="", extra_class="", pattern="", maxlength="", id="") %}
 {% set field_id = id or ("field-" ~ name | replace("_", "-")) %}
 <div class="{{ extra_class }}">
-    <label for="{{ field_id }}" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">{{ label }}</label>
-    <input type="{{ type }}" id="{{ field_id }}" name="{{ name }}" {% if required %}required{% endif %}
+    <label for="{{ field_id }}" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">{{ label }}{% if required %}<span class="text-red-500 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>{% endif %}</label>
+    <input type="{{ type }}" id="{{ field_id }}" name="{{ name }}" {% if required %}required aria-required="true"{% endif %}
            {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
            {% if value %}value="{{ value }}"{% endif %}
            {% if pattern %}pattern="{{ pattern }}"{% endif %}
@@ -49,8 +49,8 @@
 {% macro select_input(name, label, options, selected="", required=false, testid="", extra_class="", id="") %}
 {% set field_id = id or ("field-" ~ name | replace("_", "-")) %}
 <div class="{{ extra_class }}">
-    <label for="{{ field_id }}" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">{{ label }}</label>
-    <select id="{{ field_id }}" name="{{ name }}" {% if required %}required{% endif %}
+    <label for="{{ field_id }}" class="block text-[11px] font-semibold uppercase tracking-[0.15em] text-surface-400 dark:text-surface-500">{{ label }}{% if required %}<span class="text-red-500 dark:text-red-400 ml-0.5" aria-hidden="true">*</span>{% endif %}</label>
+    <select id="{{ field_id }}" name="{{ name }}" {% if required %}required aria-required="true"{% endif %}
             {% if testid %}data-testid="{{ testid }}"{% endif %}
             class="mt-1.5 w-full rounded-lg border border-surface-200 bg-surface-50 px-4 py-2.5 text-[13px] dark:border-surface-700 dark:bg-surface-800 dark:text-white focus:border-primary-400 focus:ring-2 focus:ring-primary-200/50 dark:focus:ring-primary-500/20 focus:outline-none transition">
         {% for opt in options %}
