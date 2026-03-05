@@ -56,7 +56,7 @@ class CatalogService:
         stmt = select(AppCatalogItem)
         if search and search.strip():
             q = f"%{search.strip()}%"
-            stmt = stmt.join(AppCatalogItem.bundle).where(or_(AppBundle.name.ilike(q), AppBundle.description.ilike(q)))
+            stmt = stmt.where(or_(AppCatalogItem.label.ilike(q), AppCatalogItem.notes.ilike(q)))
         if active_only:
             stmt = stmt.where(AppCatalogItem.is_active.is_(True))
         stmt = stmt.order_by(AppCatalogItem.created_at.desc())
