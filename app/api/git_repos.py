@@ -4,29 +4,33 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_role
+from app.schemas.common import ListResponse
 from app.schemas.git_repos import GitRepoRead
 
 router = APIRouter(prefix="/git-repos", tags=["git-repos"])
 
 
-@router.get("", response_model=list[GitRepoRead])
+@router.get("", response_model=ListResponse[GitRepoRead])
 def list_repos(
     active_only: bool = True,
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     auth: object = Depends(require_role("admin")),
-) -> list[dict[str, object]]:
+) -> dict[str, object]:
     from app.services.git_repo_service import GitRepoService
 
     svc = GitRepoService(db)
     repos = svc.list_repos(active_only=active_only)
-    return [svc.serialize_repo(r) for r in repos]
+    page = repos[offset : offset + limit]
+    return {"items": [svc.serialize_repo(r) for r in page], "count": len(repos), "limit": limit, "offset": offset}
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=GitRepoRead)
 def create_repo(
     label: str = Body(...),
     auth_type: str = Body("none"),
@@ -105,35 +109,35 @@ def update_repo(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/{repo_id}")
+@router.delete("/{repo_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_repo(
     repo_id: UUID,
     db: Session = Depends(get_db),
     auth: object = Depends(require_role("admin")),
-) -> dict[str, str]:
+) -> None:
     from app.services.git_repo_service import GitRepoService
 
     try:
         GitRepoService(db).delete_repo(repo_id)
         db.commit()
-        return {"deleted": str(repo_id)}
+        return None
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/{repo_id}/purge")
+@router.delete("/{repo_id}/purge", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def purge_repo(
     repo_id: UUID,
     db: Session = Depends(get_db),
     auth: object = Depends(require_role("admin")),
-) -> dict[str, str]:
+) -> None:
     from app.services.git_repo_service import GitRepoService
 
     try:
         GitRepoService(db).purge_repo(repo_id)
         db.commit()
-        return {"deleted": str(repo_id)}
+        return None
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
